@@ -608,18 +608,29 @@ class GameScene extends Phaser.Scene {
 
     const width = this.cameras?.main?.width || this.scale?.width || 0;
 
+    // 目标：移动端手感尽量贴近 WASD（更大热区、更容易到满速、手指滑动不易“脱离摇杆”）
     const cfg = {
-      maxRadius: 72,
+      // 摇杆最大位移半径（像素）
+      maxRadius: 110,
+      // 死区（像素）
       deadZone: 10,
-      leftOnly: true
+      // 仅左半屏启动摇杆（避免与右侧操作冲突）
+      leftOnly: true,
+      // 跟随式：当手指超过 maxRadius 时，摇杆中心跟随手指移动，避免触控范围太小
+      followWhenOutOfRange: true,
+      // 让摇杆更接近“数字输入”（WASD 一按就满速）
+      // - magnitude >= fullSpeedThreshold 时直接视为满速
+      // - 否则使用加速曲线尽快抬升速度
+      fullSpeedThreshold: 0.35,
+      responseExponent: 0.65
     };
 
-    const base = this.add.circle(0, 0, 38, 0x000000, 0.22)
+    const base = this.add.circle(0, 0, 44, 0x000000, 0.22)
       .setScrollFactor(0)
       .setDepth(10000)
       .setVisible(false);
 
-    const thumb = this.add.circle(0, 0, 18, 0xffffff, 0.22)
+    const thumb = this.add.circle(0, 0, 20, 0xffffff, 0.22)
       .setScrollFactor(0)
       .setDepth(10001)
       .setVisible(false);
@@ -637,8 +648,20 @@ class GameScene extends Phaser.Scene {
       if (!pointer) return;
       if (!this.player) return;
 
-      // 避免抢 UI（按钮/卡片等 setInteractive 的物体会出现在 currentlyOver）
-      if (Array.isArray(currentlyOver) && currentlyOver.length > 0) return;
+      // 避免抢 HUD/UI（按钮/卡片等 setInteractive 的物体会出现在 currentlyOver）
+      // 但不阻止“世界物体”的点击（例如地面掉落物），避免摇杆经常无法启动
+      if (Array.isArray(currentlyOver) && currentlyOver.length > 0) {
+        const overUi = currentlyOver.some((obj) => {
+          if (!obj) return false;
+          const depth = obj.depth ?? 0;
+          const sfX = obj.scrollFactorX ?? 1;
+          const sfY = obj.scrollFactorY ?? 1;
+          const isHudLike = (sfX === 0 && sfY === 0) || depth >= 9000;
+          const flagged = !!(obj.getData?.('ui') || obj.getData?.('isUI') || obj.getData?.('isUi'));
+          return isHudLike || flagged;
+        });
+        if (overUi) return;
+      }
 
       if (this._touchJoystick.activePointerId != null) return;
 
@@ -660,11 +683,11 @@ class GameScene extends Phaser.Scene {
       if (this._touchJoystick.activePointerId == null) return;
       if (pointer.id !== this._touchJoystick.activePointerId) return;
 
-      const cx = this._touchJoystick.center.x;
-      const cy = this._touchJoystick.center.y;
+      let cx = this._touchJoystick.center.x;
+      let cy = this._touchJoystick.center.y;
       let dx = pointer.x - cx;
       let dy = pointer.y - cy;
-      const dist = Math.hypot(dx, dy);
+      let dist = Math.hypot(dx, dy);
 
       if (dist <= cfg.deadZone) {
         this._touchJoystick.value.set(0, 0);
@@ -673,13 +696,47 @@ class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (dist > cfg.maxRadius) {
-        dx = (dx / dist) * cfg.maxRadius;
-        dy = (dy / dist) * cfg.maxRadius;
+      // 跟随式摇杆：当手指拉得太远，让中心向手指方向移动，避免“范围太小/手指滑出”
+      if (cfg.followWhenOutOfRange && dist > cfg.maxRadius && dist > 0.0001) {
+        const over = dist - cfg.maxRadius;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        cx += ux * over;
+        cy += uy * over;
+        this._touchJoystick.center.set(cx, cy);
+        base.setPosition(cx, cy);
+        dx = pointer.x - cx;
+        dy = pointer.y - cy;
+        dist = Math.hypot(dx, dy);
       }
 
-      const nx = Phaser.Math.Clamp(dx / cfg.maxRadius, -1, 1);
-      const ny = Phaser.Math.Clamp(dy / cfg.maxRadius, -1, 1);
+      if (dist > cfg.maxRadius && dist > 0.0001) {
+        dx = (dx / dist) * cfg.maxRadius;
+        dy = (dy / dist) * cfg.maxRadius;
+        dist = cfg.maxRadius;
+      }
+
+      // [-1,1] 的原始方向向量
+      let nx = Phaser.Math.Clamp(dx / cfg.maxRadius, -1, 1);
+      let ny = Phaser.Math.Clamp(dy / cfg.maxRadius, -1, 1);
+
+      // 响应曲线：更接近 WASD 的“更快到满速”
+      const mag = Math.hypot(nx, ny);
+      if (mag > 0.0001) {
+        const dirX = nx / mag;
+        const dirY = ny / mag;
+
+        const t = Phaser.Math.Clamp(mag / Math.max(0.0001, cfg.fullSpeedThreshold), 0, 1);
+        const curved = Math.pow(t, cfg.responseExponent);
+        const outMag = (mag >= cfg.fullSpeedThreshold) ? 1 : curved;
+
+        nx = dirX * outMag;
+        ny = dirY * outMag;
+      } else {
+        nx = 0;
+        ny = 0;
+      }
+
       this._touchJoystick.value.set(nx, ny);
 
       thumb.setPosition(cx + dx, cy + dy);
