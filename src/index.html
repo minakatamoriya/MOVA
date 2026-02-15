@@ -46,6 +46,18 @@
             pointer-events: auto;
         }
 
+        /* 移动端友好滚动：可滚动但隐藏明显滚动条 */
+        .ui-scroll {
+            scrollbar-width: none;          /* Firefox */
+            -ms-overflow-style: none;       /* IE/Edge legacy */
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .ui-scroll::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
         .loading {
             position: absolute;
             top: 50%;
