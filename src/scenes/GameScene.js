@@ -109,6 +109,9 @@ class GameScene extends Phaser.Scene {
 
     this.weaponPickupNodes = [];
 
+    // 玩家死亡状态（Scene 实例复用，需要重置）
+    this._playerDeathHandled = false;
+
     this.exitDoorActive = false;
     this.exitDoorZone = null;
     this.exitDoorVisuals = null;
@@ -614,8 +617,8 @@ class GameScene extends Phaser.Scene {
       maxRadius: 110,
       // 死区（像素）
       deadZone: 10,
-      // 仅左半屏启动摇杆（避免与右侧操作冲突）
-      leftOnly: true,
+      // 全屏任意位置都可启动摇杆（支持右手操作）
+      leftOnly: false,
       // 跟随式：当手指超过 maxRadius 时，摇杆中心跟随手指移动，避免触控范围太小
       followWhenOutOfRange: true,
       // 让摇杆更接近“数字输入”（WASD 一按就满速）
@@ -665,7 +668,7 @@ class GameScene extends Phaser.Scene {
 
       if (this._touchJoystick.activePointerId != null) return;
 
-      if (cfg.leftOnly && width > 0 && pointer.x > width * 0.5) return;
+      // leftOnly=false 时，全屏都可启动
 
       this._touchJoystick.activePointerId = pointer.id;
       this._touchJoystick.center.set(pointer.x, pointer.y);
@@ -824,6 +827,12 @@ class GameScene extends Phaser.Scene {
     if (this.player) {
       this.player.update(time, delta);
     }
+
+    // 玩家死亡：立即停止所有玩家攻击与机制（但不暂停 Scene 的 time/tweens，保证 GameOver 延迟跳转仍能发生）
+    if (this.player && this.player.isAlive === false) {
+      this.handlePlayerDeathOnce();
+      return;
+    }
     
     // 更新 Boss 管理器
     if (this.bossManager) {
@@ -838,6 +847,12 @@ class GameScene extends Phaser.Scene {
     // 更新碰撞检测
     if (this.collisionManager) {
       this.collisionManager.update();
+    }
+
+    // 可能在 collisionManager.update() 中触发死亡：同帧立即停机
+    if (this.player && this.player.isAlive === false) {
+      this.handlePlayerDeathOnce();
+      return;
     }
 
     // 自动消耗品（装备后触发）：血瓶/大血瓶
@@ -1034,6 +1049,61 @@ class GameScene extends Phaser.Scene {
     }
 
     console.log('GameScene: 资源清理完成');
+  }
+
+  handlePlayerDeathOnce() {
+    if (this._playerDeathHandled) return;
+    this._playerDeathHandled = true;
+
+    // 禁用输入，避免残留移动/操作
+    try { this.input.enabled = false; } catch (_) { /* ignore */ }
+    try { if (this.input?.keyboard) this.input.keyboard.enabled = false; } catch (_) { /* ignore */ }
+    this.destroyTouchJoystick();
+    this.player?.clearAnalogMove?.();
+    if (this.player) this.player.canFire = false;
+
+    // 停止宠物
+    if (this.petManager) {
+      try {
+        for (const pet of this.petManager.active?.values?.() || []) {
+          pet?.destroy?.();
+        }
+        this.petManager.active?.clear?.();
+      } catch (_) { /* ignore */ }
+    }
+
+    // 停止 Build 相关机制与可视对象（无人机/近战扇形/提示圈等）
+    this.droneEnabled = false;
+    if (Array.isArray(this.droneUnits) && this.droneUnits.length > 0) {
+      this.droneUnits.forEach((u) => { try { u?.destroy?.(); } catch (_) { /* ignore */ } });
+      this.droneUnits = [];
+    }
+
+    this.meleeEnabled = false;
+    try { this.destroySlashFan?.(); } catch (_) { /* ignore */ }
+
+    if (this._warriorTargetRing) { try { this._warriorTargetRing.setVisible(false); } catch (_) { /* ignore */ } }
+    if (this._paladinTargetRing) { try { this._paladinTargetRing.setVisible(false); } catch (_) { /* ignore */ } }
+    if (this._archerRangeRing) { try { this._archerRangeRing.setVisible(false); } catch (_) { /* ignore */ } }
+
+    this.paladinEnabled = false;
+    this.warlockEnabled = false;
+    this.warlockDebuffEnabled = false;
+
+    // 清除玩家弹幕（包括毒池等持续伤害）
+    try { this.bulletManager?.clearPlayerBullets?.(); } catch (_) { /* ignore */ }
+
+    // 额外保险：清除非 BulletManager 托管、但标记为玩家弹幕的临时对象（例如近战判定 graphics）
+    try {
+      const list = Array.isArray(this.children?.list) ? this.children.list.slice() : [];
+      list.forEach((child) => {
+        if (!child || !child.active) return;
+        if (child === this.player) return;
+        if (child.isPlayerBullet) {
+          child.destroy?.();
+        }
+      });
+    } catch (_) { /* ignore */ }
   }
 }
 

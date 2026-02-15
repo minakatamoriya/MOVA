@@ -805,6 +805,23 @@ export default class BulletManager {
   }
 
   /**
+   * 仅清除玩家弹幕（不影响 Boss 弹幕）
+   * - 用于玩家死亡时立刻停止玩家所有攻击表现
+   */
+  clearPlayerBullets() {
+    if (!this.playerBulletGroup?.children) return;
+
+    const playerBullets = this.playerBulletGroup.children.entries.slice();
+    playerBullets.forEach((bullet) => {
+      if (bullet) this.destroyBullet(bullet, true);
+    });
+
+    if (this.playerBulletGroup?.children) {
+      this.stats.activePlayerBullets = this.playerBulletGroup.children.entries.length;
+    }
+  }
+
+  /**
    * 仅清除 Boss 弹幕（不影响玩家子弹）
    * - 用于 Boss 死亡/过关时立刻清场，避免残留伤害
    */

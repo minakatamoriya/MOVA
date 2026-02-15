@@ -1159,12 +1159,17 @@ export default class Player extends Phaser.GameObjects.Container {
     if (!this.isAlive) return;
     
     this.isAlive = false;
+    this.canFire = false;
+    this.clearAnalogMove?.();
     console.log('玩家被击败！');
     
     // 停止射击
     if (this.fireTimer) {
       this.fireTimer.remove();
     }
+
+    // 终止持续类技能表现（例如法师奥术射线）
+    try { destroyArcaneRay(this); } catch (_) { /* ignore */ }
     
     // 死亡动画
     this.scene.tweens.add({

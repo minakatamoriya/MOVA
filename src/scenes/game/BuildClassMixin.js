@@ -687,7 +687,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updateDrones(time, delta) {
-      if (!this.droneEnabled || !this.player) return;
+      if (!this.droneEnabled || !this.player || this.player.isAlive === false) return;
       if (!this.droneUnits) this.droneUnits = [];
       this.syncDroneUnits();
 
@@ -822,7 +822,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updateMelee(time) {
-      if (!this.meleeEnabled || !this.player) return;
+      if (!this.meleeEnabled || !this.player || this.player.isAlive === false) return;
 
       const range = this.meleeRange || 150;
 
@@ -1456,7 +1456,10 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updatePaladinTargetingRing(time) {
-      if (!this.player) return;
+      if (!this.player || this.player.isAlive === false) {
+        if (this._paladinTargetRing) this._paladinTargetRing.setVisible(false);
+        return;
+      }
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'paladin' || this.player.mainCoreKey === 'paladin' || this.paladinEnabled;
@@ -1497,7 +1500,10 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updateArcherRangeRing(time) {
-      if (!this.player) return;
+      if (!this.player || this.player.isAlive === false) {
+        if (this._archerRangeRing) this._archerRangeRing.setVisible(false);
+        return;
+      }
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'scatter' || this.player.mainCoreKey === 'scatter';
@@ -1545,7 +1551,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updatePaladinPulse(time) {
-      if (!this.paladinEnabled || !this.player) return;
+      if (!this.paladinEnabled || !this.player || this.player.isAlive === false) return;
       if (time - this.paladinLastTime < this.paladinCooldown) return;
 
       const boss = this.bossManager.getCurrentBoss();
@@ -1623,6 +1629,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updateWarlockDebuff(time, delta) {
+      if (!this.player || this.player.isAlive === false) return;
       const now = this.time?.now ?? time;
       const boss = this.bossManager?.getCurrentBoss?.() || null;
       const minions = this.bossManager?.getMinions?.() || [];

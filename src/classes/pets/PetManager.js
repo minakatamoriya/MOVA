@@ -279,7 +279,7 @@ export default class PetManager {
   }
 
   update(time, delta) {
-    if (!this.player) return;
+    if (!this.player || this.player.isAlive === false) return;
 
     // 自动回归（冷却结束）
     for (const type of this.owned.values()) {

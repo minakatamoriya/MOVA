@@ -143,10 +143,59 @@ export default function App() {
 
   // 装备系统（React 版）交互：点击=查看详情；详情卡片右侧按钮操作（装备/卸载）
   const [equipDetail, setEquipDetail] = useState(null);
+  const equipDetailTimerRef = useRef(null);
 
   // 道具商店（React 版）交互：点击=查看详情（风格与装备查看类似）
   const [shopDetailItem, setShopDetailItem] = useState(null);
   const shopDetailTimerRef = useRef(null);
+
+  const DETAIL_AUTO_HIDE_MS = 3000;
+  const LONG_PRESS_MS = 420;
+
+  const pressStateRef = useRef({ timer: null, fired: false, key: null });
+  const clearPressState = () => {
+    const t = pressStateRef.current?.timer;
+    if (t) clearTimeout(t);
+    pressStateRef.current = { timer: null, fired: false, key: null };
+  };
+
+  const startLongPress = (key, onLongPress, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    clearPressState();
+    pressStateRef.current = {
+      key,
+      fired: false,
+      timer: setTimeout(() => {
+        // 触发长按
+        pressStateRef.current = { ...pressStateRef.current, fired: true, timer: null };
+        try {
+          onLongPress?.();
+        } catch (err) {
+          // ignore
+        }
+      }, LONG_PRESS_MS)
+    };
+  };
+
+  const endLongPress = (key, onShortPress, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const cur = pressStateRef.current;
+    if (!cur || cur.key !== key) {
+      clearPressState();
+      return;
+    }
+    const fired = !!cur.fired;
+    clearPressState();
+    if (!fired) {
+      try {
+        onShortPress?.();
+      } catch (err) {
+        // ignore
+      }
+    }
+  };
 
   const showShopDetail = (item) => {
     if (!item) return;
@@ -158,7 +207,7 @@ export default function App() {
     shopDetailTimerRef.current = setTimeout(() => {
       setShopDetailItem(null);
       shopDetailTimerRef.current = null;
-    }, 2600);
+    }, DETAIL_AUTO_HIDE_MS);
   };
 
   const showEquipDetail = (payload) => {
@@ -173,6 +222,15 @@ export default function App() {
       kind: payload?.kind === 'equipped' ? 'equipped' : 'owned',
       slotIndex: Number.isFinite(Number(payload?.slotIndex)) ? Number(payload.slotIndex) : null
     });
+
+    if (equipDetailTimerRef.current) {
+      clearTimeout(equipDetailTimerRef.current);
+      equipDetailTimerRef.current = null;
+    }
+    equipDetailTimerRef.current = setTimeout(() => {
+      setEquipDetail(null);
+      equipDetailTimerRef.current = null;
+    }, DETAIL_AUTO_HIDE_MS);
   };
 
   useEffect(() => {
@@ -181,8 +239,29 @@ export default function App() {
         clearTimeout(shopDetailTimerRef.current);
         shopDetailTimerRef.current = null;
       }
+      if (equipDetailTimerRef.current) {
+        clearTimeout(equipDetailTimerRef.current);
+        equipDetailTimerRef.current = null;
+      }
+      clearPressState();
     };
   }, []);
+
+  const attemptPurchaseShopItem = (item) => {
+    if (!item?.id) return;
+    const isOwned = ownedItems.includes(item.id);
+    if (isOwned) {
+      showFloatingInfo('已拥有');
+      return;
+    }
+    const coins = Number(viewData?.globalCoins || 0);
+    const price = Number(item.price || 0);
+    if (coins < price) {
+      showFloatingInfo('金币不足');
+      return;
+    }
+    uiBus.emit('ui:itemShop:purchase', item.id);
+  };
 
   const getNextAutoEquipSlot = () => {
     const list = Array.isArray(equippedItems) ? equippedItems : [];
@@ -765,20 +844,21 @@ export default function App() {
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            alignItems: 'stretch',
+            justifyContent: 'stretch',
             color: '#fff'
           }}
         >
           <div
             style={{
-              width: 660,
-              maxWidth: '94%',
-              maxHeight: '92%',
-              borderRadius: 12,
+              width: '100%',
+              height: '100%',
+              maxWidth: '100%',
+              maxHeight: '100%',
+              borderRadius: 0,
               background: 'rgba(15, 16, 26, 0.92)',
               border: '2px solid rgba(42,42,58,1)',
-              padding: 18,
+              padding: 14,
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
@@ -787,19 +867,19 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 32, fontWeight: 900 }}>道具商店</div>
+              <div style={{ fontSize: 14, fontWeight: 900, opacity: 0.9 }}>点击购买，长按查看</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
                 style={{
                   cursor: 'pointer',
-                  height: 38,
+                  height: 30,
                   padding: '0 14px',
                   borderRadius: 12,
                   border: '1px solid rgba(255,255,255,0.25)',
                   background: 'rgba(255,255,255,0.08)',
                   color: '#fff',
-                  fontSize: 16,
+                  fontSize: 13,
                   fontWeight: 800
                 }}
               >
@@ -807,7 +887,7 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 800 }}>
+            <div style={{ opacity: 0.92, fontSize: 14, fontWeight: 900 }}>
               全局金币: {viewData?.globalCoins || 0}
             </div>
 
@@ -822,8 +902,10 @@ export default function App() {
                 gap: 10,
                 justifyContent: 'center',
                 alignContent: 'start',
-                paddingBottom: 84
+                paddingBottom: 84,
+                userSelect: 'none'
               }}
+              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
             >
               {ITEM_DEFS.map((item) => {
                 const isOwned = ownedItems.includes(item.id);
@@ -831,7 +913,12 @@ export default function App() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => showShopDetail(item)}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onPointerDown={(e) => startLongPress(`shop:${item.id}`, () => showShopDetail(item), e)}
+                    onPointerUp={(e) => endLongPress(`shop:${item.id}`, () => attemptPurchaseShopItem(item), e)}
+                    onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                    onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     style={{
                       cursor: 'pointer',
                       width: 92,
@@ -841,7 +928,10 @@ export default function App() {
                       padding: 0,
                       textAlign: 'center',
                       opacity: isOwned ? 0.55 : 1,
-                      filter: isOwned ? 'grayscale(1) brightness(0.9)' : 'none'
+                      filter: isOwned ? 'grayscale(1) brightness(0.9)' : 'none',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      touchAction: 'none'
                     }}
                     title={`${item.name}：${item.desc}`}
                   >
@@ -901,8 +991,6 @@ export default function App() {
             {shopDetailItem ? (
               (() => {
                 const isOwned = ownedItems.includes(shopDetailItem.id);
-                const coins = Number(viewData?.globalCoins || 0);
-                const canBuy = !isOwned && coins >= Number(shopDetailItem.price || 0);
                 return (
                   <div
                     style={{
@@ -930,26 +1018,7 @@ export default function App() {
                       <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
                       {isOwned ? (
                         <div style={{ fontWeight: 900, color: '#88ff88' }}>已拥有</div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!canBuy}
-                          onClick={() => uiBus.emit('ui:itemShop:purchase', shopDetailItem.id)}
-                          style={{
-                            cursor: canBuy ? 'pointer' : 'not-allowed',
-                            height: 34,
-                            padding: '0 14px',
-                            borderRadius: 12,
-                            border: '1px solid rgba(255,255,255,0.25)',
-                            background: canBuy ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)',
-                            color: canBuy ? '#fff' : 'rgba(255,255,255,0.55)',
-                            fontSize: 14,
-                            fontWeight: 800
-                          }}
-                        >
-                          购买
-                        </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -967,20 +1036,21 @@ export default function App() {
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            alignItems: 'stretch',
+            justifyContent: 'stretch',
             color: '#fff'
           }}
         >
           <div
             style={{
-              width: 760,
-              maxWidth: '96%',
-              maxHeight: '92%',
-              borderRadius: 12,
+              width: '100%',
+              height: '100%',
+              maxWidth: '100%',
+              maxHeight: '100%',
+              borderRadius: 0,
               background: 'rgba(15, 16, 26, 0.92)',
               border: '2px solid rgba(42,42,58,1)',
-              padding: 18,
+              padding: 14,
               display: 'flex',
               flexDirection: 'column',
               gap: 12,
@@ -989,19 +1059,19 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 32, fontWeight: 900 }}>装备系统</div>
+              <div style={{ fontSize: 14, fontWeight: 900, opacity: 0.9 }}>点击装备/卸载，长按查看</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
                 style={{
                   cursor: 'pointer',
-                  height: 38,
+                  height: 30,
                   padding: '0 14px',
                   borderRadius: 12,
                   border: '1px solid rgba(255,255,255,0.25)',
                   background: 'rgba(255,255,255,0.08)',
                   color: '#fff',
-                  fontSize: 16,
+                  fontSize: 13,
                   fontWeight: 800
                 }}
               >
@@ -1010,7 +1080,6 @@ export default function App() {
             </div>
 
             <div>
-              <div style={{ fontWeight: 900, marginBottom: 8 }}>已装备（6 格）</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 92px)', gap: 10, justifyContent: 'center' }}>
                 {new Array(6).fill(null).map((_, idx) => {
                   const itemId = equippedItems?.[idx] || null;
@@ -1019,62 +1088,26 @@ export default function App() {
                     <button
                       key={`slot-${idx}`}
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (item) showEquipDetail({ kind: 'equipped', slotIndex: idx, item });
-                        else showEquipDetail(null);
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onPointerDown={(e) => {
+                        if (!item) return;
+                        startLongPress(`equipSlot:${idx}`, () => showEquipDetail({ kind: 'equipped', slotIndex: idx, item }), e);
                       }}
-                      style={{
-                        cursor: 'pointer',
-                        width: 92,
-                        height: 92,
-                        borderRadius: 12,
-                        border: '2px solid rgba(42,42,58,1)',
-                        background: 'rgba(11, 11, 24, 0.62)',
-                        color: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 900,
-                        fontSize: 20
+                      onPointerUp={(e) => {
+                        if (!item) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          clearPressState();
+                          return;
+                        }
+                        endLongPress(`equipSlot:${idx}`, () => {
+                          unequipSlot(idx);
+                          showFloatingInfo('已卸载');
+                        }, e);
                       }}
-                      title={item ? item.name : `空槽位 ${idx + 1}`}
-                    >
-                      {item ? item.icon : '空'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontWeight: 900 }}>已拥有道具（点击查看详情）</div>
-              <div
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: 'auto',
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(6, 92px)',
-                  gap: 10,
-                  justifyContent: 'center',
-                  alignContent: 'start'
-                }}
-              >
-                {ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).length === 0 ? (
-                  <div style={{ opacity: 0.8 }}>暂无已购买道具</div>
-                ) : (
-                  ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).map((item) => (
-                    (() => {
-                      const isEquipped = Array.isArray(equippedItems) && equippedItems.includes(item.id);
-                      return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        showEquipDetail({ kind: 'owned', item });
-                      }}
+                      onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                      onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                       style={{
                         cursor: 'pointer',
                         width: 92,
@@ -1088,15 +1121,83 @@ export default function App() {
                         justifyContent: 'center',
                         fontWeight: 900,
                         fontSize: 20,
-                        overflow: 'hidden'
-                        ,
-                        opacity: isEquipped ? 0.35 : 1,
-                        filter: isEquipped ? 'grayscale(1) brightness(0.85)' : 'none'
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                        touchAction: 'none'
                       }}
-                      title={`${item.name}：${item.desc}`}
+                      title={item ? item.name : `空槽位 ${idx + 1}`}
                     >
-                      {item.icon}
+                      {item ? item.icon : '空'}
                     </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: 'auto',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(6, 92px)',
+                  gap: 10,
+                  justifyContent: 'center',
+                  alignContent: 'start',
+                  paddingBottom: 84,
+                  userSelect: 'none'
+                }}
+                onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              >
+                {ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).length === 0 ? (
+                  <div style={{ opacity: 0.8 }}>暂无已购买道具</div>
+                ) : (
+                  ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).map((item) => (
+                    (() => {
+                      const isEquipped = Array.isArray(equippedItems) && equippedItems.includes(item.id);
+                      const equippedSlot = Array.isArray(equippedItems) ? equippedItems.indexOf(item.id) : -1;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onPointerDown={(e) => startLongPress(`owned:${item.id}`, () => showEquipDetail({ kind: 'owned', item }), e)}
+                          onPointerUp={(e) => endLongPress(`owned:${item.id}`, () => {
+                            if (equippedSlot >= 0) {
+                              unequipSlot(equippedSlot);
+                              showFloatingInfo('已卸载');
+                              return;
+                            }
+                            autoEquipOwnedItem(item.id);
+                          }, e)}
+                          onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                          onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          style={{
+                            cursor: 'pointer',
+                            width: 92,
+                            height: 92,
+                            borderRadius: 12,
+                            border: '2px solid rgba(42,42,58,1)',
+                            background: 'rgba(11, 11, 24, 0.62)',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: 20,
+                            overflow: 'hidden',
+                            opacity: isEquipped ? 0.35 : 1,
+                            filter: isEquipped ? 'grayscale(1) brightness(0.85)' : 'none',
+                            userSelect: 'none',
+                            WebkitUserSelect: 'none',
+                            touchAction: 'none'
+                          }}
+                          title={`${item.name}：${item.desc}`}
+                        >
+                          {item.icon}
+                        </button>
                       );
                     })()
                   ))
@@ -1104,16 +1205,12 @@ export default function App() {
               </div>
             </div>
 
-            {/* 详情卡片：点击展示；右侧按钮操作（卸载/装备） */}
+            {/* 详情卡片：长按展示；3 秒后自动消失 */}
             {equipDetail?.item ? (
               (() => {
                 const item = equipDetail.item;
                 const list = Array.isArray(equippedItems) ? equippedItems : [];
                 const isEquipped = list.includes(item.id);
-                const canEquip = !isEquipped && getNextAutoEquipSlot() >= 0;
-
-                const actionText = equipDetail.kind === 'equipped' ? '卸载' : '装备';
-                const actionDisabled = equipDetail.kind === 'equipped' ? false : !canEquip;
 
                 return (
                   <div
@@ -1140,35 +1237,7 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      {equipDetail.kind !== 'equipped' && isEquipped ? (
-                        <div style={{ fontWeight: 900, color: '#88ff88' }}>已装备</div>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={actionDisabled}
-                        onClick={() => {
-                          if (equipDetail.kind === 'equipped') {
-                            if (Number.isFinite(equipDetail.slotIndex)) unequipSlot(equipDetail.slotIndex);
-                            showEquipDetail(null);
-                          } else {
-                            autoEquipOwnedItem(item.id);
-                            showEquipDetail({ kind: 'owned', item });
-                          }
-                        }}
-                        style={{
-                          cursor: actionDisabled ? 'not-allowed' : 'pointer',
-                          height: 34,
-                          padding: '0 14px',
-                          borderRadius: 12,
-                          border: '1px solid rgba(255,255,255,0.25)',
-                          background: actionDisabled ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.10)',
-                          color: actionDisabled ? 'rgba(255,255,255,0.55)' : '#fff',
-                          fontSize: 14,
-                          fontWeight: 800
-                        }}
-                      >
-                        {actionText}
-                      </button>
+                      {isEquipped ? <div style={{ fontWeight: 900, color: '#88ff88' }}>已装备</div> : null}
                     </div>
                   </div>
                 );

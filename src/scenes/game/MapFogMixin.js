@@ -711,6 +711,24 @@ export function applyMapFogMixin(GameScene) {
       const cam = this.cameras.main;
       const view = cam.worldView;
 
+      // 若玩家移动到小地图遮挡区域：淡化小地图
+      {
+        const { x0, y0, w, h } = this.miniMap;
+        const zoom = (cam && Number.isFinite(cam.zoom)) ? cam.zoom : 1;
+        const playerScreenX = (this.player.x - view.x) * zoom;
+        const playerScreenY = (this.player.y - view.y) * zoom;
+        const overlapped = playerScreenX >= x0 && playerScreenX <= (x0 + w)
+          && playerScreenY >= y0 && playerScreenY <= (y0 + h);
+        const targetAlpha = overlapped ? 0.2 : 1;
+
+        if (this.miniMapRoot && this.miniMapRoot.alpha !== targetAlpha) {
+          this.miniMapRoot.setAlpha(targetAlpha);
+        }
+        if (this._mapNameText && this._mapNameText.alpha !== targetAlpha) {
+          this._mapNameText.setAlpha(targetAlpha);
+        }
+      }
+
       const px = Phaser.Math.Clamp(this.player.x, 0, worldW);
       const py = Phaser.Math.Clamp(this.player.y, 0, worldH);
 
