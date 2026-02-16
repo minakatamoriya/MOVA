@@ -14,20 +14,48 @@ import { mountUi } from './ui/mount';
 import { uiBus } from './ui/bus';
 import { resetSkillTreeProgress } from './classes/progression';
 
+function getViewportCssSize() {
+  // 移动端（尤其是 iOS Safari）横竖屏切换/刷新时，innerWidth/innerHeight 可能短时间不准确。
+  // 优先使用 visualViewport，其次使用容器实际尺寸，最后才回退 innerWidth/innerHeight。
+  const vv = window.visualViewport;
+  const vw = Number(vv?.width);
+  const vh = Number(vv?.height);
+
+  if (Number.isFinite(vw) && vw > 0 && Number.isFinite(vh) && vh > 0) {
+    return { width: Math.round(vw), height: Math.round(vh), source: 'visualViewport' };
+  }
+
+  const container = document.getElementById('game-container');
+  if (container) {
+    const rect = container.getBoundingClientRect();
+    const w = Number(rect.width);
+    const h = Number(rect.height);
+    if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) {
+      return { width: Math.round(w), height: Math.round(h), source: 'containerRect' };
+    }
+  }
+
+  return { width: Math.round(window.innerWidth || 0), height: Math.round(window.innerHeight || 0), source: 'inner' };
+}
+
 /**
  * 获取设备显示信息
  */
 function getDeviceDisplayInfo() {
   const dpr = window.devicePixelRatio || 1;
+  const vp = getViewportCssSize();
+  const w = vp.width || window.innerWidth;
+  const h = vp.height || window.innerHeight;
   return {
-    cssWidth: window.innerWidth,
-    cssHeight: window.innerHeight,
+    cssWidth: w,
+    cssHeight: h,
+    cssSource: vp.source,
     devicePixelRatio: dpr,
-    physicalWidth: Math.round(window.innerWidth * dpr),
-    physicalHeight: Math.round(window.innerHeight * dpr),
+    physicalWidth: Math.round(w * dpr),
+    physicalHeight: Math.round(h * dpr),
     screenWidth: window.screen.width,
     screenHeight: window.screen.height,
-    orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+    orientation: w > h ? 'landscape' : 'portrait'
   };
 }
 
@@ -38,15 +66,14 @@ console.log(`  物理分辨率: ${deviceInfo.physicalWidth}×${deviceInfo.physic
 console.log(`  屏幕方向: ${deviceInfo.orientation}`);
 
 /**
- * Phaser 游戏配置
- * 高度固定 720，宽度按屏幕宽高比自动计算，配合 FIT 缩放 → 无黑边 + 等比缩放。
- * 所有设备高度方向视觉完全一致，宽屏多看一点左右边缘。
+ * Phaser 游戏配置（方案 A：固定设计视口）
+ * - 逻辑分辨率固定为 720×1280（9:16），确保所有机型“玩法视野一致”。
+ * - 使用 FIT 等比缩放：不同长宽比设备会出现黑边（通常是两侧黑边），但不会增加/减少可视范围。
  */
-const GAME_HEIGHT = 720;
-const screenAspect = window.innerWidth / window.innerHeight;
-const GAME_WIDTH = Math.round(GAME_HEIGHT * screenAspect);
+const GAME_WIDTH = 720;
+const GAME_HEIGHT = 1280;
 
-console.log(`🎮 游戏分辨率: ${GAME_WIDTH}×${GAME_HEIGHT} (屏幕比例 ${screenAspect.toFixed(3)})`);
+console.log(`🎮 逻辑游戏分辨率(固定): ${GAME_WIDTH}×${GAME_HEIGHT} (9:16)`);
 
 const config = {
   type: Phaser.AUTO,
@@ -89,12 +116,35 @@ const game = new Phaser.Game(config);
 // 将设备显示信息存入 registry，供任意场景访问
 game.registry.set('deviceInfo', deviceInfo);
 
-// 监听窗口尺寸变化（手机旋转等），动态调整游戏宽度以保持无黑边
-window.addEventListener('resize', () => {
-  const newAspect = window.innerWidth / window.innerHeight;
-  const newWidth = Math.round(GAME_HEIGHT * newAspect);
-  game.scale.resize(newWidth, GAME_HEIGHT);
-});
+const applyResponsiveGameSize = (reason) => {
+  const vp = getViewportCssSize();
+  const w = Number(vp.width || 0);
+  const h = Number(vp.height || 0);
+  if (!(w > 0 && h > 0)) return;
+
+  // 方案 A：不要改变逻辑尺寸，只刷新 FIT 布局（必要时同步父容器尺寸）。
+  try {
+    if (typeof game.scale.setParentSize === 'function') {
+      game.scale.setParentSize(w, h);
+    }
+    game.scale.refresh();
+    const orientation = w > h ? 'landscape' : 'portrait';
+    console.log(`📐 Resize(${reason || 'unknown'}): viewport ${w}×${h} (${vp.source}) -> game fixed ${GAME_WIDTH}×${GAME_HEIGHT} (${orientation})`);
+  } catch (_) {
+    // ignore
+  }
+};
+
+// 监听窗口尺寸变化（手机旋转等），刷新 FIT 布局
+window.addEventListener('resize', () => applyResponsiveGameSize('window.resize'));
+window.addEventListener('orientationchange', () => applyResponsiveGameSize('orientationchange'));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => applyResponsiveGameSize('visualViewport.resize'));
+}
+
+// 首次启动时再校准两次：下一帧 + 250ms（解决移动端旋转后刷新时尺寸上报延迟）
+requestAnimationFrame(() => applyResponsiveGameSize('raf'));
+setTimeout(() => applyResponsiveGameSize('timeout250'), 250);
 
 // UI 模式：React 负责菜单与按钮，Phaser 只渲染玩法画面
 game.registry.set('uiMode', 'react');

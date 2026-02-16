@@ -898,7 +898,7 @@ export default function App() {
                 minHeight: 0,
                 overflow: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(6, 92px)',
+                gridTemplateColumns: 'repeat(auto-fill, 92px)',
                 gap: 10,
                 justifyContent: 'center',
                 alignContent: 'start',
@@ -1080,7 +1080,7 @@ export default function App() {
             </div>
 
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 92px)', gap: 10, justifyContent: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 92px)', gap: 10, justifyContent: 'center' }}>
                 {new Array(6).fill(null).map((_, idx) => {
                   const itemId = equippedItems?.[idx] || null;
                   const item = itemId ? ITEM_DEFS.find((it) => it.id === itemId) : null;
@@ -1141,7 +1141,7 @@ export default function App() {
                   minHeight: 0,
                   overflow: 'auto',
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(6, 92px)',
+                  gridTemplateColumns: 'repeat(auto-fill, 92px)',
                   gap: 10,
                   justifyContent: 'center',
                   alignContent: 'start',
@@ -1598,81 +1598,89 @@ export default function App() {
               background: 'rgba(15, 16, 26, 0.7)',
               flex: 1,
               display: 'flex',
-              flexDirection: 'row',
+              flexDirection: 'column',
               overflow: 'hidden',
               position: 'relative'
             }}
           >
-            {/* 左侧竖向 tab（缩小） */}
+            {/* 顶部 tab：从左侧移到上方 */}
             <div
               style={{
-                width: 110,
                 padding: 8,
                 display: 'flex',
-                flexDirection: 'column',
                 gap: 8,
-                borderRight: '2px solid rgba(42,42,58,1)',
+                borderBottom: '2px solid rgba(42,42,58,1)',
                 background: 'rgba(20, 20, 36, 0.75)'
               }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {[
-                  { key: 'classes', label: '天赋' },
-                  { key: 'bag', label: '背包' },
-                  { key: 'stats', label: '属性' }
-                ].map((t) => {
-                  const active = activeTab === t.key;
-                  return (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => {
-                        setActiveTab(t.key);
-                        if (floatingInfoText) setFloatingInfoText('');
-                      }}
-                      style={{
-                        cursor: 'pointer',
-                        width: '100%',
-                        height: 38,
-                        borderRadius: 10,
-                        border: `2px solid ${active ? 'rgba(102,204,255,1)' : 'rgba(42,42,58,1)'}`,
-                        background: active ? 'rgba(42, 42, 68, 1)' : 'rgba(15, 16, 26, 0.92)',
-                        color: '#fff',
-                        fontSize: 12,
-                        fontWeight: 900
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {[
+                { key: 'classes', label: '天赋' },
+                { key: 'bag', label: '背包' },
+                { key: 'stats', label: '属性' }
+              ].map((t) => {
+                const active = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(t.key);
+                      if (floatingInfoText) setFloatingInfoText('');
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      flex: 1,
+                      height: 38,
+                      borderRadius: 10,
+                      border: `2px solid ${active ? 'rgba(102,204,255,1)' : 'rgba(42,42,58,1)'}`,
+                      background: active ? 'rgba(42, 42, 68, 1)' : 'rgba(15, 16, 26, 0.92)',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 900
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
 
-              <div style={{ flex: 1 }} />
+            {/* 右侧内容区：尽量扩大展示面积 */}
+            <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', padding: 0 }}>
+              {activeTab === 'classes' ? renderTalentPanel() : null}
+              {activeTab === 'bag' ? renderBagPanel() : null}
+              {activeTab === 'stats' ? renderStatsPanel() : null}
+            </div>
 
-              {/* 分隔线：上方导航 / 下方操作 */}
-              <div style={{ height: 1, background: 'rgba(255,255,255,0.2)', margin: '10px 0 8px' }} />
-
-              {/* 返回 / 退出：降低权重但保持警示 */}
+            {/* 底部操作：返回 + 退出 */}
+            <div
+              style={{
+                padding: 8,
+                display: 'flex',
+                gap: 10,
+                borderTop: '2px solid rgba(42,42,58,1)',
+                background: 'rgba(20, 20, 36, 0.75)'
+              }}
+            >
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:setViewOpen', false)}
                 style={{
                   cursor: 'pointer',
-                  width: '100%',
-                  height: 36,
+                  flex: 1,
+                  height: 40,
                   borderRadius: 10,
                   border: '2px solid rgba(42,42,58,1)',
                   background: 'rgba(15, 16, 26, 0.92)',
                   color: 'rgba(255,255,255,0.86)',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 900,
-                  opacity: 0.8,
+                  opacity: 0.9,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 4,
-                  padding: '0 6px'
+                  gap: 6,
+                  padding: '0 10px'
                 }}
               >
                 ← 返回
@@ -1683,32 +1691,24 @@ export default function App() {
                 onClick={() => setConfirmExitOpen(true)}
                 style={{
                   cursor: 'pointer',
-                  width: '100%',
-                  height: 36,
-                  marginTop: 6,
+                  flex: 1,
+                  height: 40,
                   borderRadius: 10,
                   border: '2px solid rgba(255, 77, 77, 0.65)',
                   background: 'rgba(255, 77, 77, 0.10)',
                   color: 'rgba(255,255,255,0.92)',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 900,
-                  opacity: 0.8,
+                  opacity: 0.9,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 4,
-                  padding: '0 6px'
+                  gap: 6,
+                  padding: '0 10px'
                 }}
               >
                 退出
               </button>
-            </div>
-
-            {/* 右侧内容区：尽量扩大展示面积 */}
-            <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: 0 }}>
-              {activeTab === 'classes' ? renderTalentPanel() : null}
-              {activeTab === 'bag' ? renderBagPanel() : null}
-              {activeTab === 'stats' ? renderStatsPanel() : null}
             </div>
 
             {/* 点击浮框说明（不占用固定空间） */}
@@ -1716,12 +1716,13 @@ export default function App() {
               <div
                 style={{
                   position: 'absolute',
-                  left: 126,
+                  left: 0,
                   right: 0,
-                  bottom: 0,
+                  bottom: 56,
                   padding: 12,
                   borderRadius: 0,
                   border: '2px solid rgba(42,42,58,1)',
+                  borderLeft: 'none',
                   borderRight: 'none',
                   borderBottom: 'none',
                   background: 'rgba(11, 11, 24, 0.88)',
