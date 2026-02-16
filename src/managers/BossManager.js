@@ -1,6 +1,7 @@
 import BaseBoss from '../enemies/bosses/BaseBoss';
 import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
+import { getStageBalance } from '../data/balanceConfig';
 
 /**
  * Boss 管理器
@@ -44,8 +45,8 @@ export default class BossManager {
   spawnMapBoss(bossData, spawnPt, layer = 1, silent = true) {
     if (!bossData) return null;
 
-    const scaling = getLayerScaling(Math.max(1, layer));
-    const baseHp = getRoleHp('boss');
+    const stage = Math.max(1, Math.floor(layer || 1));
+    const balance = getStageBalance(stage);
     const bossSize = getRoleSize('boss');
 
     const movePatternMap = {
@@ -59,11 +60,11 @@ export default class BossManager {
       x: spawnPt.x,
       y: spawnPt.y,
       name: bossData.name,
-      hp: Math.round(baseHp * scaling.hpMult),
+      hp: Math.round(balance.boss.hp),
       size: bossSize,
       color: bossData.color,
       movePattern: movePatternMap[bossData.moveType] || 'random',
-      moveSpeed: 75,
+      moveSpeed: balance.boss.moveSpeed,
       combatActive: false,
       entryType: 'fade',
       entryDuration: 400,

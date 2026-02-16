@@ -740,6 +740,10 @@ export default class CollisionManager {
     for (let i = allBossBullets.length - 1; i >= 0; i--) {
       const bullet = allBossBullets[i];
       if (!bullet || !bullet.active) continue;
+
+      // 若子弹不可见/几乎透明：视为无效，避免“看不见但被打到”的体验
+      if (bullet.visible === false) continue;
+      if (typeof bullet.alpha === 'number' && bullet.alpha <= 0.05) continue;
       
       // 获取子弹半径（根据类型可能不同）
       let bulletRadius = 6; // 默认半径

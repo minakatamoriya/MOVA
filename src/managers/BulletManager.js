@@ -300,8 +300,9 @@ export default class BulletManager {
       bullet = this.scene.add.star(x, y, 5, Math.max(2, radius * 0.45), Math.max(5, radius * 1.2), color, 1);
       bullet.radius = Math.round(radius * 1.2);
     } else if (shapeType === 'ring') {
-      bullet = this.scene.add.circle(x, y, radius, color, 0);
-      bullet.setStrokeStyle(Math.max(2, Math.round(radius * 0.35)), color, 1);
+      // ring 类多用于“范围伤害/爆炸区”，若只画描边会出现“被打到了但看不见覆盖面积”的问题
+      bullet = this.scene.add.circle(x, y, radius, color, 0.16);
+      bullet.setStrokeStyle(Math.max(2, Math.round(radius * 0.22)), color, 0.85);
       bullet.radius = Math.round(radius);
     } else if (shapeType === 'rectangle') {
       // 向后兼容：旧矩形弹
@@ -344,6 +345,10 @@ export default class BulletManager {
       x: Math.cos(angle) * speed,
       y: Math.sin(angle) * speed
     };
+
+    // 始终把敌方弹幕绘制在迷雾之上，避免“不可见的远程攻击”（迷雾遮住了子弹但碰撞仍生效）
+    // UI（小地图/HUD）通常在更高的 depth，因此不会盖住 UI。
+    try { bullet.setDepth(410); } catch (_) { /* ignore */ }
 
     // 可选发光（默认关闭：避免“实心+外圈”风格）
     if (hasGlow) {

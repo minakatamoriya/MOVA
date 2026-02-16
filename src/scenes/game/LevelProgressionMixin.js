@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { STAGE_FLOW, LINE_META, NEUTRAL, getLayerChoices, getMapById } from '../../data/mapPool';
 import { getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
+import { BALANCE_CONSTANTS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import TestMinion from '../../enemies/minions/TestMinion';
@@ -69,8 +70,12 @@ export function applyLevelProgressionMixin(GameScene) {
 
     getMaxExpForLevel(level) {
       const lv = Math.max(1, Math.floor(level || 1));
-      if (lv <= 5) return 100 * lv;
-      return Math.floor(500 * Math.pow(1.35, lv - 5));
+      // 目标：前两关升级更频繁（第1关≈+2级，第2关≈+2~3级），后期再逐步拉开
+      if (lv <= 15) {
+        return 120 + (lv - 1) * 40;
+      }
+      // 16+：指数增长，避免后期无限膨胀
+      return Math.floor(720 * Math.pow(1.18, lv - 15));
     },
 
     addExp(amount, opts = {}) {
@@ -354,14 +359,12 @@ export function applyLevelProgressionMixin(GameScene) {
     },
 
     spawnSingleExitDoor() {
-      const worldSize = this.mapConfig.gridSize * this.mapConfig.cellSize;
-      const x = Math.floor(worldSize / 2);
-      const y = Math.floor(this.mapConfig.cellSize * 0.35);
+      const { x, y, w, h } = getExitDoorWorldRect(this.mapConfig);
 
-      this.exitDoorZone = this.add.zone(x, y, this.mapConfig.cellSize * 1.2, this.mapConfig.cellSize * 0.8);
+      this.exitDoorZone = this.add.zone(x, y, w, h);
       this.exitDoorActive = true;
 
-      const frame = this.add.rectangle(x, y, this.mapConfig.cellSize * 1.2, this.mapConfig.cellSize * 0.8, 0x0b0b18, 0.65);
+      const frame = this.add.rectangle(x, y, w, h, 0x0b0b18, 0.65);
       frame.setStrokeStyle(3, 0xffdd88, 0.95);
       frame.setDepth(210);
 
@@ -686,19 +689,16 @@ export function applyLevelProgressionMixin(GameScene) {
 
       const worldSize = cfg.gridSize * cfg.cellSize;
       const cell = cfg.cellSize;
-      const layer = this.currentStage || 1;
-      const scaling = getLayerScaling(layer);
+      const stage = this.currentStage || 1;
+      const balance = getStageBalance(stage);
 
-      const spawnPt = this.getSpawnPoint();
-      const bossPt  = this.getBossSpawnPoint();
-
-      const minionCount = Math.round(minions.length * 2 * scaling.countMult);
+      const minionCount = Phaser.Math.Between(balance.minions.countMin, balance.minions.countMax);
       const spawned = [];
 
       for (let i = 0; i < minionCount; i++) {
         const def = minions[i % minions.length];
         const size = getRoleSize('minion');
-        const hp   = Math.round(getRoleHp('minion') * scaling.hpMult);
+        const hp   = Math.round(balance.minions.hp);
 
         const mx = Phaser.Math.Between(Math.floor(cell * 1.5), Math.floor(worldSize - cell * 1.5));
         const my = Phaser.Math.Between(Math.floor(worldSize * 0.4), Math.floor(worldSize * 0.8));
@@ -711,20 +711,28 @@ export function applyLevelProgressionMixin(GameScene) {
           hp,
           size,
           color: def.color,
-          moveSpeed: def.moveType === 'patrol' ? 65 : 95,
-          contactDamage: Math.round(10 * scaling.damageMult),
-          expReward: Math.round(25 * scaling.hpMult),
+          moveSpeed: balance.minions.speed[def.moveType] ?? balance.minions.speed.chaser,
+          contactDamage: balance.minions.contactDamage,
+          expReward: balance.minions.exp,
           isElite: false,
           aggroOnSeen: true,
+          aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
+          shootCdMs: (def.moveType === 'shooter') ? balance.minions.projectiles.cdMs : undefined,
+          shootBulletCount: (def.moveType === 'shooter') ? balance.minions.projectiles.count : undefined,
+          shootBulletSpread: (def.moveType === 'shooter') ? balance.minions.projectiles.spread : undefined,
+          shootBulletSpeed: (def.moveType === 'shooter') ? balance.minions.projectiles.speed : undefined,
+          shootBulletDamage: (def.moveType === 'shooter') ? balance.minions.projectiles.damage : undefined,
+          // 前两关显著降低弹幕：把“受击反击”基本关掉
+          hitReactionCdMs: (stage <= 2) ? Infinity : undefined,
         });
         spawned.push(m);
       }
 
-      const eliteCount = Math.round(elites.length * scaling.countMult);
+      const eliteCount = Phaser.Math.Between(balance.elites.countMin, balance.elites.countMax);
       for (let i = 0; i < eliteCount; i++) {
         const def = elites[i % elites.length];
         const size = getRoleSize('elite');
-        const hp   = Math.round(getRoleHp('elite') * scaling.hpMult);
+        const hp   = Math.round(balance.elites.hp);
 
         const ex = Phaser.Math.Between(Math.floor(cell * 2), Math.floor(worldSize - cell * 2));
         const ey = Phaser.Math.Between(Math.floor(worldSize * 0.15), Math.floor(worldSize * 0.45));
@@ -737,11 +745,18 @@ export function applyLevelProgressionMixin(GameScene) {
           hp,
           size,
           color: def.color,
-          moveSpeed: def.moveType === 'patrol' ? 55 : 80,
-          contactDamage: Math.round(16 * scaling.damageMult),
-          expReward: Math.round(60 * scaling.hpMult),
+          moveSpeed: balance.elites.speed[def.moveType] ?? balance.elites.speed.chaser,
+          contactDamage: balance.elites.contactDamage,
+          expReward: balance.elites.exp,
           isElite: true,
           aggroOnSeen: true,
+          aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
+          shootCdMs: (def.moveType === 'shooter') ? balance.elites.projectiles.cdMs : undefined,
+          shootBulletCount: (def.moveType === 'shooter') ? balance.elites.projectiles.count : undefined,
+          shootBulletSpread: (def.moveType === 'shooter') ? balance.elites.projectiles.spread : undefined,
+          shootBulletSpeed: (def.moveType === 'shooter') ? balance.elites.projectiles.speed : undefined,
+          shootBulletDamage: (def.moveType === 'shooter') ? balance.elites.projectiles.damage : undefined,
+          hitReactionCdMs: (stage <= 2) ? Infinity : undefined,
         });
         spawned.push(m);
       }
@@ -749,7 +764,7 @@ export function applyLevelProgressionMixin(GameScene) {
       if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];
       this.bossManager.minions.push(...spawned);
 
-      console.log(`[MapMonsters] spawned ${spawned.length} enemies for map "${mapId}" (layer ${layer})`);
+      console.log(`[MapMonsters] spawned ${spawned.length} enemies for map "${mapId}" (stage ${stage})`);
     }
 
   });

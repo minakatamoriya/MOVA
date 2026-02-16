@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { START_ROOM, NEUTRAL } from '../../data/mapPool';
 import { getMapBoss } from '../../data/mapMonsters';
+import { getBossSpawnWorldPoint } from '../../data/balanceConfig';
 
 /**
  * 地图/迷雾/小地图 相关方法
@@ -190,11 +191,7 @@ export function applyMapFogMixin(GameScene) {
       const cfg = this.mapConfig;
       if (!cfg) return { x: this.gameArea.x + this.gameArea.width / 2, y: this.gameArea.y + 150 };
 
-      const worldSize = cfg.gridSize * cfg.cellSize;
-      return {
-        x: Math.floor(worldSize / 2),
-        y: Math.floor(cfg.cellSize * 1.25)
-      };
+      return getBossSpawnWorldPoint(cfg);
     },
 
     setupWorldMapForLevel(level, opts = {}) {

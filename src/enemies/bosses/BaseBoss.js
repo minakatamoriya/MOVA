@@ -803,6 +803,10 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       return false;
     }
 
+    if (!this._firstDamagedAt) {
+      this._firstDamagedAt = (this.scene?.time?.now ?? 0);
+    }
+
     // 接口：受击反馈（允许无伤害也触发；比如无敌阶段被打也要有反应）
     this.triggerHitReaction({ ...(context || {}), damage });
 
@@ -979,6 +983,16 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 清空 Boss 弹幕与未来陷阱：避免“Boss 已死但弹幕/落点还在打人”
     try { this.scene?.bulletManager?.clearBossBullets?.(); } catch (_) { /* ignore */ }
     try { this.clearHazards(); } catch (_) { /* ignore */ }
+
+    try {
+      const now = (this.scene?.time?.now ?? 0);
+      const first = (this._firstDamagedAt || now);
+      const ttkMs = Math.max(0, now - first);
+      const stage = this.scene?.currentStage || 1;
+      // eslint-disable-next-line no-console
+      console.log(`[TTK] stage=${stage} role=boss name=${this.bossName} hp=${this.maxHp} ttk=${(ttkMs / 1000).toFixed(2)}s`);
+    } catch (_) { /* ignore */ }
+
     console.log(`${this.bossName} 被击败了！`);
     
     // 停止所有计时器

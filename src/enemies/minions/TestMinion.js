@@ -35,6 +35,11 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.shootCdMs = config.shootCdMs || 850;
     this._lastShotAt = 0;
 
+    this.shootBulletCount = (config.shootBulletCount != null) ? Math.max(1, Math.floor(config.shootBulletCount)) : 3;
+    this.shootBulletSpread = (config.shootBulletSpread != null) ? Number(config.shootBulletSpread) : 0.22;
+    this.shootBulletSpeed = (config.shootBulletSpeed != null) ? Math.max(60, Math.floor(config.shootBulletSpeed)) : 180;
+    this.shootBulletDamage = (config.shootBulletDamage != null) ? Math.max(1, Math.floor(config.shootBulletDamage)) : 10;
+
     // 受击反馈（可扩展接口）：被击中后立即触发某种“反应”（远程反击/冲锋/防御法阵等）
     this.hitReactionCdMs = (config.hitReactionCdMs != null)
       ? Math.max(0, Math.round(config.hitReactionCdMs))
@@ -46,6 +51,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     // 第一关首波：进入视野后才开始追玩家
     this.aggroOnSeen = !!config.aggroOnSeen;
     this.aggroActive = !this.aggroOnSeen;
+
+    // “检测到后缓缓移动”：速度爬升时间（毫秒）
+    this.aggroRampMs = (config.aggroRampMs != null) ? Math.max(0, Math.floor(config.aggroRampMs)) : 650;
+    this._aggroStartAt = this.aggroActive ? (this.scene?.time?.now ?? 0) : 0;
 
     this.debuffs = {};
 
@@ -207,6 +216,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   takeDamage(damage, context = {}) {
     if (!this.isAlive) return false;
 
+    if (!this._firstDamagedAt) {
+      this._firstDamagedAt = (this.scene?.time?.now ?? 0);
+    }
+
     // 接口：受击反馈
     this.triggerHitReaction({ ...(context || {}), damage });
 
@@ -291,6 +304,16 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     if (!this.isAlive) return;
     this.isAlive = false;
 
+    if (reason === 'killed') {
+      const now = (this.scene?.time?.now ?? 0);
+      const first = (this._firstDamagedAt || now);
+      const ttkMs = Math.max(0, now - first);
+      const stage = this.scene?.currentStage || 1;
+      const role = this.isElite ? 'elite' : 'minion';
+      // eslint-disable-next-line no-console
+      console.log(`[TTK] stage=${stage} role=${role} name=${this.minionName} hp=${this.maxHp} ttk=${(ttkMs / 1000).toFixed(2)}s`);
+    }
+
     if (reason === 'killed' && this.scene?.events) {
       this.scene.events.emit('minionKilled', {
         x: this.x,
@@ -349,6 +372,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         : false;
       if (inView || inRange) {
         this.aggroActive = true;
+        this._aggroStartAt = (this.scene?.time?.now ?? time ?? 0);
       } else {
         return;
       }
@@ -376,6 +400,16 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     const dt = (delta || 0) / 1000;
+
+    // 速度缓启动：刚激活时更慢，逐步逼近 moveSpeed
+    const now = (time != null) ? time : (this.scene?.time?.now ?? 0);
+    let speedMult = 1;
+    if (!this.followBoss && this.aggroRampMs > 0) {
+      const t = Math.max(0, now - (this._aggroStartAt || 0));
+      // 0.35 起步，避免完全不动；随后线性爬到 1
+      const pct = Phaser.Math.Clamp(t / this.aggroRampMs, 0, 1);
+      speedMult = 0.35 + 0.65 * pct;
+    }
 
     if (this.minionType === 'shooter' && this.followBoss) {
       const targetX = this.followBoss.x + (this.followOffset?.x || 0);
@@ -407,12 +441,30 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       return;
     }
 
+    // shooter（不跟随Boss）：缓慢靠近到理想距离并射击
+    if (this.minionType === 'shooter' && player && player.isAlive) {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+
+      // 保持一定距离：远程单位别贴脸
+      const preferDist = 220;
+      if (dist > preferDist) {
+        const step = Math.min(dist - preferDist, (this.moveSpeed * speedMult) * dt);
+        this.x += (dx / dist) * step;
+        this.y += (dy / dist) * step;
+      }
+
+      this.tryShoot(time, player);
+      return;
+    }
+
     // chaser：追玩家
     if (player && player.isAlive) {
       const dx = player.x - this.x;
       const dy = player.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-      const step = Math.min(dist, this.moveSpeed * dt);
+      const step = Math.min(dist, (this.moveSpeed * speedMult) * dt);
       this.x += (dx / dist) * step;
       this.y += (dy / dist) * step;
 
@@ -459,15 +511,17 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     if (!this.scene?.bulletManager?.createBossBullet) return;
 
     const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
-    // 降低密集程度：更少子弹 + 更长 CD
-    const count = 3;
-    const spread = 0.22;
+    const count = Math.max(1, this.shootBulletCount || 1);
+    const spread = Number.isFinite(this.shootBulletSpread) ? this.shootBulletSpread : 0.0;
+    const speed = Math.max(60, this.shootBulletSpeed || 180);
+    const damage = Math.max(1, this.shootBulletDamage || 10);
+
     for (let i = 0; i < count; i++) {
       const t = count === 1 ? 0 : (i / (count - 1));
       const a = baseAngle + (t - 0.5) * spread;
-      this.scene.bulletManager.createBossBullet(this.x, this.y, a, 180, 0xaa66ff, {
+      this.scene.bulletManager.createBossBullet(this.x, this.y, a, speed, 0xaa66ff, {
         radius: 6,
-        damage: 10,
+        damage,
         hasTrail: true,
         type: i % 2 === 0 ? 'diamond' : 'circle'
       });
