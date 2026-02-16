@@ -506,6 +506,11 @@ export function applyBuildClassMixin(GameScene) {
 
       const options = this.getLevelUpOptions();
 
+      // 关键：暂停期间 pointerup 可能丢失（尤其移动端摇杆按住时弹出三选一）。
+      // 在真正 pause 之前，先把摇杆/模拟移动输入清空，避免恢复后持续移动。
+      this.resetTouchJoystickInput?.();
+      this.player?.clearAnalogMove?.();
+
       if (this.physics?.world) this.physics.world.pause();
       if (this.anims) this.anims.pauseAll();
       if (this.time) this.time.paused = true;

@@ -310,6 +310,9 @@ class GameScene extends Phaser.Scene {
       // 避免"暂停期间累积的巨大 delta"导致物品 CD 被补算
       this._skipGameplayDeltaOnce = true;
 
+      // 恢复时先清掉摇杆/模拟移动输入，防止暂停期间抬手导致方向残留
+      this.resetTouchJoystickInput?.();
+
       if (this.physics?.world) this.physics.world.resume();
       if (this.anims) this.anims.resumeAll();
       if (this.time) this.time.paused = false;
@@ -792,6 +795,23 @@ class GameScene extends Phaser.Scene {
     this.input.on('pointermove', onMove);
     this.input.on('pointerup', onUp);
     this.input.on('pointerupoutside', onUp);
+  }
+
+  // 兜底：当场景被暂停/被 UI 覆盖时，pointerup 可能丢失，导致摇杆方向残留。
+  // 这里把“摇杆状态 + 玩家模拟输入”都视作松手，防止恢复后继续朝旧方向移动。
+  resetTouchJoystickInput() {
+    try {
+      const j = this._touchJoystick;
+      if (j) {
+        j.activePointerId = null;
+        j.value?.set?.(0, 0);
+        j.base?.setVisible?.(false);
+        j.thumb?.setVisible?.(false);
+      }
+    } catch (_) {
+      // ignore
+    }
+    this.player?.clearAnalogMove?.();
   }
 
   destroyTouchJoystick() {

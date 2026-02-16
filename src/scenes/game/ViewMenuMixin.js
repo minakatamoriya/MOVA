@@ -236,6 +236,10 @@ export function applyViewMenuMixin(GameScene) {
       // React UI 模式
       if (this.isReactUiMode()) {
         if (this.viewMenuOpen && !this.viewMenuClosing) return;
+
+        // 打开暂停/查看界面前，先清空摇杆与模拟移动输入，避免恢复后延续旧方向。
+        this.resetTouchJoystickInput?.();
+
         this.viewMenuOpen = true;
         this.viewMenuClosing = false;
 
@@ -298,6 +302,10 @@ export function applyViewMenuMixin(GameScene) {
       if (this.isReactUiMode()) {
         this.viewMenuClosing = false;
         this.viewMenuOpen = false;
+
+        // 关闭菜单恢复前也再兜底清一次，防止菜单期间抬手/切换导致状态残留。
+        this.resetTouchJoystickInput?.();
+
         if (this.anims?.resumeAll) {
           this.anims.resumeAll();
         }
