@@ -15,13 +15,44 @@ import { uiBus } from './ui/bus';
 import { resetSkillTreeProgress } from './classes/progression';
 
 /**
- * Phaser 游戏配置
+ * 获取设备显示信息
  */
+function getDeviceDisplayInfo() {
+  const dpr = window.devicePixelRatio || 1;
+  return {
+    cssWidth: window.innerWidth,
+    cssHeight: window.innerHeight,
+    devicePixelRatio: dpr,
+    physicalWidth: Math.round(window.innerWidth * dpr),
+    physicalHeight: Math.round(window.innerHeight * dpr),
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    orientation: window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+  };
+}
+
+const deviceInfo = getDeviceDisplayInfo();
+console.log('📱 设备显示信息:', deviceInfo);
+console.log(`  CSS 分辨率: ${deviceInfo.cssWidth}×${deviceInfo.cssHeight}`);
+console.log(`  物理分辨率: ${deviceInfo.physicalWidth}×${deviceInfo.physicalHeight} (DPR: ${deviceInfo.devicePixelRatio})`);
+console.log(`  屏幕方向: ${deviceInfo.orientation}`);
+
+/**
+ * Phaser 游戏配置
+ * 高度固定 720，宽度按屏幕宽高比自动计算，配合 FIT 缩放 → 无黑边 + 等比缩放。
+ * 所有设备高度方向视觉完全一致，宽屏多看一点左右边缘。
+ */
+const GAME_HEIGHT = 720;
+const screenAspect = window.innerWidth / window.innerHeight;
+const GAME_WIDTH = Math.round(GAME_HEIGHT * screenAspect);
+
+console.log(`🎮 游戏分辨率: ${GAME_WIDTH}×${GAME_HEIGHT} (屏幕比例 ${screenAspect.toFixed(3)})`);
+
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  width: 1280,
-  height: 720,
+  width: GAME_WIDTH,
+  height: GAME_HEIGHT,
   backgroundColor: '#000000',
   input: {
     // 关键：不要监听 window 级事件，否则点击 React Overlay 也会触发 Phaser 输入
@@ -54,6 +85,16 @@ const config = {
 
 // 创建游戏实例
 const game = new Phaser.Game(config);
+
+// 将设备显示信息存入 registry，供任意场景访问
+game.registry.set('deviceInfo', deviceInfo);
+
+// 监听窗口尺寸变化（手机旋转等），动态调整游戏宽度以保持无黑边
+window.addEventListener('resize', () => {
+  const newAspect = window.innerWidth / window.innerHeight;
+  const newWidth = Math.round(GAME_HEIGHT * newAspect);
+  game.scale.resize(newWidth, GAME_HEIGHT);
+});
 
 // UI 模式：React 负责菜单与按钮，Phaser 只渲染玩法画面
 game.registry.set('uiMode', 'react');

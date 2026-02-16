@@ -746,6 +746,20 @@ export function applyMapFogMixin(GameScene) {
 
       overlay.fillStyle(0x00ffff, 1);
       overlay.fillCircle(mx, my, 3);
+    },
+
+    /**
+     * 屏幕尺寸变化时重新定位小地图（底部锚定）
+     */
+    repositionMiniMap() {
+      if (!this.miniMapRoot || !this.miniMap) return;
+
+      // 重建小地图以正确定位
+      if (this.inStartRoom) {
+        this.setupStartRoomMiniMap();
+      } else {
+        this.setupMiniMap();
+      }
     }
 
   });

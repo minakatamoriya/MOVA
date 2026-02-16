@@ -347,6 +347,25 @@ export function applyHudMixin(GameScene) {
       this.expBarText.setDepth(922);
     },
 
+    /**
+     * 重建左上角 HUD（屏幕尺寸变化后调用）
+     * 销毁旧的 HUD 元素并重新创建
+     */
+    rebuildTopLeftHud() {
+      // 销毁旧的 HUD 元素
+      const oldElements = [
+        this.hpHeartText, this.hpBarBg, this.hpBarFill, this.hpBarText,
+        this.expIconText, this.expBarBg, this.expBarFill, this.expBarText
+      ];
+      oldElements.forEach(el => { if (el && el.destroy) el.destroy(); });
+
+      // 重新创建
+      this.createTopLeftHud();
+
+      // 恢复 HUD 数值显示
+      this.updateInfoPanel();
+    },
+
     createButton(x, y, text, callback, width = 140, height = 50, fontSize = '14px') {
       const button = this.add.container(x, y);
 

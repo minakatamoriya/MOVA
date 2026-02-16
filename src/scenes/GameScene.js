@@ -245,7 +245,7 @@ class GameScene extends Phaser.Scene {
     // 设置背景
     this.cameras.main.setBackgroundColor('#0a0a1a');
 
-    // 主界面保持"白纸"，血条 HUD 放在左上角（Canvas 内机制）
+    // 固定分辨率 1280×720 + FIT 缩放，所有设备体验完全一致
     this.bottomPanelHeight = 0;
     this.gameArea = {
       x: 50,
@@ -253,7 +253,6 @@ class GameScene extends Phaser.Scene {
       width: this.cameras.main.width - 100,
       height: this.cameras.main.height - 100 - this.bottomPanelHeight
     };
-
     this.bottomHudTopY = this.gameArea.y + this.gameArea.height;
 
     // 左上角血条 HUD
@@ -303,6 +302,9 @@ class GameScene extends Phaser.Scene {
     // 新流程：先进入起始房间（小地图、无迷雾、无 Boss）
     this.enterStartRoom();
 
+    // 监听屏幕尺寸变化（手机旋转等），重新计算游戏区域和 HUD 布局
+    this.scale.on('resize', this.handleResize, this);
+
     // 从升级/商店等叠加场景恢复时，确保各系统解除暂停
     this.events.on('resume', () => {
       // 避免"暂停期间累积的巨大 delta"导致物品 CD 被补算
@@ -323,7 +325,33 @@ class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * 处理游戏分辨率变化（手机旋转导致宽度变化时触发）
+   */
+  handleResize(gameSize) {
+    const w = gameSize.width;
+    const h = gameSize.height;
+
+    // 重新计算游戏区域
+    this.gameArea = {
+      x: 50,
+      y: 50,
+      width: w - 100,
+      height: h - 100 - (this.bottomPanelHeight || 0)
+    };
+    this.bottomHudTopY = this.gameArea.y + this.gameArea.height;
+
+    // 重建 HUD 和小地图
+    this.rebuildTopLeftHud?.();
+    this.repositionMiniMap?.();
+
+    console.log(`📐 游戏尺寸变化: ${w}×${h}`);
+  }
+
   shutdown() {
+    // 移除 resize 监听
+    this.scale.off('resize', this.handleResize, this);
+
     // 本局掉落/战利品是一次性的：死亡或退出导致场景关闭时清空
     this.inventoryAcquired = [];
     this.drops = [];
