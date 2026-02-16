@@ -14,6 +14,58 @@ import { mountUi } from './ui/mount';
 import { uiBus } from './ui/bus';
 import { resetSkillTreeProgress } from './classes/progression';
 
+// 微信内置浏览器（以及 iOS WKWebView）在“返回上一页/切回前台”时可能从 BFCache 恢复，
+// 导致 JS 运行态、资源缓存、甚至首屏逻辑不更新。
+// 兜底策略：检测到 back/forward 恢复就强制刷新一次，并用 sessionStorage 防止无限刷新循环。
+(() => {
+  const KEY = '__bfcache_reload_once__';
+
+  const getNavType = () => {
+    try {
+      const entry = performance?.getEntriesByType?.('navigation')?.[0];
+      if (entry && typeof entry.type === 'string') return entry.type;
+    } catch (_) {
+      // ignore
+    }
+    try {
+      // legacy: 2 means TYPE_BACK_FORWARD
+      const t = performance?.navigation?.type;
+      if (typeof t === 'number') return t === 2 ? 'back_forward' : 'other';
+    } catch (_) {
+      // ignore
+    }
+    return 'unknown';
+  };
+
+  const shouldForceReload = (eventPersisted) => {
+    if (eventPersisted) return true;
+    return getNavType() === 'back_forward';
+  };
+
+  window.addEventListener('pageshow', (event) => {
+    const forced = shouldForceReload(!!event.persisted);
+
+    // 正常加载时清理标记：避免“刷新过一次后标记残留”，导致下次 BFCache 恢复不再刷新。
+    if (!forced) {
+      try {
+        if (sessionStorage.getItem(KEY) === '1') sessionStorage.removeItem(KEY);
+      } catch (_) {
+        // ignore
+      }
+      return;
+    }
+
+    // BFCache/后退前进恢复：只允许强刷一次，防止无限循环。
+    try {
+      if (sessionStorage.getItem(KEY) === '1') return;
+      sessionStorage.setItem(KEY, '1');
+    } catch (_) {
+      // sessionStorage 不可用时就直接刷新（最差情况用户会看到重复刷新，但一般不会）
+    }
+    window.location.reload();
+  });
+})();
+
 function getViewportCssSize() {
   // 移动端（尤其是 iOS Safari）横竖屏切换/刷新时，innerWidth/innerHeight 可能短时间不准确。
   // 优先使用 visualViewport，其次使用容器实际尺寸，最后才回退 innerWidth/innerHeight。
