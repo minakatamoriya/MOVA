@@ -405,7 +405,7 @@ export default function App() {
             {symbol}
           </div>
 
-          <div style={{ fontSize: 12, fontWeight: 900, textAlign: 'center', lineHeight: 1.15 }}>
+          <div style={{ fontSize: 16, fontWeight: 900, textAlign: 'center', lineHeight: 1.15 }}>
             {node.name}
           </div>
         </button>
@@ -817,8 +817,8 @@ export default function App() {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 900, fontSize: 16 }}>显示伤害数字</div>
-                  <div style={{ opacity: 0.75, fontSize: 12, marginTop: 4 }}>关闭后将不再显示飘字伤害</div>
+                  <div style={{ fontWeight: 900, fontSize: 20 }}>显示伤害数字</div>
+                  <div style={{ opacity: 0.75, fontSize: 16, marginTop: 4 }}>关闭后将不再显示飘字伤害</div>
                 </div>
                 <input
                   type="checkbox"
@@ -867,7 +867,7 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 900, opacity: 0.9 }}>点击购买，长按查看</div>
+              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点击购买，长按查看</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
@@ -887,7 +887,7 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{ opacity: 0.92, fontSize: 14, fontWeight: 900 }}>
+            <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 900 }}>
               全局金币: {viewData?.globalCoins || 0}
             </div>
 
@@ -973,7 +973,7 @@ export default function App() {
                       style={{
                         marginTop: 6,
                         fontWeight: 900,
-                        fontSize: 12,
+                        fontSize: 16,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
@@ -981,7 +981,7 @@ export default function App() {
                     >
                       {item.name}
                     </div>
-                    <div style={{ marginTop: 2, fontWeight: 900, fontSize: 12, color: '#ffd700' }}>{item.price} G</div>
+                    <div style={{ marginTop: 2, fontWeight: 900, fontSize: 14, color: '#ffd700' }}>{item.price} G</div>
                   </button>
                 );
               })}
@@ -1012,7 +1012,7 @@ export default function App() {
                       <div style={{ fontWeight: 900, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {shopDetailItem.icon} {shopDetailItem.name}
                       </div>
-                      <div style={{ opacity: 0.82, fontSize: 13, marginTop: 4 }}>{shopDetailItem.desc}</div>
+                      <div style={{ opacity: 0.82, fontSize: 15, marginTop: 4 }}>{shopDetailItem.desc}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
@@ -1059,7 +1059,7 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 900, opacity: 0.9 }}>点击装备/卸载，长按查看</div>
+              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点击装备/卸载，长按查看</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
@@ -1594,10 +1594,8 @@ export default function App() {
         >
           <div
             style={{
-              margin: 18,
               borderRadius: 12,
-              background: 'rgba(15, 16, 26, 0.98)',
-              border: '2px solid rgba(255,255,255,0.22)',
+              background: 'rgba(15, 16, 26, 0.7)',
               flex: 1,
               display: 'flex',
               flexDirection: 'row',
@@ -1608,11 +1606,11 @@ export default function App() {
             {/* 左侧竖向 tab（缩小） */}
             <div
               style={{
-                width: 132,
-                padding: 10,
+                width: 110,
+                padding: 8,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 10,
+                gap: 8,
                 borderRight: '2px solid rgba(42,42,58,1)',
                 background: 'rgba(20, 20, 36, 0.75)'
               }}
@@ -1635,12 +1633,12 @@ export default function App() {
                       style={{
                         cursor: 'pointer',
                         width: '100%',
-                        height: 44,
-                        borderRadius: 12,
+                        height: 38,
+                        borderRadius: 10,
                         border: `2px solid ${active ? 'rgba(102,204,255,1)' : 'rgba(42,42,58,1)'}`,
                         background: active ? 'rgba(42, 42, 68, 1)' : 'rgba(15, 16, 26, 0.92)',
                         color: '#fff',
-                        fontSize: 14,
+                        fontSize: 12,
                         fontWeight: 900
                       }}
                     >
@@ -1662,18 +1660,19 @@ export default function App() {
                 style={{
                   cursor: 'pointer',
                   width: '100%',
-                  height: 44,
-                  borderRadius: 12,
+                  height: 36,
+                  borderRadius: 10,
                   border: '2px solid rgba(42,42,58,1)',
                   background: 'rgba(15, 16, 26, 0.92)',
                   color: 'rgba(255,255,255,0.86)',
-                  fontSize: 13,
+                  fontSize: 11,
                   fontWeight: 900,
                   opacity: 0.8,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 6
+                  gap: 4,
+                  padding: '0 6px'
                 }}
               >
                 ← 返回
@@ -1685,19 +1684,20 @@ export default function App() {
                 style={{
                   cursor: 'pointer',
                   width: '100%',
-                  height: 44,
-                  marginTop: 8,
-                  borderRadius: 12,
+                  height: 36,
+                  marginTop: 6,
+                  borderRadius: 10,
                   border: '2px solid rgba(255, 77, 77, 0.65)',
                   background: 'rgba(255, 77, 77, 0.10)',
                   color: 'rgba(255,255,255,0.92)',
-                  fontSize: 13,
+                  fontSize: 11,
                   fontWeight: 900,
                   opacity: 0.8,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 6
+                  gap: 4,
+                  padding: '0 6px'
                 }}
               >
                 退出
@@ -1705,7 +1705,7 @@ export default function App() {
             </div>
 
             {/* 右侧内容区：尽量扩大展示面积 */}
-            <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: 12 }}>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'auto', padding: 0 }}>
               {activeTab === 'classes' ? renderTalentPanel() : null}
               {activeTab === 'bag' ? renderBagPanel() : null}
               {activeTab === 'stats' ? renderStatsPanel() : null}
@@ -1716,17 +1716,21 @@ export default function App() {
               <div
                 style={{
                   position: 'absolute',
-                  left: 148,
-                  right: 12,
-                  bottom: 12,
+                  left: 126,
+                  right: 0,
+                  bottom: 0,
                   padding: 12,
-                  borderRadius: 12,
+                  borderRadius: 0,
                   border: '2px solid rgba(42,42,58,1)',
+                  borderRight: 'none',
+                  borderBottom: 'none',
                   background: 'rgba(11, 11, 24, 0.88)',
                   color: '#fff',
                   whiteSpace: 'pre-wrap',
                   lineHeight: 1.55,
-                  pointerEvents: 'none'
+                  pointerEvents: 'none',
+                  fontSize: 13,
+                  maxHeight: '40%'
                 }}
               >
                 {floatingInfoText}

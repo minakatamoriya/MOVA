@@ -5,9 +5,10 @@ export default class SystemMessageOverlay {
     this.scene = scene;
 
     this.depth = opts.depth ?? 2000;
-    // 默认放到屏幕最下方居中
+    // 默认放到屏幕最下方居中（默认与 Toast 的锚点保持一致）
     this.anchorY = opts.anchorY ?? 0.92;
-    this.marginBottomPx = opts.marginBottomPx ?? 34;
+    // 作为“贴底”时的底部 margin（与 ToastOverlay 的 margin 含义一致）
+    this.marginBottomPx = opts.marginBottomPx ?? 16;
     this.marginTopPx = opts.marginTopPx ?? 28;
 
     this._current = null;
@@ -101,10 +102,21 @@ export default class SystemMessageOverlay {
 
     const cam = this.scene.cameras.main;
     const x = cam.centerX;
-    const anchorY = opts.anchorY ?? this.anchorY;
-    let y = Math.floor(cam.height * anchorY);
+    const hasAnchorY = Number.isFinite(Number(opts.anchorY));
+    const bottomHudH = this.scene.bottomPanelHeight || 0;
+
+    // 默认：贴底并与 ToastOverlay 的锚点一致；如显式传入 anchorY，则使用 anchorY
+    let y;
+    if (hasAnchorY) {
+      const anchorY = Number(opts.anchorY);
+      y = Math.floor(cam.height * anchorY);
+    } else {
+      // ToastOverlay._getAnchor(): y = cam.height - margin - bottomHudH - 22
+      y = Math.floor(cam.height - this.marginBottomPx - bottomHudH - 22);
+    }
+
     // 强制留出上下边距，避免贴边/被遮挡
-    y = Phaser.Math.Clamp(y, this.marginTopPx, cam.height - this.marginBottomPx);
+    y = Phaser.Math.Clamp(y, this.marginTopPx, cam.height - Math.max(8, this.marginBottomPx));
 
     const maxW = Math.floor(cam.width * 0.86);
     const padX = 18;
@@ -122,7 +134,7 @@ export default class SystemMessageOverlay {
 
     // 文字（自动换行）
     const txt = this.scene.add.text(0, 0, String(text ?? ''), {
-      fontSize: '22px',
+      fontSize: '18px',
       color: '#ffffff',
       fontStyle: '600',
       align: 'center',

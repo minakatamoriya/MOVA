@@ -131,8 +131,7 @@ export function applyLevelProgressionMixin(GameScene) {
         const playerScreenX = this.player.x - view.x;
         const playerScreenY = this.player.y - view.y;
         centerX = playerScreenX;
-        const downOffset = Math.floor(cell * 0.8);
-        centerY = playerScreenY - minDist + downOffset;
+        centerY = playerScreenY;
       } else {
         centerX = view.x + cam.width * 0.5;
         centerY = view.y + cam.height * 0.43;
@@ -154,12 +153,17 @@ export function applyLevelProgressionMixin(GameScene) {
       let startDeg;
       let endDeg;
       if (useScreenSpace) {
-        arcRadius = Math.floor(Math.min(cell * 3.35, cam.height * 0.36));
-        startDeg = 215;
-        endDeg = 325;
+        // 六选一：围绕角色均匀分布成圆形（每 60 度）
+        arcRadius = Math.floor(Math.min(cell * 1.95, Math.min(cam.width, cam.height) * 0.22));
+        startDeg = -90;
+        endDeg = startDeg + 300;
 
-        const minCenterY = arcRadius + iconR + 26;
-        const maxCenterY = (this.player.y - view.y) - (iconR + 44);
+        const margin = 14;
+        const minCenterX = arcRadius + iconR + margin;
+        const maxCenterX = cam.width - (arcRadius + iconR + margin);
+        const minCenterY = arcRadius + iconR + margin;
+        const maxCenterY = cam.height - (arcRadius + iconR + margin);
+        centerX = Phaser.Math.Clamp(centerX, minCenterX, maxCenterX);
         centerY = Phaser.Math.Clamp(centerY, minCenterY, maxCenterY);
       } else {
         arcRadius = Math.floor(Math.min(cam.width * 0.55, cell * 5.0));
@@ -172,8 +176,9 @@ export function applyLevelProgressionMixin(GameScene) {
       const debugSpawn = [];
 
       items.forEach((it, idx) => {
-        const t = (items.length <= 1) ? 0.5 : (idx / (items.length - 1));
-        const deg = Phaser.Math.Linear(startDeg, endDeg, t);
+        const deg = useScreenSpace
+          ? (startDeg + (idx * 60))
+          : Phaser.Math.Linear(startDeg, endDeg, (items.length <= 1) ? 0.5 : (idx / (items.length - 1)));
         const rad = Phaser.Math.DegToRad(deg);
         const cx = centerX + Math.cos(rad) * arcRadius;
         const cy = centerY + Math.sin(rad) * arcRadius;
@@ -311,7 +316,6 @@ export function applyLevelProgressionMixin(GameScene) {
         this.systemMessage.show(`你获得了${className}技能 ${baseSkillName}，开始你的冒险吧！`, {
           key: 'startroom_got_skill',
           durationMs: 3200,
-          anchorY: 0.92,
           onDismiss: () => {
           }
         });

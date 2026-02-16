@@ -11,7 +11,7 @@ export function applyMapFogMixin(GameScene) {
     getMapConfigForLevel(level) {
       return {
         level: level || 1,
-        gridSize: 14,
+        gridSize: 20,
         cellSize: 128,
         debugGrid: false
       };
@@ -46,8 +46,9 @@ export function applyMapFogMixin(GameScene) {
     getStartRoomSpawnPoint() {
       const cfg = this.getStartRoomConfig();
       return {
+        // 起始房间：出生点放在正中心，保证 UI/武器选择环不会出屏
         x: Math.floor(cfg.worldW / 2),
-        y: Math.floor(cfg.worldH * 0.80)
+        y: Math.floor(cfg.worldH / 2)
       };
     },
 
@@ -120,8 +121,7 @@ export function applyMapFogMixin(GameScene) {
       if (this.systemMessage) {
         this.systemMessage.show('请选择一件趁手的武器！', {
           key: 'startroom_pick_weapon',
-          sticky: true,
-          anchorY: 0.92
+          sticky: true
         });
       }
 
@@ -540,8 +540,8 @@ export function applyMapFogMixin(GameScene) {
       const cam = this.cameras.main;
 
       const margin = 16;
-      const miniW = 170;
-      const miniH = 170;
+      const miniW = 130;
+      const miniH = 130;
       const x0 = margin;
       const y0 = cam.height - margin - miniH;
 
@@ -563,7 +563,8 @@ export function applyMapFogMixin(GameScene) {
       const sy = miniH / worldSize;
 
       mapG.clear();
-      mapG.fillStyle(0x0a0a1a, 1);
+      // 小地图底色：略调亮，提高与“未探索迷雾”的对比度
+      mapG.fillStyle(0x222a44, 1);
       mapG.fillRect(0, 0, miniW, miniH);
 
       mapG.lineStyle(1, 0x222244, 0.35);
@@ -588,7 +589,8 @@ export function applyMapFogMixin(GameScene) {
       fogRT.setOrigin(0, 0);
       fogRT.setScrollFactor(0);
       fogRT.setDepth(951);
-      fogRT.fill(0x000000, 0.86);
+      // 未探索迷雾：更黑更不透明，突出“未探索 vs 已探索”的差异
+      fogRT.fill(0x000000, 0.94);
 
       const brushKey = this.ensureRadialLightTexture('minimap_fog_brush_soft', 128);
       const fogBrushImage = this.make.image({ x: 0, y: 0, key: brushKey, add: false });
@@ -621,8 +623,8 @@ export function applyMapFogMixin(GameScene) {
 
       const cam = this.cameras.main;
       const margin = 16;
-      const miniW = 170;
-      const miniH = 170;
+      const miniW = 130;
+      const miniH = 130;
       const x0 = margin;
       const y0 = cam.height - margin - miniH;
 
@@ -639,7 +641,7 @@ export function applyMapFogMixin(GameScene) {
       mapG.setPosition(x0, y0);
 
       mapG.clear();
-      mapG.fillStyle(0x0a0a1a, 1);
+      mapG.fillStyle(0x222a44, 1);
       mapG.fillRect(0, 0, miniW, miniH);
 
       const cx = miniW / 2;
@@ -715,10 +717,22 @@ export function applyMapFogMixin(GameScene) {
       {
         const { x0, y0, w, h } = this.miniMap;
         const zoom = (cam && Number.isFinite(cam.zoom)) ? cam.zoom : 1;
-        const playerScreenX = (this.player.x - view.x) * zoom;
-        const playerScreenY = (this.player.y - view.y) * zoom;
-        const overlapped = playerScreenX >= x0 && playerScreenX <= (x0 + w)
-          && playerScreenY >= y0 && playerScreenY <= (y0 + h);
+        const bounds = (typeof this.player.getBounds === 'function')
+          ? this.player.getBounds()
+          : { left: this.player.x - 16, right: this.player.x + 16, top: this.player.y - 16, bottom: this.player.y + 16 };
+        const pad = 2;
+        const pLeft = (bounds.left - view.x) * zoom;
+        const pRight = (bounds.right - view.x) * zoom;
+        const pTop = (bounds.top - view.y) * zoom;
+        const pBottom = (bounds.bottom - view.y) * zoom;
+
+        // 以“边界矩形”判定，而不是中心点；一旦边界触碰到小地图区域就淡化
+        const mmLeft = x0;
+        const mmRight = x0 + w;
+        const mmTop = y0;
+        const mmBottom = y0 + h;
+
+        const overlapped = !(pRight < (mmLeft - pad) || pLeft > (mmRight + pad) || pBottom < (mmTop - pad) || pTop > (mmBottom + pad));
         const targetAlpha = overlapped ? 0.2 : 1;
 
         if (this.miniMapRoot && this.miniMapRoot.alpha !== targetAlpha) {
