@@ -837,6 +837,9 @@ export function applyBuildClassMixin(GameScene) {
       this.slashSwingDir = 1;
       this.slashSwingStartTime = 0;
       this.slashSwingDuration = 650;
+      // 保证一次挥砍完整性：挥砍进行中不因击杀/重选目标而重置或瞬间改向
+      this.slashLockedFacingAngle = null;
+      this.slashLockUntil = 0;
       this.slashArcSpan = Math.PI;
       this.slashTailLength = 0.32;
       this.slashEllipseYScale = 0.78;
@@ -873,6 +876,11 @@ export function applyBuildClassMixin(GameScene) {
 
       const range = this.meleeRange || 150;
 
+      const baseSwingDuration = this.slashSwingDuration || 1000;
+      const swingDuration = baseSwingDuration;
+      const swingElapsed = (this.slashSwingStartTime != null) ? (time - this.slashSwingStartTime) : 0;
+      const swingInProgress = Number.isFinite(swingElapsed) && swingElapsed >= 0 && swingElapsed < swingDuration;
+
       // 索敌范围（用于“找目标开始挥砍”）：初始更短
       const acquireRange = Math.max(220, range * 1.6);
       const target = this.getNearestEnemy(acquireRange);
@@ -888,8 +896,32 @@ export function applyBuildClassMixin(GameScene) {
         }
       }
 
+      // 若正在挥砍中，即使目标被消灭/暂时丢失，也要把本次挥动完整播放完。
       if (!target || !target.isAlive) {
+        if (swingInProgress && Number.isFinite(this.slashLockedFacingAngle)) {
+          const facingAngle = this.slashLockedFacingAngle;
+          this.slashFacingAngle = facingAngle;
+          const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
+          const bezier01 = (t, p1, p2) => {
+            const u = 1 - t;
+            return (3 * u * u * t * p1) + (3 * u * t * t * p2) + (t * t * t);
+          };
+          const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
+          const visualRange = range * 0.48;
+          this.displaySlashFan(
+            this.player.x,
+            this.player.y,
+            visualRange,
+            facingAngle,
+            this.slashSwingDir,
+            swingProgress
+          );
+          return;
+        }
+
         this.destroySlashFan();
+        this.slashLockedFacingAngle = null;
+        this.slashLockUntil = 0;
         this.slashSwingStartTime = time;
         return;
       }
@@ -897,23 +929,56 @@ export function applyBuildClassMixin(GameScene) {
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
       const inAttackRange = dist <= range;
 
-      let facingAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
-      this.slashFacingAngle = facingAngle;
-
       if (!inAttackRange) {
+        if (swingInProgress && Number.isFinite(this.slashLockedFacingAngle)) {
+          const facingAngle = this.slashLockedFacingAngle;
+          this.slashFacingAngle = facingAngle;
+          const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
+          const bezier01 = (t, p1, p2) => {
+            const u = 1 - t;
+            return (3 * u * u * t * p1) + (3 * u * t * t * p2) + (t * t * t);
+          };
+          const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
+          const visualRange = range * 0.48;
+          this.displaySlashFan(
+            this.player.x,
+            this.player.y,
+            visualRange,
+            facingAngle,
+            this.slashSwingDir,
+            swingProgress
+          );
+          return;
+        }
+
         this.destroySlashFan();
+        this.slashLockedFacingAngle = null;
+        this.slashLockUntil = 0;
         this.slashSwingStartTime = time;
         return;
       }
 
-      if (!this.slashSwingStartTime) this.slashSwingStartTime = time;
-      const baseSwingDuration = this.slashSwingDuration || 1000;
-      const swingDuration = baseSwingDuration;
+      // 正常开打：锁定本次挥砍的朝向，避免中途因重选目标而瞬间改向/重置
+      const computedFacingAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+      if (!Number.isFinite(this.slashSwingStartTime) || this.slashSwingStartTime <= 0) {
+        this.slashSwingStartTime = time;
+      }
+      if (!Number.isFinite(this.slashLockUntil) || time >= this.slashLockUntil || !Number.isFinite(this.slashLockedFacingAngle)) {
+        this.slashLockedFacingAngle = computedFacingAngle;
+        this.slashLockUntil = this.slashSwingStartTime + swingDuration;
+      }
+
+      const facingAngle = this.slashLockedFacingAngle;
+      this.slashFacingAngle = facingAngle;
 
       this.slashArcSpan = this.player.warriorSpin ? Math.PI * 2 : Math.PI;
 
       while (time - this.slashSwingStartTime >= swingDuration) {
         this.slashSwingStartTime += swingDuration;
+
+        // 新一挥开始：刷新锁定朝向（下一挥可以重新对准新的最近目标）
+        this.slashLockedFacingAngle = computedFacingAngle;
+        this.slashLockUntil = this.slashSwingStartTime + swingDuration;
 
         if (!this.player.warriorSpin) {
           this.slashSwingDir *= -1;
