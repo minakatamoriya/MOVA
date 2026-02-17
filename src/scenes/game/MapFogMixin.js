@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { START_ROOM, NEUTRAL } from '../../data/mapPool';
 import { getMapBoss } from '../../data/mapMonsters';
-import { getBossSpawnWorldPoint } from '../../data/balanceConfig';
+import { getBossArenaWorldRect, getBossSpawnWorldPoint } from '../../data/balanceConfig';
 
 /**
  * 地图/迷雾/小地图 相关方法
@@ -184,7 +184,10 @@ export function applyMapFogMixin(GameScene) {
       this.setupSoftFogOfWar();
       this.setupMiniMap();
 
-      this.spawnLevel1IntroWave();
+      // 延迟生成首波小怪：避免与地图/迷雾/小地图创建挤在同一帧导致掉帧
+      this.time.delayedCall(80, () => {
+        this.spawnLevel1IntroWave();
+      });
     },
 
     getBossSpawnPoint() {
@@ -277,6 +280,14 @@ export function applyMapFogMixin(GameScene) {
             b.setCombatActive(false);
           } else if (b) {
             b.combatActive = false;
+          }
+
+          // 限制 Boss 活动范围：以出口门为中心的固定区域
+          if (b && this.mapConfig) {
+            const arena = getBossArenaWorldRect(this.mapConfig);
+            if (typeof b.setMoveBoundsRect === 'function') b.setMoveBoundsRect(arena);
+            else b.moveBoundsRect = arena;
+            if (typeof b.clampToBounds === 'function') b.clampToBounds();
           }
           this.levelBossTriggered = true;
         }
@@ -473,13 +484,10 @@ export function applyMapFogMixin(GameScene) {
       const baseScaleRaw = this._fogBrushBaseScale || this.fogBrushImage.scaleX || 1;
       const baseScale = baseScaleRaw * (Number.isFinite(scaleMult) ? scaleMult : 1);
 
+      // 单次擦除（原先双 pass 1.35x+0.78x 开销过大；合并为稍大的单次擦除即可）
       this.fogBrushImage.setAlpha(1);
-      this.fogBrushImage.setScale(baseScale * 1.35);
+      this.fogBrushImage.setScale(baseScale * 1.25);
       this.fogWorldRT.erase(this.fogBrushImage, x, y);
-
-      this.fogBrushImage.setScale(baseScale * 0.78);
-      this.fogWorldRT.erase(this.fogBrushImage, x, y);
-
       this.fogBrushImage.setScale(baseScale);
 
       if (this.miniMap?.fogRT && this.miniMap?.sx && this.miniMap?.sy && this.miniMap?.fogBrushImage) {
@@ -490,12 +498,8 @@ export function applyMapFogMixin(GameScene) {
         const bScale = bScaleRaw * (Number.isFinite(scaleMult) ? scaleMult : 1);
 
         b.setAlpha(1);
-        b.setScale(bScale * 1.35);
+        b.setScale(bScale * 1.25);
         this.miniMap.fogRT.erase(b, mx, my);
-
-        b.setScale(bScale * 0.78);
-        this.miniMap.fogRT.erase(b, mx, my);
-
         b.setScale(bScale);
       }
     },
@@ -754,6 +758,19 @@ export function applyMapFogMixin(GameScene) {
       overlay.clear();
       overlay.lineStyle(2, 0xffffff, 0.9);
       overlay.strokeRect(vx, vy, vw, vh);
+
+      // Boss 位置：闪烁红圈标记
+      {
+        const boss = this.bossManager?.getCurrentBoss?.() || null;
+        if (boss && boss.isAlive) {
+          const bx = Phaser.Math.Clamp(boss.x, 0, worldW) * sx;
+          const by = Phaser.Math.Clamp(boss.y, 0, worldH) * sy;
+          const t = (now || 0) * 0.014;
+          const pulse = 0.25 + 0.65 * (0.5 + 0.5 * Math.sin(t));
+          overlay.lineStyle(2, 0xff3333, pulse);
+          overlay.strokeCircle(bx, by, 7);
+        }
+      }
 
       overlay.fillStyle(0x00ffff, 1);
       overlay.fillCircle(mx, my, 3);

@@ -14,8 +14,14 @@ export const BALANCE_CONSTANTS = {
 
   // Boss 生成点：固定在“出口门下方”
   boss: {
-    // bossY = (exitDoor.yFrac + belowDoorOffsetCells) * cellSize
-    belowDoorOffsetCells: 0.90,
+    // bossY = exitDoorCenterY + exitDoorHeight/2 + belowDoorOffsetCells * cellSize
+    // 以“门底边”为基准更直观，确保 Boss 固定出现在门前下方一定距离。
+    belowDoorOffsetCells: 0.50,
+
+    // Boss 活动范围：以“出口门中心”为基准的固定区域（单位：cellSize）。
+    // 目的：Boss 不会跑到地图深处，也避免因边界 clamp 产生“漂移”。
+    arenaHalfWidthCells: 5.0,
+    arenaHalfHeightCells: 4.0,
   },
 
   // 小怪“看到玩家后缓缓接近”的速度爬升
@@ -199,10 +205,41 @@ export function getBossSpawnWorldPoint(mapConfig) {
   const cfg = mapConfig;
   if (!cfg) return { x: 0, y: 0 };
 
-  const worldSize = cfg.gridSize * cfg.cellSize;
-  const x = Math.floor(worldSize / 2);
-  const yFrac = BALANCE_CONSTANTS.exitDoor.yFrac + BALANCE_CONSTANTS.boss.belowDoorOffsetCells;
-  const y = Math.floor(cfg.cellSize * yFrac);
+  // 以“出口门”几何位置推导 Boss 出场点：门底边 + 偏移
+  const door = getExitDoorWorldRect(cfg);
+  const x = Math.floor(door.x);
+  const y = Math.floor(door.y + (door.h * 0.5) + (cfg.cellSize * BALANCE_CONSTANTS.boss.belowDoorOffsetCells));
 
   return { x, y };
+}
+
+export function getBossArenaWorldRect(mapConfig) {
+  const cfg = mapConfig;
+  if (!cfg) return { x: 0, y: 0, width: 0, height: 0 };
+
+  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+  const worldSize = cfg.gridSize * cfg.cellSize;
+  const door = getExitDoorWorldRect(cfg);
+  const cx = Number(door.x) || 0;
+  const cy = Number(door.y) || 0;
+
+  const halfW = Math.max(1, (cfg.cellSize || 128) * (BALANCE_CONSTANTS.boss.arenaHalfWidthCells || 5));
+  const halfH = Math.max(1, (cfg.cellSize || 128) * (BALANCE_CONSTANTS.boss.arenaHalfHeightCells || 4));
+
+  let left = Math.floor(cx - halfW);
+  let right = Math.floor(cx + halfW);
+  let top = Math.floor(cy - halfH);
+  let bottom = Math.floor(cy + halfH);
+
+  left = clamp(left, 0, Math.max(0, worldSize - 1));
+  right = clamp(right, 1, worldSize);
+  top = clamp(top, 0, Math.max(0, worldSize - 1));
+  bottom = clamp(bottom, 1, worldSize);
+
+  // 保证至少 2px 宽高
+  if (right - left < 2) right = Math.min(worldSize, left + 2);
+  if (bottom - top < 2) bottom = Math.min(worldSize, top + 2);
+
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }

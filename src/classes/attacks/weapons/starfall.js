@@ -83,7 +83,7 @@ function createImpactVfx(scene, x, y, scheme, aoeRadius) {
 /**
  * 德鲁伊基础技能：星落
  * - 定位敌方（当前Boss）
- * - 射程无限
+ * - 有索敌射程上限（用于范围提示与走位决策）
  * - 敌方上方生成闪亮星体下落，落地造成范围伤害
  */
 export function fireStarfall(player) {
@@ -101,6 +101,10 @@ export function fireStarfall(player) {
     });
   }
   if (enemies.length === 0) return;
+
+  // 索敌射程（不再无限距离）
+  const acquireRange = Math.max(120, Math.round(player.druidStarfallRange || player.druidStarfallRangeBase || 720));
+  const acquireR2 = acquireRange * acquireRange;
 
   // 目标选择：
   // 1) 优先相机视野内
@@ -125,8 +129,15 @@ export function fireStarfall(player) {
     return Infinity;
   };
 
-  const visible = enemies.filter(isInView);
-  const pool = visible.length > 0 ? visible : enemies;
+  const inRange = enemies.filter((e) => {
+    const dx = (e.x || 0) - player.x;
+    const dy = (e.y || 0) - player.y;
+    return (dx * dx + dy * dy) <= acquireR2;
+  });
+  if (inRange.length === 0) return;
+
+  const visible = inRange.filter(isInView);
+  const pool = visible.length > 0 ? visible : inRange;
 
   let target = pool[0];
   let bestHp = getHp(target);

@@ -49,12 +49,31 @@ export default class BossManager {
     const balance = getStageBalance(stage);
     const bossSize = getRoleSize('boss');
 
-    const movePatternMap = {
-      chaser: 'random',
-      shooter: 'static',
-      patrol: 'horizontal',
-      static: 'static',
-    };
+    // 需求：Boss 预警发现玩家后，应缓慢、智能地朝玩家移动（而不是左右巡逻/随机漂移）。
+    // 因此地图 Boss 统一采用 tracking。
+    const resolvedMovePattern = 'tracking';
+
+    // 默认攻击模式：少量、缓慢、体积更大（避免屏幕被弹幕淹没）
+    // 注：BaseBoss 内置支持 attackPatterns；若未来 mapMonsters 为 Boss 提供自定义 patterns，可在此替换。
+    const defaultAttackPatterns = [
+      {
+        interval: 1700,
+        execute: (boss) => {
+          if (!boss || !boss.isAlive) return;
+          if (typeof boss.fireSmartVolley === 'function') {
+            boss.fireSmartVolley({
+              count: 2,
+              spreadRad: 0.14,
+              speed: 135,
+              radius: 14,
+              damage: 7,
+              color: boss.bossColor || bossData.color || 0xff4444,
+              shapeType: 'circle'
+            });
+          }
+        }
+      }
+    ];
 
     const cfg = {
       x: spawnPt.x,
@@ -63,8 +82,9 @@ export default class BossManager {
       hp: Math.round(balance.boss.hp),
       size: bossSize,
       color: bossData.color,
-      movePattern: movePatternMap[bossData.moveType] || 'random',
+      movePattern: resolvedMovePattern,
       moveSpeed: balance.boss.moveSpeed,
+      attackPatterns: defaultAttackPatterns,
       combatActive: false,
       entryType: 'fade',
       entryDuration: 400,
@@ -249,10 +269,17 @@ export default class BossManager {
 
     if (Array.isArray(this.minions) && this.minions.length > 0) {
       const player = this.scene?.player;
-      this.minions = this.minions.filter((m) => m && m.active && m.isAlive);
-      this.minions.forEach((m) => {
-        if (m && m.update) m.update(time, delta, player);
-      });
+
+      // 避免每帧 filter 创建新数组（GC 压力）：原地清理 + 遍历
+      let writeIdx = 0;
+      for (let i = 0; i < this.minions.length; i++) {
+        const m = this.minions[i];
+        if (m && m.active && m.isAlive) {
+          this.minions[writeIdx++] = m;
+          m.update(time, delta, player);
+        }
+      }
+      this.minions.length = writeIdx;
     }
   }
 

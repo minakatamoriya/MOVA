@@ -382,8 +382,7 @@ export function applyLevelProgressionMixin(GameScene) {
       if (this.systemMessage) {
         this.systemMessage.show('Boss 已被击败！前往最上方大门进入下一关。', {
           key: 'boss_defeated_exit_door',
-          durationMs: 3600,
-          anchorY: 0.92
+          durationMs: 3600
         });
       }
     },
@@ -549,8 +548,7 @@ export function applyLevelProgressionMixin(GameScene) {
       if (this.systemMessage) {
         this.systemMessage.show('Boss 已被击败！地图上方出现了三条路径，走入选择下一关。', {
           key: 'boss_defeated_path_choice',
-          durationMs: 4500,
-          anchorY: 0.92
+          durationMs: 4500
         });
       }
     },
@@ -666,10 +664,11 @@ export function applyLevelProgressionMixin(GameScene) {
         });
         m.isIntroWave = true;
         spawned.push(m);
+      }
 
-        if (this.fogMode === 'soft' && typeof this.revealFogAt === 'function') {
-          this.revealFogAt(m.x, m.y, true, 1.4, { tag: `intro:${i}`, minIntervalMs: 0, minDist: 0 });
-        }
+      // 首波小怪迷雾揭露：合并为中心点单次揭露，避免 5 次 force erase 的 GPU 峰值
+      if (this.fogMode === 'soft' && typeof this.revealFogAt === 'function' && spawned.length > 0) {
+        this.revealFogAt(centerX, topY, true, 2.2, { tag: 'intro_group', minIntervalMs: 0, minDist: 0 });
       }
 
       if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];

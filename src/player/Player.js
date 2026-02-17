@@ -124,9 +124,23 @@ export default class Player extends Phaser.GameObjects.Container {
     this.moonfireDamageMult = 0.35;
     this.moonfireSpeedMult = 0.6; // 比常规更慢
     this.moonfireGravity = 0;
+    // 月火术索敌范围（不再无限远）
+    this.moonfireRangeBase = 300;
+    this.moonfireRange = this.moonfireRangeBase;
     // 亲和吸附：轻微拐弯（不要像追踪弹）
     this.moonfireAffinityConeDeg = 55;
     this.moonfireAffinityTurnDegPerSec = 28;
+
+    // 攻击范围（用于统一范围圈提示）
+    // 德鲁伊：星落索敌范围（不再无限距离）
+    this.druidStarfallRangeBase = 310;
+    this.druidStarfallRange = this.druidStarfallRangeBase;
+
+    // 法师飞弹：用于范围圈对齐（飞弹本身已用 maxLifeMs 限制）
+    this.mageMissileRange = 280;
+
+    // 术士：剧毒新星半径（范围圈提示脚下 AoE）
+    this.warlockPoisonNovaRadiusBase = 96;
 
     // Build 流派属性（散射）
     this.scatterEnabled = true;
@@ -143,7 +157,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.buildFireRateMult = 1;
 
     // 猎人基础技能（箭矢）专属升级参数
-    this.archerArrowRangeBase = 680; // 中长距离
+    // 注意：索敌范围“<= 720px”按直径理解 => 半径硬上限 <= 360
+    this.archerArrowRangeBase = 330;
     this.archerArrowRange = this.archerArrowRangeBase;
     this.archerArrowDamageMult = 1;
     this.archerArrowRangeLevel = 0;
@@ -437,7 +452,9 @@ export default class Player extends Phaser.GameObjects.Container {
     const coreColor = isArcher ? 0x00ffff : getBaseColorForCoreKey(coreKey);
     const accent = isArcher ? 0x00ffff : lerpColor(coreColor, 0xffffff, 0.42);
 
-    const rangePx = isArcher ? (this.archerArrowRange || this.archerArrowRangeBase || 680) : null;
+    const rangePx = isArcher
+      ? Phaser.Math.Clamp((this.archerArrowRange || this.archerArrowRangeBase || 330), 120, 360)
+      : null;
     const maxLifeMs = (isArcher && rangePx != null)
       ? Math.max(220, Math.round((rangePx / Math.max(1, this.bulletSpeed)) * 1000))
       : null;
@@ -968,8 +985,10 @@ export default class Player extends Phaser.GameObjects.Container {
 
   upgradeArcherRange() {
     this.archerArrowRangeLevel = Math.min(3, (this.archerArrowRangeLevel || 0) + 1);
-    const inc = [0, 90, 180, 270][this.archerArrowRangeLevel] || 0;
-    this.archerArrowRange = Math.round((this.archerArrowRangeBase || 680) + inc);
+    const inc = [0, 10, 20, 30][this.archerArrowRangeLevel] || 0;
+    const base = Math.round(this.archerArrowRangeBase || 330);
+    // 半径硬上限：360（对应“索敌范围 <= 720px（直径）”）
+    this.archerArrowRange = Math.min(360, Math.round(base + inc));
   }
 
   upgradeArcherRate() {

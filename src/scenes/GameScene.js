@@ -74,6 +74,12 @@ class GameScene extends Phaser.Scene {
     this._warriorTargetRing = null;
     this._paladinTargetRing = null;
     this._archerRangeRing = null;
+    this._mageRangeRing = null;
+    this._druidRangeRing = null;
+    this._warlockRangeRing = null;
+
+    // 统一开关：攻击范围提示圈（默认开启）
+    this.showRangeIndicators = true;
 
     // ── 地图分支系统 ──
     this.currentMapInfo = null;        // 当前地图 { id, name, subtitle, line }
@@ -170,6 +176,10 @@ class GameScene extends Phaser.Scene {
     this._pathChoiceObjects = [];
     this._pathDoorZones = [];
     this._mapNameText = null;
+
+    // 范围圈全局开关（可由 UI/调试统一控制）
+    const v = this.registry?.get?.('showRangeIndicators');
+    this.showRangeIndicators = (typeof v === 'boolean') ? v : true;
   }
 
   isReactUiMode() {
@@ -259,8 +269,20 @@ class GameScene extends Phaser.Scene {
     this.createTopLeftHud();
 
     // 系统提示 UI（Phaser 内 HUD 层）
-    // 需求：提示框再放上去一点，但不要挡住经验条
-    this.systemMessage = new SystemMessageOverlay(this, { anchorY: 0.92 });
+    // 需求：提示框放到屏幕顶部（血条下方一定距离处）
+    {
+      const cam = this.cameras.main;
+      const barY = Number(this.hpBarBg?.y ?? 22);
+      const barH = Number(this.hpBarBg?.height ?? 12);
+      const barBottom = barY + barH * 0.5;
+      const yPx = Math.floor(barBottom + 26);
+      const anchorY = Phaser.Math.Clamp(yPx / Math.max(1, cam.height), 0.06, 0.28);
+      this.systemMessage = new SystemMessageOverlay(this, {
+        anchorY,
+        // 强制上边距：避免覆盖血条/经验条
+        marginTopPx: Math.floor(barBottom + 200)
+      });
+    }
 
     // 右下角 Toast（队列化弹出并渐隐）
     this.toast = new ToastOverlay(this);
@@ -292,6 +314,22 @@ class GameScene extends Phaser.Scene {
       this.emitUiSnapshot();
     };
     uiBus.on('ui:requestSnapshot', this._uiRequestSnapshotHandler);
+
+    // 范围圈开关（统一控制所有职业范围提示）
+    this._uiSetRangeIndicatorsHandler = (enabled) => {
+      const on = (typeof enabled === 'boolean') ? enabled : !!enabled;
+      this.showRangeIndicators = on;
+      try { this.registry?.set?.('showRangeIndicators', on); } catch (_) { /* ignore */ }
+    };
+    uiBus.on('ui:setRangeIndicators', this._uiSetRangeIndicatorsHandler);
+
+    this._uiToggleRangeIndicatorsHandler = () => {
+      const current = (typeof this.showRangeIndicators === 'boolean') ? this.showRangeIndicators : true;
+      const next = !current;
+      this.showRangeIndicators = next;
+      try { this.registry?.set?.('showRangeIndicators', next); } catch (_) { /* ignore */ }
+    };
+    uiBus.on('ui:toggleRangeIndicators', this._uiToggleRangeIndicatorsHandler);
 
     // 确保场景切换时释放 uiBus 监听，避免重复绑定
     this.events.once('shutdown', this.shutdown, this);
@@ -380,6 +418,16 @@ class GameScene extends Phaser.Scene {
     if (this._uiRequestSnapshotHandler) {
       uiBus.off('ui:requestSnapshot', this._uiRequestSnapshotHandler);
       this._uiRequestSnapshotHandler = null;
+    }
+
+    if (this._uiSetRangeIndicatorsHandler) {
+      uiBus.off('ui:setRangeIndicators', this._uiSetRangeIndicatorsHandler);
+      this._uiSetRangeIndicatorsHandler = null;
+    }
+
+    if (this._uiToggleRangeIndicatorsHandler) {
+      uiBus.off('ui:toggleRangeIndicators', this._uiToggleRangeIndicatorsHandler);
+      this._uiToggleRangeIndicatorsHandler = null;
     }
   }
 
@@ -940,9 +988,13 @@ class GameScene extends Phaser.Scene {
     this.updateWarlockDebuff(time, delta);
     this.updatePaladinTargetingRing(time);
     this.updateArcherRangeRing(time);
+    this.updateMageRangeRing?.(time);
+    this.updateDruidRangeRing?.(time);
+    this.updateWarlockRangeRing?.(time);
 
     // 地图：迷雾（柔和永久揭开）+ 小地图
-    if (this.fogMode === 'soft' && this.player) {
+    // 帧预算保护：当前帧耗时过长（掉帧中）则跳过迷雾更新，优先保障流畅度
+    if (this.fogMode === 'soft' && this.player && delta < 50) {
       // 若进入战斗/敌人接近，扩大视野，避免敌人躲在迷雾里攻击
       const cell = (this.mapConfig?.cellSize || 128);
       const boss = this.bossManager?.getCurrentBoss?.() || null;
@@ -956,8 +1008,8 @@ class GameScene extends Phaser.Scene {
       }) : false));
 
       const playerScale = (inCombat || closeEnemy) ? 1.7 : 1.25;
-      // 玩家：更频繁（移动+时间双阈值）
-      this.revealFogAt(this.player.x, this.player.y, false, playerScale, { tag: 'player', minIntervalMs: 40, minDist: 10 });
+      // 玩家：适度频率（移动+时间双阈值）
+      this.revealFogAt(this.player.x, this.player.y, false, playerScale, { tag: 'player', minIntervalMs: 60, minDist: 14 });
 
       // 额外揭开敌人周围（只在敌人接近时做，避免过度开图）
       const enemyRevealTriggerR = cell * 6;
@@ -966,18 +1018,18 @@ class GameScene extends Phaser.Scene {
         const dy = boss.y - this.player.y;
         if ((dx * dx + dy * dy) <= (enemyRevealTriggerR * enemyRevealTriggerR)) {
           // Boss：低频即可（避免持续擦除带来的掉帧）
-          this.revealFogAt(boss.x, boss.y, false, 1.9, { tag: 'boss', minIntervalMs: 140, minDist: 18 });
+          this.revealFogAt(boss.x, boss.y, false, 1.9, { tag: 'boss', minIntervalMs: 200, minDist: 24 });
         }
       }
+      // 小怪迷雾揭露：降频以减轻 GPU blit 压力（首波小怪在生成时已 force 揭露过）
       if (Array.isArray(minions) && minions.length > 0) {
         minions.forEach(m => {
           if (!m || !m.isAlive) return;
           const dx = m.x - this.player.x;
           const dy = m.y - this.player.y;
           if ((dx * dx + dy * dy) <= (enemyRevealTriggerR * enemyRevealTriggerR)) {
-            // 小怪：更低频
             const id = (m.__enemyId != null) ? String(m.__enemyId) : (m.minionName || 'm');
-            this.revealFogAt(m.x, m.y, false, 1.5, { tag: `minion:${id}`, minIntervalMs: 180, minDist: 22 });
+            this.revealFogAt(m.x, m.y, false, 1.5, { tag: `minion:${id}`, minIntervalMs: 300, minDist: 30 });
           }
         });
       }
@@ -1133,6 +1185,9 @@ class GameScene extends Phaser.Scene {
     if (this._warriorTargetRing) { try { this._warriorTargetRing.setVisible(false); } catch (_) { /* ignore */ } }
     if (this._paladinTargetRing) { try { this._paladinTargetRing.setVisible(false); } catch (_) { /* ignore */ } }
     if (this._archerRangeRing) { try { this._archerRangeRing.setVisible(false); } catch (_) { /* ignore */ } }
+    if (this._mageRangeRing) { try { this._mageRangeRing.setVisible(false); } catch (_) { /* ignore */ } }
+    if (this._druidRangeRing) { try { this._druidRangeRing.setVisible(false); } catch (_) { /* ignore */ } }
+    if (this._warlockRangeRing) { try { this._warlockRangeRing.setVisible(false); } catch (_) { /* ignore */ } }
 
     this.paladinEnabled = false;
     this.warlockEnabled = false;

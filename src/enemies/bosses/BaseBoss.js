@@ -63,6 +63,10 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     const resolvedMoveSpeed = Number.isFinite(rawMoveSpeed) ? rawMoveSpeed : 100;
     this.moveSpeed = Phaser.Math.Clamp(resolvedMoveSpeed, 10, 95);
     this.movePattern = config.movePattern || 'static'; // static, horizontal, vertical, circle, random
+
+    // 可选：限制 Boss 活动范围（世界坐标系矩形）
+    // 例如：以出口门为中心的“Boss 房间”区域。
+    this.moveBoundsRect = config.moveBoundsRect || null;
     
     // 攻击属性
     this.attackPatterns = config.attackPatterns || [];
@@ -76,6 +80,10 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 弹幕组
     this.bullets = null;
 
+    // 预警提示（头顶感叹号）
+    this._alertIcon = null;
+    this._alertHideTimer = null;
+
     // 陷阱/落点等“延迟危险”清理跟踪（用于 Boss 死亡瞬间清空未来机制）
     this._hazardTimers = [];
     this._hazardObjects = [];
@@ -85,6 +93,110 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     
     // 执行入场动画
     this.playEntryAnimation();
+  }
+
+  showAlertIcon(durationMs = 1200) {
+    const scene = this.scene;
+    if (!scene?.add || !scene?.time) return;
+    if (!this.isAlive || this.isDestroyed) return;
+
+    if (this._alertHideTimer) {
+      try { this._alertHideTimer.remove(false); } catch (_) { /* ignore */ }
+      this._alertHideTimer = null;
+    }
+
+    // 已存在：刷新时长即可
+    if (this._alertIcon && this._alertIcon.active) {
+      try { this._alertIcon.setVisible(true); } catch (_) { /* ignore */ }
+    } else {
+      const icon = scene.add.text(0, -Math.max(48, (this.bossSize || 50) + 52), '!', {
+        fontSize: '46px',
+        fontStyle: '800',
+        color: '#ff2b2b',
+        stroke: '#000000',
+        strokeThickness: 8,
+        align: 'center'
+      }).setOrigin(0.5);
+      icon.setDepth(12);
+      this.add(icon);
+      this._alertIcon = icon;
+
+      // 轻微弹跳
+      try {
+        scene.tweens.add({
+          targets: icon,
+          y: icon.y - 10,
+          duration: 180,
+          yoyo: true,
+          repeat: 2,
+          ease: 'Sine.Out'
+        });
+      } catch (_) { /* ignore */ }
+    }
+
+    // 自动隐藏
+    const ms = Math.max(300, Math.round(durationMs || 0));
+    this._alertHideTimer = scene.time.delayedCall(ms, () => {
+      if (!this.scene || this.isDestroyed) return;
+      if (this._alertIcon && this._alertIcon.active) {
+        try { this._alertIcon.setVisible(false); } catch (_) { /* ignore */ }
+      }
+      this._alertHideTimer = null;
+    });
+  }
+
+  fireSmartVolley(options = {}) {
+    const scene = this.scene;
+    if (!scene?.bulletManager?.createBossBullet) return;
+    if (!this.isAlive || this.isDestroyed) return;
+
+    const target = this.getPrimaryTarget();
+    if (!target || !target.active || target.isAlive === false) return;
+
+    const count = Math.max(1, Math.min(4, Math.floor(options.count || 2)));
+    const spreadRad = Number.isFinite(options.spreadRad) ? Number(options.spreadRad) : 0.14;
+    const speed = Math.max(60, Math.round(options.speed || 135));
+    const radius = Math.max(8, Math.round(options.radius || 14));
+    const damage = Math.max(1, Math.round(options.damage || 7));
+    const color = (options.color != null) ? options.color : (this.bossColor || 0xff4444);
+    const shapeType = (options.shapeType || 'circle');
+
+    const dx = target.x - this.x;
+    const dy = target.y - this.y;
+    const baseAngle = Math.atan2(dy, dx);
+
+    const half = (count - 1) * 0.5;
+    for (let i = 0; i < count; i++) {
+      const t = (i - half);
+      const angle = baseAngle + t * spreadRad;
+      scene.bulletManager.createBossBullet(
+        this.x,
+        this.y,
+        angle,
+        speed,
+        color,
+        {
+          radius,
+          damage,
+          hasGlow: false,
+          hasTrail: true,
+          type: shapeType
+        }
+      );
+    }
+  }
+
+  setMoveBoundsRect(rect) {
+    if (!rect) {
+      this.moveBoundsRect = null;
+      return;
+    }
+    const x = Number(rect.x);
+    const y = Number(rect.y);
+    const w = Number(rect.width);
+    const h = Number(rect.height);
+    const ok = Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
+    this.moveBoundsRect = ok ? { x, y, width: w, height: h } : null;
   }
 
   /**
@@ -97,12 +209,44 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       bottom = 70
     } = padding || {};
 
-    const gameArea = this.scene?.gameArea || { x: 100, y: 100, width: this.scene?.cameras?.main?.width || 800, height: this.scene?.cameras?.main?.height || 600 };
+    // 重要：Boss 的移动边界必须使用“世界坐标系”的固定边界。
+    // 之前使用 scene.gameArea（屏幕区域）会导致在大地图上 clampToBounds 把 Boss 拉离出生点，表现为“漂移”。
+    const scene = this.scene;
 
-    const left = gameArea.x + x;
-    const right = gameArea.x + gameArea.width - x;
-    const topY = gameArea.y + top;
-    const bottomY = gameArea.y + gameArea.height - bottom;
+    const overrideRect = this.moveBoundsRect;
+    const hasOverrideRect = overrideRect
+      && Number.isFinite(overrideRect.x) && Number.isFinite(overrideRect.y)
+      && Number.isFinite(overrideRect.width) && Number.isFinite(overrideRect.height)
+      && overrideRect.width > 0 && overrideRect.height > 0;
+
+    const worldRect = scene?.worldBoundsRect;
+    const hasWorldRect = worldRect
+      && Number.isFinite(worldRect.x) && Number.isFinite(worldRect.y)
+      && Number.isFinite(worldRect.width) && Number.isFinite(worldRect.height)
+      && worldRect.width > 0 && worldRect.height > 0;
+
+    let bounds;
+    if (hasOverrideRect) {
+      bounds = overrideRect;
+    } else if (hasWorldRect) {
+      bounds = worldRect;
+    } else {
+      const cfg = scene?.mapConfig;
+      if (cfg && Number.isFinite(cfg.gridSize) && Number.isFinite(cfg.cellSize)) {
+        const worldSize = cfg.gridSize * cfg.cellSize;
+        bounds = { x: 0, y: 0, width: worldSize, height: worldSize };
+      } else {
+        // 兜底：保留旧逻辑，但尽量使用世界视口（worldView）而不是屏幕 UI 区域。
+        bounds = scene?.cameras?.main?.worldView
+          || scene?.gameArea
+          || { x: 0, y: 0, width: scene?.cameras?.main?.width || 800, height: scene?.cameras?.main?.height || 600 };
+      }
+    }
+
+    const left = bounds.x + x;
+    const right = bounds.x + bounds.width - x;
+    const topY = bounds.y + top;
+    const bottomY = bounds.y + bounds.height - bottom;
 
     return {
       left,
@@ -349,6 +493,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     const next = !!active;
     if (this.combatActive === next) return;
     this.combatActive = next;
+
+    // 预警触发：Boss 从“待机”进入“开战”时，头顶出现感叹号
+    if (this.combatActive) {
+      this.showAlertIcon(1200);
+    }
 
     if (!this._combatStarted) {
       if (this.combatActive) this.startCombat();

@@ -112,10 +112,27 @@ export default class PetManager {
   getCurrentTarget() {
     const boss = this.scene?.bossManager?.getCurrentBoss?.();
     const now = this.scene.time?.now ?? 0;
+
+    const isWithinDruidAcquireRange = (t) => {
+      if (!t || !t.active) return false;
+      const p = this.player;
+      if (!p) return false;
+
+      // 熊宠寻怪范围：与德鲁伊索敌范围保持一致（不再全屏追 Boss）
+      const starfall = Number(p.druidStarfallRange || p.druidStarfallRangeBase || 0);
+      const moonfire = Number(p.moonfireRange || p.moonfireRangeBase || 0);
+      const acquireRange = Math.max(120, Math.round(Math.max(starfall, moonfire, 0)));
+
+      const dx = t.x - p.x;
+      const dy = t.y - p.y;
+      return (dx * dx + dy * dy) <= (acquireRange * acquireRange);
+    };
+
     if (this.focusTarget && now < (this.focusUntil || 0) && this.focusTarget.active) {
-      return this.focusTarget;
+      if (isWithinDruidAcquireRange(this.focusTarget)) return this.focusTarget;
+      return null;
     }
-    if (boss && boss.isAlive) return boss;
+    if (boss && boss.isAlive && isWithinDruidAcquireRange(boss)) return boss;
     return null;
   }
 

@@ -19,11 +19,20 @@ export function fireMoonfire(player, pointer) {
     });
   }
 
-  let target = enemies.length > 0 ? enemies[0] : null;
-  if (enemies.length > 1) {
+  // 索敌范围限制（初始更短；后续可由天赋增加）
+  const acquireRange = Math.max(120, Math.round(player.moonfireRange || player.moonfireRangeBase || 620));
+  const acquireR2 = acquireRange * acquireRange;
+  const inRange = enemies.filter((e) => {
+    const dx = (e.x || 0) - spawnX;
+    const dy = (e.y || 0) - spawnY;
+    return (dx * dx + dy * dy) <= acquireR2;
+  });
+
+  let target = inRange.length > 0 ? inRange[0] : null;
+  if (inRange.length > 1) {
     let bestD = (target.x - spawnX) ** 2 + (target.y - spawnY) ** 2;
-    for (let i = 1; i < enemies.length; i++) {
-      const e = enemies[i];
+    for (let i = 1; i < inRange.length; i++) {
+      const e = inRange[i];
       const d = (e.x - spawnX) ** 2 + (e.y - spawnY) ** 2;
       if (d < bestD) {
         target = e;

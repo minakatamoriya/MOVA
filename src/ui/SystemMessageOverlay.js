@@ -103,13 +103,17 @@ export default class SystemMessageOverlay {
     const cam = this.scene.cameras.main;
     const x = cam.centerX;
     const hasAnchorY = Number.isFinite(Number(opts.anchorY));
+    const hasInstanceAnchorY = Number.isFinite(Number(this.anchorY));
     const bottomHudH = this.scene.bottomPanelHeight || 0;
 
-    // 默认：贴底并与 ToastOverlay 的锚点一致；如显式传入 anchorY，则使用 anchorY
+    // 默认：使用实例 anchorY；如显式传入 opts.anchorY，则优先使用 opts.anchorY。
+    // 如实例未提供 anchorY，则退回到“贴底”逻辑（与 ToastOverlay 的锚点一致）。
     let y;
     if (hasAnchorY) {
       const anchorY = Number(opts.anchorY);
       y = Math.floor(cam.height * anchorY);
+    } else if (hasInstanceAnchorY) {
+      y = Math.floor(cam.height * Number(this.anchorY));
     } else {
       // ToastOverlay._getAnchor(): y = cam.height - margin - bottomHudH - 22
       y = Math.floor(cam.height - this.marginBottomPx - bottomHudH - 22);

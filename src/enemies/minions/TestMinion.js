@@ -379,7 +379,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     // 轻量“体积”分离：避免多个小怪完全重叠
-    if (!this.followBoss && this.scene?.bossManager?.getMinions) {
+    // 节流：每 3 帧执行一次（O(n²) 检测在小怪多时开销大）
+    this._separationFrame = ((this._separationFrame || 0) + 1) % 3;
+    if (this._separationFrame === 0 && !this.followBoss && this.scene?.bossManager?.getMinions) {
       const minions = this.scene.bossManager.getMinions();
       for (let i = 0; i < minions.length; i++) {
         const other = minions[i];
@@ -387,9 +389,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         if (other.followBoss) continue;
         const dx = this.x - other.x;
         const dy = this.y - other.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+        const dist2 = dx * dx + dy * dy;
         const minDist = (this.radius || 16) + (other.radius || 16) + 2;
-        if (dist < minDist) {
+        if (dist2 < minDist * minDist) {
+          const dist = Math.sqrt(dist2) || 0.0001;
           const push = (minDist - dist) * 0.5;
           const nx = dx / dist;
           const ny = dy / dist;

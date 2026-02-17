@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey, getBasicSkillColorScheme } from '../../classes/visual/basicSkillColors';
+import { resolveClassColor } from '../../classes/visual/classColors';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../../classes/attacks/basicAttackMods';
 import { CORE_OPTIONS } from '../../classes/classDefs';
 import {
@@ -22,6 +23,49 @@ import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel 
  */
 export function applyBuildClassMixin(GameScene) {
   Object.assign(GameScene.prototype, {
+
+    isRangeIndicatorEnabled() {
+      const v = this.registry?.get?.('showRangeIndicators');
+      if (typeof v === 'boolean') return v;
+      if (typeof this.showRangeIndicators === 'boolean') return this.showRangeIndicators;
+      return true;
+    },
+
+    // 统一的“攻击范围圈”样式：只变颜色（职业色），其余一致
+    ensureUnifiedRangeRing(propName, classKey) {
+      if (!propName) return null;
+
+      const color = resolveClassColor(classKey);
+
+      // 统一样式参数：与圣骑士范围圈一致（更易辨识）
+      const fillAlpha = 0.05;
+      const strokeWidth = 3;
+      const strokeAlpha = 0.55;
+
+      let ring = this[propName];
+      if (ring && (!ring.active || !ring.geom || typeof ring.setRadius !== 'function')) {
+        try { ring.destroy(); } catch (_) { /* ignore */ }
+        ring = null;
+      }
+
+      if (!ring) {
+        ring = this.add.circle(0, 0, 28, color, fillAlpha);
+        ring.setStrokeStyle(strokeWidth, color, strokeAlpha);
+        ring.setDepth(60);
+        ring.setVisible(false);
+        this[propName] = ring;
+      } else {
+        // 若职业切换，颜色也同步
+        try {
+          ring.setFillStyle?.(color, fillAlpha);
+          ring.setStrokeStyle?.(strokeWidth, color, strokeAlpha);
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      return ring;
+    },
 
     applyUpgrade(upgrade) {
       if (!upgrade || !this.player) return;
@@ -779,7 +823,8 @@ export function applyBuildClassMixin(GameScene) {
     enableWarriorBuild() {
       this.meleeEnabled = true;
       this.thornsPercent = Math.max(this.thornsPercent, 0.12);
-      this.meleeRange = 220;
+      // 初始索敌/攻击范围更小（从近到远排序最短）
+      this.meleeRange = 180;
       this.meleeLifesteal = 0;
       this.player.canFire = false;
       this.player.maxHp += 30;
@@ -800,10 +845,7 @@ export function applyBuildClassMixin(GameScene) {
       this.slashParticleEmitter = null;
 
       if (this._warriorTargetRing) this._warriorTargetRing.destroy();
-      this._warriorTargetRing = this.add.circle(0, 0, 28, 0xff3a3a, 0.06);
-      this._warriorTargetRing.setStrokeStyle(3, 0xff3a3a, 0.55);
-      this._warriorTargetRing.setDepth(60);
-      this._warriorTargetRing.setVisible(false);
+      this.ensureUnifiedRangeRing('_warriorTargetRing', 'warrior');
 
       this.events.emit('updatePlayerInfo');
     },
@@ -831,17 +873,18 @@ export function applyBuildClassMixin(GameScene) {
 
       const range = this.meleeRange || 150;
 
-      const acquireRange = Math.max(280, range * 2.4);
+      // 索敌范围（用于“找目标开始挥砍”）：初始更短
+      const acquireRange = Math.max(220, range * 1.6);
       const target = this.getNearestEnemy(acquireRange);
 
       if (this._warriorTargetRing) {
-        if (target && target.isAlive) {
+        if (!this.isRangeIndicatorEnabled()) {
+          this._warriorTargetRing.setVisible(false);
+        } else {
           const r = Phaser.Math.Clamp(range, 90, 420);
           this._warriorTargetRing.setRadius(r);
           this._warriorTargetRing.setPosition(this.player.x, this.player.y);
           this._warriorTargetRing.setVisible(true);
-        } else {
-          this._warriorTargetRing.setVisible(false);
         }
       }
 
@@ -1466,6 +1509,11 @@ export function applyBuildClassMixin(GameScene) {
         return;
       }
 
+      if (!this.isRangeIndicatorEnabled()) {
+        if (this._paladinTargetRing) this._paladinTargetRing.setVisible(false);
+        return;
+      }
+
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'paladin' || this.player.mainCoreKey === 'paladin' || this.paladinEnabled;
       if (!active) {
@@ -1478,34 +1526,29 @@ export function applyBuildClassMixin(GameScene) {
         this._paladinTargetRing = null;
       }
 
-      if (!this._paladinTargetRing) {
-        const paladinColor = getBaseColorForCoreKey('paladin');
-        this._paladinTargetRing = this.add.circle(0, 0, 28, paladinColor, 0.05);
-        this._paladinTargetRing.setStrokeStyle(3, paladinColor, 0.55);
-        this._paladinTargetRing.setDepth(60);
-        this._paladinTargetRing.setVisible(false);
-      }
+      this.ensureUnifiedRangeRing('_paladinTargetRing', 'paladin');
 
-      const acquireRange = 520;
-      const target = this.getNearestEnemy(acquireRange);
-      if (target && target.isAlive) {
-        const baseReach = 140;
-        const reach = this.player.paladinPierce ? Math.round(baseReach * 1.12) : baseReach;
-        const baseRadius = 160;
-        const radius = this.player.paladinPierce ? Math.round(baseRadius * 1.12) : baseRadius;
-        const attackRange = reach + radius + 10;
+      // 常显：不依赖是否找到目标
+      // 初始更短：保证“战士 < 圣骑 < 法师 < 德鲁伊 < 猎人”
+      const baseReach = 110;
+      const reach = this.player.paladinPierce ? Math.round(baseReach * 1.12) : baseReach;
+      const baseRadius = 130;
+      const radius = this.player.paladinPierce ? Math.round(baseRadius * 1.12) : baseRadius;
+      const attackRange = reach + radius + 10;
 
-        const r = Phaser.Math.Clamp(attackRange, 120, 520);
-        this._paladinTargetRing.setRadius(r);
-        this._paladinTargetRing.setPosition(this.player.x, this.player.y);
-        this._paladinTargetRing.setVisible(true);
-      } else {
-        this._paladinTargetRing.setVisible(false);
-      }
+      const r = Phaser.Math.Clamp(attackRange, 120, 520);
+      this._paladinTargetRing.setRadius(r);
+      this._paladinTargetRing.setPosition(this.player.x, this.player.y);
+      this._paladinTargetRing.setVisible(true);
     },
 
     updateArcherRangeRing(time) {
       if (!this.player || this.player.isAlive === false) {
+        if (this._archerRangeRing) this._archerRangeRing.setVisible(false);
+        return;
+      }
+
+      if (!this.isRangeIndicatorEnabled()) {
         if (this._archerRangeRing) this._archerRangeRing.setVisible(false);
         return;
       }
@@ -1517,28 +1560,115 @@ export function applyBuildClassMixin(GameScene) {
         return;
       }
 
-      if (this._archerRangeRing && (!this._archerRangeRing.active || !this._archerRangeRing.geom)) {
-        try { this._archerRangeRing.destroy(); } catch (_) { /* ignore */ }
-        this._archerRangeRing = null;
-      }
-
-      if (!this._archerRangeRing) {
-        const c = 0x00ffff;
-        this._archerRangeRing = this.add.circle(0, 0, 28, c, 0.03);
-        this._archerRangeRing.setStrokeStyle(2, c, 0.22);
-        this._archerRangeRing.setDepth(60);
-        this._archerRangeRing.setVisible(false);
-      }
+      this.ensureUnifiedRangeRing('_archerRangeRing', 'archer');
 
       const r = Phaser.Math.Clamp(
-        Math.round(this.player.archerArrowRange || this.player.archerArrowRangeBase || 680),
+        Math.round(this.player.archerArrowRange || this.player.archerArrowRangeBase || 330),
         240,
-        860
+        360
       );
 
       this._archerRangeRing.setRadius(r);
       this._archerRangeRing.setPosition(this.player.x, this.player.y);
       this._archerRangeRing.setVisible(true);
+    },
+
+    updateMageRangeRing(time) {
+      if (!this.player || this.player.isAlive === false) {
+        if (this._mageRangeRing) this._mageRangeRing.setVisible(false);
+        return;
+      }
+
+      if (!this.isRangeIndicatorEnabled()) {
+        if (this._mageRangeRing) this._mageRangeRing.setVisible(false);
+        return;
+      }
+
+      const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
+      const active = mainCore === 'mage' || this.player.mainCoreKey === 'mage'
+        || this.player.weaponType === 'laser'
+        || this.player.weaponType === 'mage_missile';
+      if (!active) {
+        if (this._mageRangeRing) this._mageRangeRing.setVisible(false);
+        return;
+      }
+
+      this.ensureUnifiedRangeRing('_mageRangeRing', 'mage');
+
+      // 法师主普攻：奥术射线；同时兼容“法师飞弹”武器
+      const ray = Math.max(60, Math.round(this.player.arcaneRayRange || this.player.arcaneRayBaseRange || 220));
+      const missile = Math.max(60, Math.round(this.player.mageMissileRange || 280));
+      const r = Phaser.Math.Clamp(Math.max(ray, missile), 160, 860);
+
+      this._mageRangeRing.setRadius(r);
+      this._mageRangeRing.setPosition(this.player.x, this.player.y);
+      this._mageRangeRing.setVisible(true);
+    },
+
+    updateDruidRangeRing(time) {
+      if (!this.player || this.player.isAlive === false) {
+        if (this._druidRangeRing) this._druidRangeRing.setVisible(false);
+        return;
+      }
+
+      if (!this.isRangeIndicatorEnabled()) {
+        if (this._druidRangeRing) this._druidRangeRing.setVisible(false);
+        return;
+      }
+
+      const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
+      const active = mainCore === 'drone' || this.player.mainCoreKey === 'drone'
+        || this.player.weaponType === 'starfall'
+        || this.player.weaponType === 'moonfire';
+      if (!active) {
+        if (this._druidRangeRing) this._druidRangeRing.setVisible(false);
+        return;
+      }
+
+      this.ensureUnifiedRangeRing('_druidRangeRing', 'druid');
+
+      // 德鲁伊：星落/月火索敌范围（不再无限距离）
+      const starfall = Math.round(this.player.druidStarfallRange || this.player.druidStarfallRangeBase || 310);
+      const moonfire = Math.round(this.player.moonfireRange || this.player.moonfireRangeBase || 300);
+      const range = Math.max(120, Math.max(starfall, moonfire));
+      const r = Phaser.Math.Clamp(range, 200, 980);
+
+      this._druidRangeRing.setRadius(r);
+      this._druidRangeRing.setPosition(this.player.x, this.player.y);
+      this._druidRangeRing.setVisible(true);
+    },
+
+    updateWarlockRangeRing(time) {
+      if (!this.player || this.player.isAlive === false) {
+        if (this._warlockRangeRing) this._warlockRangeRing.setVisible(false);
+        return;
+      }
+
+      if (!this.isRangeIndicatorEnabled()) {
+        if (this._warlockRangeRing) this._warlockRangeRing.setVisible(false);
+        return;
+      }
+
+      const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
+      const active = mainCore === 'warlock' || this.player.mainCoreKey === 'warlock'
+        || this.player.weaponType === 'warlock_poisonnova'
+        || this.player.weaponType === 'warlock_shadow';
+      if (!active) {
+        if (this._warlockRangeRing) this._warlockRangeRing.setVisible(false);
+        return;
+      }
+
+      this.ensureUnifiedRangeRing('_warlockRangeRing', 'warlock');
+
+      // 术士：剧毒新星是“脚下施放”，这里提示的是毒圈影响半径
+      const baseRadius = Math.max(10, Math.round(this.player.warlockPoisonNovaRadiusBase || 96));
+      const spreadStacks = Math.max(0, Math.floor(this.player.warlockPoisonSpreadStacks || 0));
+      const radius = Math.round(baseRadius * (1 + 0.2 * spreadStacks));
+      const r = Phaser.Math.Clamp(radius, 60, 360);
+
+      this._warlockRangeRing.setRadius(r);
+      this._warlockRangeRing.setPosition(this.player.x, this.player.y);
+      this._warlockRangeRing.setVisible(true);
     },
 
     upgradePaladinCooldown() {

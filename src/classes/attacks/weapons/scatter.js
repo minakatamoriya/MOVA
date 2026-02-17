@@ -31,7 +31,11 @@ export function fireScatter(player) {
     }
   }
 
-  const acquireRange = Math.max(200, Math.round(player.archerArrowRange || player.archerArrowRangeBase || 680));
+  const acquireRange = Phaser.Math.Clamp(
+    Math.round(player.archerArrowRange || player.archerArrowRangeBase || 330),
+    200,
+    360
+  );
   const hasTargetInRange = (() => {
     if (!target || !target.isAlive) return false;
     const enemyR = Math.max(0,
