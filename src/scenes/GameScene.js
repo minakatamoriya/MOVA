@@ -658,6 +658,21 @@ class GameScene extends Phaser.Scene {
     // 监听玩家死亡
     this.events.on('playerDied', () => {
       console.log('游戏结束 - 玩家死亡');
+      // 兜底：所有死亡场景都能弹出结算菜单
+      if (!this._playerDeathHandled) {
+        this.handlePlayerDeathOnce();
+      }
+      // 延迟跳转，保证动画和爆炸效果播放
+      this.time.delayedCall(1200, () => {
+        if (this.scene && this.scene.isActive('GameScene')) {
+          this.scene.start('GameOverScene', {
+            victory: false,
+            score: this.playerData?.score || 0,
+            survived: typeof this.getPlayTime === 'function' ? this.getPlayTime() : '',
+            sessionCoins: this.sessionCoins || 0
+          });
+        }
+      });
     });
 
     // 监听场景关闭事件
