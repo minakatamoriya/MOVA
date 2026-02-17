@@ -6,7 +6,7 @@ import { resolveClassColor } from './visual/classColors';
 export const TREE_DEFS = [
   {
     id: 'archer',
-    name: '猎人',
+    name: '猎人-主',
     color: resolveClassColor('archer'),
     core: { id: 'scatter_core', name: '初始：猎人', maxLevel: 1, desc: '解锁散射射击。' },
     nodes: [
@@ -24,7 +24,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'druid',
-    name: '德鲁伊',
+    name: '德鲁伊-主',
     color: resolveClassColor('druid'),
     core: { id: 'drone_core', name: '初始：德鲁伊', maxLevel: 1, desc: '解锁星落（定位敌方，星星下落造成范围伤害）。' },
     nodes: [
@@ -36,7 +36,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'warrior',
-    name: '战士',
+    name: '战士-主',
     color: resolveClassColor('warrior'),
     core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为劈砍。' },
     nodes: [
@@ -49,7 +49,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'mage',
-    name: '法师',
+    name: '法师-主',
     color: resolveClassColor('mage'),
     core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为奥术射线。' },
     nodes: [
@@ -64,7 +64,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'paladin',
-    name: '圣骑',
+    name: '圣骑士-主',
     color: resolveClassColor('paladin'),
     core: { id: 'paladin_core', name: '初始：圣骑', maxLevel: 1, desc: '护盾脉冲清弹并反击。' },
     nodes: [
@@ -77,7 +77,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'warlock',
-    name: '术士',
+    name: '术士-主',
     color: resolveClassColor('warlock'),
     core: { id: 'warlock_core', name: '初始：术士', maxLevel: 1, desc: '解锁基础技能：剧毒新星（每 2 秒在脚下留下毒圈并逐渐扩大）。' },
     nodes: [
@@ -91,7 +91,7 @@ export const TREE_DEFS = [
   // ====== 副职业通用派系（纯被动） ======
   {
     id: 'arcane',
-    name: '法师-副-奥术',
+    name: '法师-副',
     color: resolveClassColor('mage'),
     core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，提供技能加速与站桩奖励。' },
     nodes: [
@@ -103,7 +103,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'ranger',
-    name: '猎人-副-游侠',
+    name: '猎人-副',
     color: resolveClassColor('archer'),
     core: { id: 'off_ranger', name: '选择：游侠', maxLevel: 1, desc: '作为副职业，提供暴击、闪避与先手压制。' },
     nodes: [
@@ -115,7 +115,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'unyielding',
-    name: '战士-副-不屈',
+    name: '战士-副',
     color: resolveClassColor('warrior'),
     core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，提供逆境增伤与绝境反击。' },
     nodes: [
@@ -127,7 +127,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'curse',
-    name: '术士-副-诅咒',
+    name: '术士-副',
     color: resolveClassColor('warlock'),
     core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，提供持续伤害与减益。' },
     nodes: [
@@ -139,7 +139,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'guardian',
-    name: '骑士-副-守护',
+    name: '圣骑士-副',
     color: resolveClassColor('paladin'),
     core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，提供格挡、减伤与反击。' },
     nodes: [
@@ -151,7 +151,7 @@ export const TREE_DEFS = [
   },
   {
     id: 'nature',
-    name: '德鲁伊-副-自然伙伴',
+    name: '德鲁伊-副',
     color: resolveClassColor('druid'),
     core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，结契召唤物（熊/鹰/树精）并强化。' },
     nodes: [
