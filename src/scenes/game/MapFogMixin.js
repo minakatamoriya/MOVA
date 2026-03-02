@@ -14,8 +14,138 @@ export function applyMapFogMixin(GameScene) {
         level: level || 1,
         gridSize: 20,
         cellSize: 128,
-        debugGrid: false
+        debugGrid: !!this.debugGridEnabled
       };
+    },
+
+    clearDebugGridOverlay() {
+      if (Array.isArray(this._debugGridObjects) && this._debugGridObjects.length > 0) {
+        this._debugGridObjects.forEach(o => o?.destroy?.());
+      }
+      this._debugGridObjects = [];
+
+      if (this._debugGridPointerHandler && this.input) {
+        try { this.input.off('pointerdown', this._debugGridPointerHandler); } catch (_) { /* ignore */ }
+      }
+      this._debugGridPointerHandler = null;
+
+      this.debugGridGraphics = null;
+      this.debugGridBlockedGraphics = null;
+      this.debugGridLabelObjects = null;
+    },
+
+    renderDebugGridOverlay() {
+      const cfg = this.mapConfig;
+      if (!cfg || !cfg.debugGrid) return;
+
+      const { gridSize, cellSize } = cfg;
+      if (!(gridSize > 0 && cellSize > 0)) return;
+
+      const worldW = this.worldBoundsRect?.width ?? (gridSize * cellSize);
+      const worldH = this.worldBoundsRect?.height ?? (gridSize * cellSize);
+      const showLabels = (typeof this.debugGridShowLabels === 'boolean') ? this.debugGridShowLabels : true;
+      const interactive = (typeof this.debugGridInteractive === 'boolean') ? this.debugGridInteractive : true;
+
+      this.clearDebugGridOverlay();
+      this._debugGridObjects = [];
+
+      // 网格线
+      const g = this.add.graphics();
+      g.setDepth(-90);
+      g.lineStyle(1, 0x66ff99, 0.35);
+      for (let i = 0; i <= gridSize; i += 1) {
+        const p = i * cellSize;
+        g.beginPath();
+        g.moveTo(0, p);
+        g.lineTo(worldW, p);
+        g.strokePath();
+
+        g.beginPath();
+        g.moveTo(p, 0);
+        g.lineTo(p, worldH);
+        g.strokePath();
+      }
+      this._debugGridObjects.push(g);
+      this.debugGridGraphics = g;
+
+      // 不可走格子高亮层（开发期）
+      const blockedG = this.add.graphics();
+      blockedG.setDepth(-89);
+      this._debugGridObjects.push(blockedG);
+      this.debugGridBlockedGraphics = blockedG;
+
+      const blockedSet = (() => {
+        if (this.debugBlockedCells instanceof Set) return this.debugBlockedCells;
+        if (Array.isArray(this.debugBlockedCells)) return new Set(this.debugBlockedCells);
+        this.debugBlockedCells = new Set();
+        return this.debugBlockedCells;
+      })();
+
+      const redrawBlocked = () => {
+        if (!this.debugGridBlockedGraphics) return;
+        this.debugGridBlockedGraphics.clear();
+        this.debugGridBlockedGraphics.fillStyle(0xff3333, 0.22);
+        this.debugGridBlockedGraphics.lineStyle(2, 0xff3333, 0.55);
+
+        blockedSet.forEach((idx) => {
+          if (!Number.isFinite(idx)) return;
+          const gx = idx % gridSize;
+          const gy = Math.floor(idx / gridSize);
+          if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize) return;
+          const x = gx * cellSize;
+          const y = gy * cellSize;
+          this.debugGridBlockedGraphics.fillRect(x, y, cellSize, cellSize);
+          this.debugGridBlockedGraphics.strokeRect(x, y, cellSize, cellSize);
+        });
+      };
+      redrawBlocked();
+
+      // 编号标签（每格一个 idx：gy*gridSize+gx）
+      if (showLabels) {
+        this.debugGridLabelObjects = [];
+        const fontSize = Math.max(12, Math.min(18, Math.floor(cellSize / 9)));
+        for (let gy = 0; gy < gridSize; gy += 1) {
+          for (let gx = 0; gx < gridSize; gx += 1) {
+            const idx = gy * gridSize + gx;
+            const x = gx * cellSize + 6;
+            const y = gy * cellSize + 6;
+            const t = this.add.text(x, y, String(idx), {
+              fontSize: `${fontSize}px`,
+              fontStyle: 'bold',
+              color: '#ffffff',
+              stroke: '#000000',
+              strokeThickness: 4,
+              backgroundColor: 'rgba(0,0,0,0.45)',
+              padding: { left: 4, right: 4, top: 2, bottom: 2 }
+            });
+            t.setAlpha(0.92);
+            t.setDepth(-88);
+            this._debugGridObjects.push(t);
+            this.debugGridLabelObjects.push(t);
+          }
+        }
+      }
+
+      if (interactive && this.input && this.cameras?.main) {
+        this._debugGridPointerHandler = (pointer) => {
+          try {
+            const cam = this.cameras.main;
+            const pt = cam.getWorldPoint(pointer.x, pointer.y);
+            const gx = Math.floor(pt.x / cellSize);
+            const gy = Math.floor(pt.y / cellSize);
+            if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize) return;
+            const idx = gy * gridSize + gx;
+            if (blockedSet.has(idx)) blockedSet.delete(idx);
+            else blockedSet.add(idx);
+
+            // 保持到 scene 上，便于你后续复制这份列表
+            this.debugBlockedCells = blockedSet;
+            redrawBlocked();
+            console.log(`[DebugGrid] toggle blocked cell gx=${gx} gy=${gy} idx=${idx} blocked=${blockedSet.has(idx)}`);
+          } catch (_) { /* ignore */ }
+        };
+        this.input.on('pointerdown', this._debugGridPointerHandler);
+      }
     },
 
     getSpawnPoint() {
@@ -74,6 +204,12 @@ export function applyMapFogMixin(GameScene) {
       this.inStartRoom = true;
       this.adventureStarted = false;
 
+      // 起始房间不显示“关卡底图”（例如试炼之地的 map1）
+      // 避免被 startroom 的 tileSprite 盖住导致误判是否生效
+      if (this.mapBgImage) {
+        try { this.mapBgImage.setVisible(false); } catch (_) { /* ignore */ }
+      }
+
       this.fogMode = 'none';
 
       if (this._worldMapObjects) {
@@ -96,7 +232,7 @@ export function applyMapFogMixin(GameScene) {
         level: 0,
         gridSize: 1,
         cellSize: cfg.cellSize,
-        debugGrid: false
+        debugGrid: !!this.debugGridEnabled
       };
       this.worldBoundsRect = new Phaser.Geom.Rectangle(0, 0, cfg.worldW, cfg.worldH);
 
@@ -112,6 +248,10 @@ export function applyMapFogMixin(GameScene) {
       this.player.setPosition(spawn.x, spawn.y);
       cam.startFollow(this.player, true, 0.18, 0.18);
       cam.setFollowOffset(0, 0);
+
+      // 开发期调试网格覆盖层
+      if (this.mapConfig.debugGrid) this.renderDebugGridOverlay();
+      else this.clearDebugGridOverlay();
 
       this.weaponSelected = false;
       this.setupStartingWeaponPickups({ force: true, layout: 'startRoom' });
@@ -180,7 +320,8 @@ export function applyMapFogMixin(GameScene) {
       this.cleanupStartRoomObjects();
 
       this.fogMode = 'soft';
-      this.setupWorldMapForLevel(this.currentLevel);
+      // 试炼之地使用自定义底图（map1.png）
+      this.setupWorldMapForLevel(this.currentLevel, { backgroundKey: 'map1' });
       this.setupSoftFogOfWar();
       this.setupMiniMap();
 
@@ -216,32 +357,41 @@ export function applyMapFogMixin(GameScene) {
       const { gridSize, cellSize, debugGrid } = this.mapConfig;
       const worldSize = gridSize * cellSize;
 
+      // 当前关卡的阻挡格子集合（开发期可用 debugBlockedCells 直接当作阻挡）
+      // 约定：this.blockedCells = Set<number>
+      {
+        const src = this.blockedCellsByMapId?.[this.currentMapInfo?.id] ?? null;
+        if (src instanceof Set) this.blockedCells = src;
+        else if (Array.isArray(src)) this.blockedCells = new Set(src);
+        else if (this.debugBlockedCells instanceof Set) this.blockedCells = this.debugBlockedCells;
+        else this.blockedCells = new Set();
+      }
+
       this.worldBoundsRect = new Phaser.Geom.Rectangle(0, 0, worldSize, worldSize);
 
-      const grassKey = this.ensureGrassTileTexture();
-      const bg = this.add.tileSprite(0, 0, worldSize, worldSize, grassKey).setOrigin(0, 0);
-      bg.setDepth(-100);
-      this._worldMapObjects.push(bg);
-
-      if (debugGrid) {
-        const g = this.add.graphics();
-        g.setDepth(-90);
-        g.lineStyle(1, 0x222244, 0.55);
-        for (let i = 0; i <= gridSize; i++) {
-          const p = i * cellSize;
-          g.beginPath();
-          g.moveTo(0, p);
-          g.lineTo(worldSize, p);
-          g.strokePath();
-
-          g.beginPath();
-          g.moveTo(p, 0);
-          g.lineTo(p, worldSize);
-          g.strokePath();
-        }
-        this._worldMapObjects.push(g);
-        this.debugGridGraphics = g;
+      // 自定义底图（例如试炼之地 map1.png）
+      const backgroundKey = opts?.backgroundKey;
+      if (backgroundKey && typeof this.setMapBackground === 'function') {
+        try {
+          this.setMapBackground(backgroundKey);
+          if (this.mapBgImage) this.mapBgImage.setVisible(true);
+        } catch (_) { /* ignore */ }
+      } else if (this.mapBgImage) {
+        // 没有指定自定义底图时，避免残留显示
+        try { this.mapBgImage.setVisible(false); } catch (_) { /* ignore */ }
       }
+
+      // 默认草地底纹：当没有自定义底图时才创建（否则会覆盖底图）
+      if (!backgroundKey) {
+        const grassKey = this.ensureGrassTileTexture();
+        const bg = this.add.tileSprite(0, 0, worldSize, worldSize, grassKey).setOrigin(0, 0);
+        bg.setDepth(-100);
+        this._worldMapObjects.push(bg);
+      }
+
+      // 开发期调试网格覆盖层（网格线 + 编号 + 可点击标记不可走格子）
+      if (debugGrid) this.renderDebugGridOverlay();
+      else this.clearDebugGridOverlay();
 
       const bossPt = this.getBossSpawnPoint();
       this.bossRoomZone = this.add.zone(bossPt.x, bossPt.y, cellSize * 2, cellSize * 2);
@@ -292,6 +442,32 @@ export function applyMapFogMixin(GameScene) {
           this.levelBossTriggered = true;
         }
       }
+    },
+
+    isGridCellBlocked(gx, gy) {
+      const cfg = this.mapConfig;
+      if (!cfg) return false;
+      const { gridSize } = cfg;
+      if (!(gridSize > 0)) return false;
+      if (!Number.isFinite(gx) || !Number.isFinite(gy)) return false;
+      if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize) return false;
+
+      const idx = gy * gridSize + gx;
+      const set = this.blockedCells instanceof Set
+        ? this.blockedCells
+        : (this.debugBlockedCells instanceof Set ? this.debugBlockedCells : null);
+      return !!set?.has?.(idx);
+    },
+
+    isWorldPointBlocked(x, y) {
+      const cfg = this.mapConfig;
+      if (!cfg) return false;
+      const { gridSize, cellSize } = cfg;
+      if (!(gridSize > 0 && cellSize > 0)) return false;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const gx = Math.floor(x / cellSize);
+      const gy = Math.floor(y / cellSize);
+      return this.isGridCellBlocked(gx, gy);
     },
 
     setupGridFogOfWar() {

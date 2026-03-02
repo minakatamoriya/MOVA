@@ -720,8 +720,27 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     getDroneBehindVector() {
-      const dir = this.player?.lastDirection || 'down';
+      const dir = this.player?.lastDirection || 'south';
       switch (dir) {
+        // 8-direction (archer)
+        case 'north':
+          return { x: 0, y: 1 };
+        case 'north-east':
+          return { x: -1, y: 1 };
+        case 'east':
+          return { x: -1, y: 0 };
+        case 'south-east':
+          return { x: -1, y: -1 };
+        case 'south':
+          return { x: 0, y: -1 };
+        case 'south-west':
+          return { x: 1, y: -1 };
+        case 'west':
+          return { x: 1, y: 0 };
+        case 'north-west':
+          return { x: 1, y: 1 };
+
+        // 4-direction (legacy)
         case 'up':
           return { x: 0, y: 1 };
         case 'down':

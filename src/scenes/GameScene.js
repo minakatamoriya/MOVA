@@ -63,6 +63,19 @@ class GameScene extends Phaser.Scene {
     // 迷雾模式：soft = "柔和笔刷式永久揭开（非网格）"
     this.fogMode = 'soft';
 
+    // 地图背景图缩放系数：1=按 Cover 铺满；<1 会让背景图更小（可能露出边缘空白）
+    this.mapBgScaleMult = 1;
+
+    // 开发期调试：网格线/编号/不可走格子标注
+    this.debugGridEnabled = false;
+    this.debugGridShowLabels = true;
+    this.debugGridInteractive = true;
+    this.debugBlockedCells = new Set();
+
+    // 固定阻挡配置（按地图 id -> idx 列表/Set）
+    // 例：this.blockedCellsByMapId = { tutorial_level: [0,1,2] }
+    this.blockedCellsByMapId = Object.create(null);
+
     // 系统提示（居中偏上，带倒计时条/渐隐/可手动关闭）
     this.systemMessage = null;
 
@@ -340,6 +353,36 @@ class GameScene extends Phaser.Scene {
     // 新流程：先进入起始房间（小地图、无迷雾、无 Boss）
     this.enterStartRoom();
 
+    // 开发期调试网格：按 G 显示/隐藏（可用于标记不可走格子）
+    if (this.input?.keyboard) {
+      try {
+        if (this._debugGridKey && this._debugGridKeyHandler) {
+          this._debugGridKey.off('down', this._debugGridKeyHandler);
+        }
+      } catch (_) { /* ignore */ }
+
+      this._debugGridKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.G);
+      this._debugGridKeyHandler = () => {
+        this.debugGridEnabled = !this.debugGridEnabled;
+        if (this.mapConfig) this.mapConfig.debugGrid = !!this.debugGridEnabled;
+        if (this.debugGridEnabled) this.renderDebugGridOverlay?.();
+        else this.clearDebugGridOverlay?.();
+        console.log('[DebugGrid] enabled=', this.debugGridEnabled);
+      };
+      this._debugGridKey.on('down', this._debugGridKeyHandler);
+
+      // 打印当前不可走格子列表（idx）
+      this._debugGridPrintKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+      this._debugGridPrintHandler = () => {
+        const set = (this.debugBlockedCells instanceof Set) ? this.debugBlockedCells
+          : (this.blockedCells instanceof Set ? this.blockedCells : null);
+        const arr = set ? Array.from(set) : [];
+        arr.sort((a, b) => a - b);
+        console.log('[DebugGrid] blocked idx list:', JSON.stringify(arr));
+      };
+      this._debugGridPrintKey.on('down', this._debugGridPrintHandler);
+    }
+
     // 监听屏幕尺寸变化（手机旋转等），重新计算游戏区域和 HUD 布局
     this.scale.on('resize', this.handleResize, this);
 
@@ -366,6 +409,56 @@ class GameScene extends Phaser.Scene {
     });
   }
 
+  setMapBackground(textureKey) {
+    if (!textureKey) return;
+
+    const area = this.worldBoundsRect || this.gameArea || null;
+    const cam = this.cameras?.main;
+    const cx = area ? (area.x + area.width * 0.5) : (cam?.midPoint?.x ?? 0);
+    const cy = area ? (area.y + area.height * 0.5) : (cam?.midPoint?.y ?? 0);
+
+    if (!this.mapBgImage) {
+      this.mapBgImage = this.add.image(cx, cy, textureKey)
+        .setOrigin(0.5)
+        .setDepth(-100);
+    } else {
+      this.mapBgImage.setTexture(textureKey);
+      this.mapBgImage.setPosition(cx, cy);
+    }
+
+    this.refitMapBackground();
+  }
+
+  refitMapBackground() {
+    if (!this.mapBgImage) return;
+
+    const key = this.mapBgImage.texture?.key;
+    if (!key) return;
+
+    const area = this.worldBoundsRect || this.gameArea || null;
+    const cam = this.cameras?.main;
+    const targetW = area ? area.width : (cam?.width ?? 0);
+    const targetH = area ? area.height : (cam?.height ?? 0);
+    if (!(targetW > 0 && targetH > 0)) return;
+
+    const tex = this.textures?.get?.(key);
+    const src = tex?.getSourceImage?.();
+    const iw = src?.width || this.mapBgImage.width || 1;
+    const ih = src?.height || this.mapBgImage.height || 1;
+
+    // Cover：等比铺满目标区域（可能会裁切边缘）
+    const coverScale = Math.max(targetW / Math.max(1, iw), targetH / Math.max(1, ih));
+    const mult = Number.isFinite(this.mapBgScaleMult) ? this.mapBgScaleMult : 1;
+    this.mapBgImage.setScale(coverScale * mult);
+
+    // 位置也随区域中心同步（resize 后 gameArea 会变化）
+    if (area) {
+      this.mapBgImage.setPosition(area.x + area.width * 0.5, area.y + area.height * 0.5);
+    } else if (cam?.midPoint) {
+      this.mapBgImage.setPosition(cam.midPoint.x, cam.midPoint.y);
+    }
+  }
+
   /**
    * 处理游戏分辨率变化（手机旋转导致宽度变化时触发）
    */
@@ -381,6 +474,9 @@ class GameScene extends Phaser.Scene {
       height: h - 100 - (this.bottomPanelHeight || 0)
     };
     this.bottomHudTopY = this.gameArea.y + this.gameArea.height;
+
+    // 底图适配新尺寸
+    this.refitMapBackground?.();
 
     // 重建 HUD 和小地图
     this.rebuildTopLeftHud?.();
@@ -429,6 +525,19 @@ class GameScene extends Phaser.Scene {
       uiBus.off('ui:toggleRangeIndicators', this._uiToggleRangeIndicatorsHandler);
       this._uiToggleRangeIndicatorsHandler = null;
     }
+
+    // 解绑调试网格键与指针监听
+    if (this._debugGridKey && this._debugGridKeyHandler) {
+      try { this._debugGridKey.off('down', this._debugGridKeyHandler); } catch (_) { /* ignore */ }
+    }
+    if (this._debugGridPrintKey && this._debugGridPrintHandler) {
+      try { this._debugGridPrintKey.off('down', this._debugGridPrintHandler); } catch (_) { /* ignore */ }
+    }
+    this._debugGridKey = null;
+    this._debugGridKeyHandler = null;
+    this._debugGridPrintKey = null;
+    this._debugGridPrintHandler = null;
+    this.clearDebugGridOverlay?.();
   }
 
   /**

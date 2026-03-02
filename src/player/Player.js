@@ -40,6 +40,38 @@ const PLAYER_ANIM_CONFIG = {
   }
 };
 
+const ARCHER_ANIM_CONFIG = {
+  // 使用单张 PNG 作为每一帧：key 由 PreloadScene 预先加载
+  sheetKey: 'archer',
+  frameWidth: 48,
+  frameHeight: 48,
+  // 放大显示（你选择了 2.0x）
+  scale: 2.0,
+  directions: [
+    'south',
+    'south-east',
+    'east',
+    'north-east',
+    'north',
+    'north-west',
+    'west',
+    'south-west'
+  ],
+  useFlipForLeft: false,
+  frameKeyFor: (state, direction, frameIndex = 0) => {
+    if (state === 'run') return `archer_walk_${direction}_${frameIndex}`;
+    // idle / attack / skill / hurt：先用 rotations 做占位（避免缺动画导致锁死）
+    return `archer_rotation_${direction}`;
+  },
+  states: {
+    idle: { frameCount: 1, frameRate: 6, repeat: -1 },
+    run: { frameCount: 6, frameRate: 10, repeat: -1 },
+    attack: { frameCount: 1, frameRate: 12, repeat: 0 },
+    skill: { frameCount: 1, frameRate: 10, repeat: 0, cooldown: 2000 },
+    hurt: { frameCount: 1, frameRate: 15, repeat: 0 }
+  }
+};
+
 /**
  * 玩家类
  * 可移动、自动射击的玩家角色
@@ -67,6 +99,20 @@ export default class Player extends Phaser.GameObjects.Container {
     this.moveSpeed = this.baseMoveSpeed; // 移动速度
     this.hitboxRadius = 8; // 核心判定半径（小型圆形）
     this.visualRadius = 15; // 视觉大小
+
+    // 若使用放大后的 archer 资源：同步放大判定/视觉圈（以旧 64px 为基准）
+    {
+      const fw = this.animConfig?.frameWidth;
+      const scale = this.animConfig?.scale;
+      if (Number.isFinite(fw) && Number.isFinite(scale) && fw > 0) {
+        const targetPx = fw * scale;
+        const mult = targetPx / 64;
+        if (Number.isFinite(mult) && mult > 0) {
+          this.hitboxRadius = Math.max(6, Math.round(this.hitboxRadius * mult));
+          this.visualRadius = Math.max(10, Math.round(this.visualRadius * mult));
+        }
+      }
+    }
 
     // 移动输入：可由 Scene 注入（移动端隐藏摇杆等）
     this.analogMoveActive = false;
@@ -188,10 +234,13 @@ export default class Player extends Phaser.GameObjects.Container {
     this.maxBullets = this.scene?.bulletManager?.config?.maxPlayerBullets ?? 300;
 
     // 动画状态
-    this.animConfig = PLAYER_ANIM_CONFIG;
+    this.animConfig = ARCHER_ANIM_CONFIG;
+    this.baseSpriteScale = (Number.isFinite(this.animConfig?.scale) && this.animConfig.scale > 0)
+      ? this.animConfig.scale
+      : 1;
     this.animState = 'idle';
     this.actionLock = null;
-    this.lastDirection = 'down';
+    this.lastDirection = 'south';
     this.attackFrameFired = false;
     this.skillFrameFired = false;
     this.lastSkillTime = 0;
@@ -214,9 +263,17 @@ export default class Player extends Phaser.GameObjects.Container {
   createVisuals() {
     this.ensureAnimations();
 
-    this.sprite = this.scene.add.sprite(0, 0, this.animConfig.sheetKey, 0);
+    const startKey = this.animConfig?.frameKeyFor
+      ? this.animConfig.frameKeyFor('idle', this.lastDirection, 0)
+      : this.animConfig.sheetKey;
+
+    this.sprite = this.scene.add.sprite(0, 0, startKey, 0);
     this.sprite.isPlayer = true;
     this.sprite.setOrigin(0.5, 0.5);
+
+    if (Number.isFinite(this.baseSpriteScale) && this.baseSpriteScale !== 1) {
+      this.sprite.setScale(this.baseSpriteScale);
+    }
     this.add(this.sprite);
     
     // 核心判定点（红色小圆点）
@@ -242,21 +299,41 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   ensureAnimations() {
-    const { sheetKey, directions, states, framesPerDirection } = this.animConfig || PLAYER_ANIM_CONFIG;
+    const config = this.animConfig || PLAYER_ANIM_CONFIG;
+    const { directions, states } = config;
+    const isTextureKeyAnim = typeof config.frameKeyFor === 'function';
+
     directions.forEach((direction) => {
-      const rowIndex = this.getDirectionRow(direction);
-      Object.entries(states).forEach(([stateName, config]) => {
+      Object.entries(states).forEach(([stateName, stateConfig]) => {
         const key = this.getAnimKey(stateName, direction);
         if (this.scene.anims.exists(key)) return;
 
-        const frames = config.frames.map((frameIndex) => rowIndex * framesPerDirection + frameIndex);
+        if (isTextureKeyAnim) {
+          const frameCount = stateConfig.frameCount || 1;
+          const frames = Array.from({ length: frameCount }, (_, i) => ({
+            key: config.frameKeyFor(stateName, direction, i)
+          }));
+
+          this.scene.anims.create({
+            key,
+            frames,
+            frameRate: stateConfig.frameRate,
+            repeat: stateConfig.repeat,
+            yoyo: Boolean(stateConfig.yoyo)
+          });
+          return;
+        }
+
+        const { sheetKey, framesPerDirection } = config;
+        const rowIndex = this.getDirectionRow(direction);
+        const frames = stateConfig.frames.map((frameIndex) => rowIndex * framesPerDirection + frameIndex);
 
         this.scene.anims.create({
           key,
           frames: this.scene.anims.generateFrameNumbers(sheetKey, { frames }),
-          frameRate: config.frameRate,
-          repeat: config.repeat,
-          yoyo: Boolean(config.yoyo)
+          frameRate: stateConfig.frameRate,
+          repeat: stateConfig.repeat,
+          yoyo: Boolean(stateConfig.yoyo)
         });
       });
     });
@@ -264,6 +341,9 @@ export default class Player extends Phaser.GameObjects.Container {
 
   bindAnimationEvents() {
     this.sprite.on(Phaser.Animations.Events.ANIMATION_UPDATE, (animation, frame) => {
+      // 对于基于独立贴图帧（texture key）的动画，不再依赖 spritesheet 的 frame.index 触发帧事件。
+      if (typeof this.animConfig?.frameKeyFor === 'function') return;
+
       if (animation.key.startsWith('player_attack_')) {
         const direction = this.getDirectionFromAnimKey(animation.key);
         const rowIndex = this.getDirectionRow(direction);
@@ -574,8 +654,34 @@ export default class Player extends Phaser.GameObjects.Container {
     }
     
     // 应用移动
-    this.x += velocityX * currentSpeed * (delta / 1000);
-    this.y += velocityY * currentSpeed * (delta / 1000);
+    const step = (delta / 1000);
+    const dx = velocityX * currentSpeed * step;
+    const dy = velocityY * currentSpeed * step;
+
+    const scene = this.scene;
+    const canBlock = scene && typeof scene.isWorldPointBlocked === 'function' && scene.mapConfig;
+    if (canBlock && (dx !== 0 || dy !== 0)) {
+      const nextX = this.x + dx;
+      const nextY = this.y + dy;
+
+      // 用“核心判定点”来判断是否进入阻挡格子（偏移略向下，让脚下更贴近）
+      const probeOffsetY = Math.max(0, (this.visualRadius || 0) * 0.35);
+      const isBlocked = (x, y) => scene.isWorldPointBlocked(x, y + probeOffsetY);
+
+      if (!isBlocked(nextX, nextY)) {
+        this.x = nextX;
+        this.y = nextY;
+      } else {
+        // 尝试分轴移动，减少卡墙感
+        const canX = dx !== 0 && !isBlocked(nextX, this.y);
+        const canY = dy !== 0 && !isBlocked(this.x, nextY);
+        if (canX) this.x = nextX;
+        if (canY) this.y = nextY;
+      }
+    } else {
+      this.x += dx;
+      this.y += dy;
+    }
 
     this.updateDirection(velocityX, velocityY);
     this.updateMovementVisuals(velocityX, velocityY);
@@ -609,11 +715,24 @@ export default class Player extends Phaser.GameObjects.Container {
   updateDirection(velocityX, velocityY) {
     if (velocityX === 0 && velocityY === 0) return;
 
-    if (Math.abs(velocityX) > Math.abs(velocityY)) {
-      this.lastDirection = velocityX > 0 ? 'right' : 'left';
-    } else {
-      this.lastDirection = velocityY > 0 ? 'down' : 'up';
+    // 8 方向（用于 archer）或 4 方向（兼容旧 player_sheet）
+    const dirs = this.animConfig?.directions || PLAYER_ANIM_CONFIG.directions;
+    const wants8 = dirs.includes('north-east') || dirs.includes('south-east');
+    if (!wants8) {
+      if (Math.abs(velocityX) > Math.abs(velocityY)) {
+        this.lastDirection = velocityX > 0 ? 'right' : 'left';
+      } else {
+        this.lastDirection = velocityY > 0 ? 'down' : 'up';
+      }
+      return;
     }
+
+    // 注意：Phaser 坐标系 y 向下为正
+    let deg = Phaser.Math.RadToDeg(Math.atan2(velocityY, velocityX));
+    deg = (deg + 360) % 360;
+    const sector = Math.round(deg / 45) % 8;
+    const map = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+    this.lastDirection = map[sector] || 'south';
   }
 
   updateMovementVisuals(velocityX, velocityY) {
@@ -622,8 +741,11 @@ export default class Player extends Phaser.GameObjects.Container {
     const targetTilt = velocityX * 8;
     this.sprite.angle = Phaser.Math.Linear(this.sprite.angle, targetTilt, 0.2);
 
-    const targetScaleX = Phaser.Math.Clamp(1 - velocityY * 0.06, 0.92, 1.08);
-    const targetScaleY = Phaser.Math.Clamp(1 + velocityY * 0.06, 0.92, 1.08);
+    const base = (Number.isFinite(this.baseSpriteScale) && this.baseSpriteScale > 0) ? this.baseSpriteScale : 1;
+    const squashX = Phaser.Math.Clamp(1 - velocityY * 0.06, 0.92, 1.08);
+    const squashY = Phaser.Math.Clamp(1 + velocityY * 0.06, 0.92, 1.08);
+    const targetScaleX = base * squashX;
+    const targetScaleY = base * squashY;
     this.sprite.scaleX = Phaser.Math.Linear(this.sprite.scaleX, targetScaleX, 0.2);
     this.sprite.scaleY = Phaser.Math.Linear(this.sprite.scaleY, targetScaleY, 0.2);
   }

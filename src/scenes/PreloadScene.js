@@ -54,6 +54,38 @@ export default class PreloadScene extends Phaser.Scene {
       frameHeight: 64
     });
 
+    // Archer: 8 方向行走（每方向 6 帧）+ rotations 静止朝向
+    const archerDirs = [
+      'south',
+      'south-east',
+      'east',
+      'north-east',
+      'north',
+      'north-west',
+      'west',
+      'south-west'
+    ];
+
+    archerDirs.forEach((dir) => {
+      this.load.image(
+        `archer_rotation_${dir}`,
+        `assets/characters/archer/rotations/${dir}.png`
+      );
+    });
+
+    for (let i = 0; i < 6; i += 1) {
+      const frame = String(i).padStart(3, '0');
+      archerDirs.forEach((dir) => {
+        this.load.image(
+          `archer_walk_${dir}_${i}`,
+          `assets/characters/archer/animations/walk/${dir}/frame_${frame}.png`
+        );
+      });
+    }
+
+    // 地图底图：第一关（试炼之地）
+    this.load.image('map1', 'assets/map/map1.png');
+
     // UI 资源（SVG，可缩放）
     this.load.svg('ui_panel', 'assets/ui/panel.svg');
     this.load.svg('ui_button', 'assets/ui/button.svg');
