@@ -54,7 +54,7 @@ export default class PreloadScene extends Phaser.Scene {
       frameHeight: 64
     });
 
-    // Archer: 8 方向行走（每方向 6 帧）+ rotations 静止朝向
+    // Character (any): 8 方向行走（每方向 8 帧）+ rotations 静止朝向
     const archerDirs = [
       'south',
       'south-east',
@@ -69,16 +69,16 @@ export default class PreloadScene extends Phaser.Scene {
     archerDirs.forEach((dir) => {
       this.load.image(
         `archer_rotation_${dir}`,
-        `assets/characters/archer/rotations/${dir}.png`
+        `assets/characters/any/rotations/${dir}.png`
       );
     });
 
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       const frame = String(i).padStart(3, '0');
       archerDirs.forEach((dir) => {
         this.load.image(
           `archer_walk_${dir}_${i}`,
-          `assets/characters/archer/animations/walk/${dir}/frame_${frame}.png`
+          `assets/characters/any/animations/walking-8-frames/${dir}/frame_${frame}.png`
         );
       });
     }

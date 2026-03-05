@@ -65,7 +65,7 @@ const ARCHER_ANIM_CONFIG = {
   },
   states: {
     idle: { frameCount: 1, frameRate: 6, repeat: -1 },
-    run: { frameCount: 6, frameRate: 10, repeat: -1 },
+    run: { frameCount: 8, frameRate: 10, repeat: -1 },
     attack: { frameCount: 1, frameRate: 12, repeat: 0 },
     skill: { frameCount: 1, frameRate: 10, repeat: 0, cooldown: 2000 },
     hurt: { frameCount: 1, frameRate: 15, repeat: 0 }
