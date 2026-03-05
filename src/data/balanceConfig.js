@@ -35,7 +35,7 @@ const STAGE_OVERRIDES = {
     minions: {
       countMin: 20,
       countMax: 24,
-      hp: 60,
+      hp: 45,
       exp: 12,
       speed: { chaser: 60, shooter: 52, patrol: 40, static: 0 },
       contactDamage: 6,
@@ -51,7 +51,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 1,
       countMax: 1,
-      hp: 220,
+      hp: 170,
       exp: 90,
       speed: { chaser: 55, shooter: 50, patrol: 42, static: 0 },
       contactDamage: 10,
@@ -65,7 +65,7 @@ const STAGE_OVERRIDES = {
       },
     },
     boss: {
-      hp: 420,
+      hp: 320,
       moveSpeed: 45,
     },
   },
@@ -74,7 +74,7 @@ const STAGE_OVERRIDES = {
     minions: {
       countMin: 24,
       countMax: 28,
-      hp: 75,
+      hp: 55,
       exp: 14,
       speed: { chaser: 66, shooter: 55, patrol: 42, static: 0 },
       contactDamage: 7,
@@ -90,7 +90,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 2,
       countMax: 2,
-      hp: 280,
+      hp: 210,
       exp: 110,
       speed: { chaser: 60, shooter: 52, patrol: 45, static: 0 },
       contactDamage: 12,
@@ -104,7 +104,7 @@ const STAGE_OVERRIDES = {
       },
     },
     boss: {
-      hp: 520,
+      hp: 400,
       moveSpeed: 48,
     },
   },

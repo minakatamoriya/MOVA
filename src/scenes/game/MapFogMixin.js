@@ -257,7 +257,13 @@ export function applyMapFogMixin(GameScene) {
       this.setupStartingWeaponPickups({ force: true, layout: 'startRoom' });
 
       this.currentMapInfo = { ...START_ROOM };
-      this.setupStartRoomMiniMap();
+      // 迷雾/小地图开关：默认关闭；关闭时起始房间也不显示小地图
+      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
+      if (fogEnabled) this.setupStartRoomMiniMap();
+      else {
+        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
+        this.miniMap = null;
+      }
 
       if (this.systemMessage) {
         this.systemMessage.show('请选择一件趁手的武器！', {
@@ -319,11 +325,23 @@ export function applyMapFogMixin(GameScene) {
 
       this.cleanupStartRoomObjects();
 
-      this.fogMode = 'soft';
+      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
+      this.fogMode = fogEnabled ? 'soft' : 'none';
       // 试炼之地使用自定义底图（map1.png）
       this.setupWorldMapForLevel(this.currentLevel, { backgroundKey: 'map1' });
-      this.setupSoftFogOfWar();
-      this.setupMiniMap();
+      if (fogEnabled) {
+        this.setupSoftFogOfWar();
+        this.setupMiniMap();
+      } else {
+        if (this._fogWorldObjects) {
+          this._fogWorldObjects.forEach(o => o?.destroy?.());
+        }
+        this._fogWorldObjects = [];
+        if (this.fogWorldRT) { this.fogWorldRT.destroy(); this.fogWorldRT = null; }
+        if (this.fogBrushImage) { this.fogBrushImage.destroy(); this.fogBrushImage = null; }
+        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
+        this.miniMap = null;
+      }
 
       // 延迟生成首波小怪：避免与地图/迷雾/小地图创建挤在同一帧导致掉帧
       this.time.delayedCall(80, () => {

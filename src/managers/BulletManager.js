@@ -22,6 +22,8 @@ export default class BulletManager {
     this._trailActive = [];        // 正在衰减中的粒子 {sprite, life, maxLife}
     this._trailPoolMax = 200;      // 池上限
     this._trailInterval = 110;     // 每颗子弹发射拖尾间隔 ms
+    // 仅追踪“真的启用了拖尾”的子弹，避免每帧扫描所有子弹
+    this._trailBullets = new Set();
 
     // 统计数据
     this.stats = {
@@ -61,7 +63,9 @@ export default class BulletManager {
       homingTurn = 0.04,
       explode = false,
       skipUpdate = false,
-      maxLifeMs = null
+      maxLifeMs = null,
+      arrowLenMult = 1,
+      arrowThickMult = 1
     } = options;
 
     const resolvedStroke = strokeColor ?? 0x00ffff;
@@ -71,38 +75,47 @@ export default class BulletManager {
     // 创建子弹
     let bullet;
     if (resolvedType === 'arrow') {
-      // 短箭：矩形箭身 + 三角箭头（默认指向 +X）
-      const shaftLen = Math.max(10, Math.round(radius * 2.2));
-      const shaftW = Math.max(3, Math.round(radius * 0.65));
-      const headLen = Math.max(6, Math.round(radius * 1.1));
+      // 箭矢：用“预渲染贴图 + Image”代替 Container(多个子物体)
+      // 目的：减少每发箭矢的对象创建与 draw calls，降低移动+连射时的 GC/卡顿。
+      const texKey = '__bm_arrow_v1';
+      if (!this.scene.textures?.exists?.(texKey)) {
+        const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+        const W = 64;
+        const H = 32;
+        const cx = 10;
+        const cy = Math.floor(H / 2);
 
-      const shaft = this.scene.add.rectangle(0, 0, shaftLen, shaftW, color, 1);
-      shaft.setOrigin(0.5, 0.5);
-      shaft.setStrokeStyle(1, resolvedStroke, 1);
+        // 外圈（白色，模拟“描边”）
+        g.clear();
+        g.fillStyle(0xffffff, 1);
+        g.fillRect(cx, cy - 4, 34, 8);
+        g.fillTriangle(cx + 34, cy - 8, cx + 34, cy + 8, cx + 52, cy);
 
-      const head = this.scene.add.triangle(
-        shaftLen / 2 + headLen / 2 - 1,
-        0,
-        -headLen / 2,
-        -shaftW,
-        -headLen / 2,
-        shaftW,
-        headLen / 2,
-        0,
-        color,
-        1
-      );
-      head.setStrokeStyle(1, resolvedStroke, 1);
+        // 内芯（灰色，后续用 tint 映射为核心色）
+        g.fillStyle(0x9aa0a6, 1);
+        g.fillRect(cx + 1, cy - 2, 32, 4);
+        g.fillTriangle(cx + 33, cy - 5, cx + 33, cy + 5, cx + 49, cy);
 
-      bullet = this.scene.add.container(x, y, [shaft, head]);
+        g.generateTexture(texKey, W, H);
+        g.destroy();
+      }
+
+      // 目标：更“长、粗、亮”，且保持利落条形
+      const shaftLen = Math.max(14, Math.round(radius * 2.8 * arrowLenMult));
+      const shaftW = Math.max(3, Math.round(radius * 0.62 * arrowThickMult));
+      const headLen = Math.max(7, Math.round(radius * 1.10 * arrowLenMult));
+      const totalLen = shaftLen + headLen;
+      const totalH = Math.max(6, shaftW * 2);
+
+      bullet = this.scene.add.image(x, y, texKey).setOrigin(0.5, 0.5);
+      bullet.setDisplaySize(totalLen, totalH);
+      bullet.setTint(color);
+      bullet.setBlendMode(Phaser.BlendModes.ADD);
+
       bullet.radius = radius; // 碰撞仍用圆形半径
       bullet.rotateToVelocity = true;
-      // 兼容：让后续的描边更新继续生效
-      bullet.setStrokeStyle = (lineWidth, stroke, alpha = 1) => {
-        shaft.setStrokeStyle(lineWidth, stroke, alpha);
-        head.setStrokeStyle(lineWidth, stroke, alpha);
-        return bullet;
-      };
+      // 兼容 basicAttackMods / 其它逻辑对 setStrokeStyle 的调用
+      bullet.setStrokeStyle = () => bullet;
     } else {
       bullet = this.scene.add.circle(x, y, radius, color);
       bullet.radius = radius;
@@ -137,7 +150,8 @@ export default class BulletManager {
 
     // 创建光晕
     if (hasGlow) {
-      const glow = this.scene.add.circle(x, y, glowRadius, glowColor ?? color, 0.2);
+      const glowAlpha = (resolvedType === 'arrow') ? 0.28 : 0.2;
+      const glow = this.scene.add.circle(x, y, glowRadius, glowColor ?? color, glowAlpha);
       glow.depth = -1;
       bullet.glow = glow;
     }
@@ -147,6 +161,8 @@ export default class BulletManager {
       bullet._hasTrail = true;
       bullet._trailColor = trailColor ?? resolvedStroke;
       bullet._trailNext = 0; // 立即可发射
+      bullet._trailTracked = true;
+      this._trailBullets.add(bullet);
     }
 
     // 添加到Group
@@ -365,6 +381,8 @@ export default class BulletManager {
       bullet._hasTrail = true;
       bullet._trailColor = trailColor || color;
       bullet._trailNext = 0;
+      bullet._trailTracked = true;
+      this._trailBullets.add(bullet);
     }
 
     // 添加到Group
@@ -388,6 +406,10 @@ export default class BulletManager {
     bullet.markedForRemoval = true;
 
     // 标记拖尾停止
+    if (bullet._trailTracked) {
+      this._trailBullets.delete(bullet);
+      bullet._trailTracked = false;
+    }
     bullet._hasTrail = false;
 
     if (bullet.outOfBoundsTimer) {
@@ -473,25 +495,21 @@ export default class BulletManager {
     const interval = this._trailInterval;
     const fadeDuration = 220; // ms
 
-    // 1) 为所有带拖尾的活跃子弹发射粒子
-    const emitFrom = (entries) => {
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const b = entries[i];
-        if (!b || !b.active || b.markedForRemoval || !b._hasTrail) continue;
-        if (now < b._trailNext) continue;
-        b._trailNext = now + interval;
-        const px = b.x + ((Math.random() - 0.5) * 8) | 0;
-        const py = b.y + ((Math.random() - 0.5) * 8) | 0;
-        const p = this._acquireTrailParticle(px, py, b._trailColor);
-        this._trailActive.push({ sprite: p, life: 0, maxLife: fadeDuration });
-      }
-    };
+    if (this._trailBullets.size === 0 && this._trailActive.length === 0) return;
 
-    if (this.playerBulletGroup?.children) {
-      emitFrom(this.playerBulletGroup.children.entries);
-    }
-    if (this.bossBulletGroup?.children) {
-      emitFrom(this.bossBulletGroup.children.entries);
+    // 1) 为所有带拖尾的活跃子弹发射粒子
+    for (const b of this._trailBullets) {
+      if (!b || !b.active || b.markedForRemoval || !b._hasTrail) {
+        this._trailBullets.delete(b);
+        if (b) b._trailTracked = false;
+        continue;
+      }
+      if (now < b._trailNext) continue;
+      b._trailNext = now + interval;
+      const px = b.x + (((Math.random() - 0.5) * 8) | 0);
+      const py = b.y + (((Math.random() - 0.5) * 8) | 0);
+      const p = this._acquireTrailParticle(px, py, b._trailColor);
+      this._trailActive.push({ sprite: p, life: 0, maxLife: fadeDuration });
     }
 
     // 2) 衰减活跃粒子

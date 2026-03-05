@@ -18,8 +18,10 @@ function ensureArcaneRayState(player) {
     beamAlpha: 0,
     phase: 'idle', // idle | charging | beam | fading
     chargeEndAt: 0,
+    beamHoldUntil: 0,
     hitbox: null,
     lastTargetId: null,
+    lastEnd: null,
     _refract: []
   };
   return player._arcaneRayState;
@@ -151,7 +153,49 @@ function spawnChargeFx(scene, player, scheme) {
 }
 
 function getEnemyRadius(enemy) {
-  return Math.max(0, enemy?.bossSize ?? enemy?.radius ?? 0);
+  if (!enemy) return 0;
+
+  const candidates = [
+    enemy.hitRadius,
+    enemy.collisionRadius,
+    enemy.bodyRadius,
+    enemy.visualRadius,
+    enemy.radius,
+    enemy.bossSize,
+    enemy.body?.radius,
+    enemy.sprite?.radius,
+  ];
+
+  let r = 0;
+  for (let i = 0; i < candidates.length; i++) {
+    const v = Number(candidates[i]);
+    if (Number.isFinite(v) && v > r) r = v;
+  }
+
+  // 显示尺寸兜底（适用于 sprite / image / container）
+  const dw = Number(enemy.displayWidth ?? enemy.width ?? 0);
+  const dh = Number(enemy.displayHeight ?? enemy.height ?? 0);
+  if (Number.isFinite(dw) && Number.isFinite(dh)) {
+    r = Math.max(r, 0.5 * Math.max(dw, dh));
+  } else if (Number.isFinite(dw)) {
+    r = Math.max(r, 0.5 * dw);
+  } else if (Number.isFinite(dh)) {
+    r = Math.max(r, 0.5 * dh);
+  }
+
+  // 最后兜底：bounds（仅在其它信息都缺失时使用）
+  if (!(r > 0) && typeof enemy.getBounds === 'function') {
+    try {
+      const b = enemy.getBounds();
+      const bw = Number(b?.width ?? 0);
+      const bh = Number(b?.height ?? 0);
+      if (Number.isFinite(bw) && Number.isFinite(bh) && (bw > 0 || bh > 0)) {
+        r = 0.5 * Math.max(bw, bh);
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  return Math.max(0, r);
 }
 
 function getBeamStart(player) {
@@ -190,9 +234,9 @@ function getHitPointOnCircleEdge(ax, ay, bx, by, cx, cy, r) {
   };
 }
 
-function updateBeamDraw(state, player, target, scheme, beamAlpha) {
+function updateBeamDraw(state, player, end, scheme, beamAlpha) {
   if (!state.beamG || !state.beamGlowG) return;
-  if (!target) {
+  if (!end) {
     clearBeamGraphics(state);
     return;
   }
@@ -201,9 +245,9 @@ function updateBeamDraw(state, player, target, scheme, beamAlpha) {
   const startX = s.x;
   const startY = s.y;
 
-  // 视觉：终点连到敌人中心（命中/脱离仍按外边缘计算）
-  const endX = target.x;
-  const endY = target.y;
+  // 视觉：终点连到目标点（敌人中心 / 残留点）
+  const endX = end.x;
+  const endY = end.y;
 
   const focusLvl = Math.max(0, Math.min(3, player.mageEnergyFocusLevel || 0));
   const widthScale = 1 + 0.12 * focusLvl;
@@ -411,6 +455,11 @@ export function updateArcaneRay(player, delta) {
   // - 脱离：distance(center, center) > range + enemyRadius
   const inRange = !!(target && Phaser.Math.Distance.Between(player.x, player.y, target.x, target.y) <= (range + targetRadius));
 
+  // 记录上一帧终点：用于“敌人瞬死”时仍能看到完整光束
+  if (target && target.isAlive) {
+    state.lastEnd = { x: target.x, y: target.y, until: now + 260 };
+  }
+
   // ====== 圆圈：常驻极淡；有敌人进入范围时更明显并微脉动 ======
   let circleTargetAlpha = 0.07;
   if (inRange) circleTargetAlpha = (state.phase === 'beam') ? 0.10 : 0.26;
@@ -434,7 +483,8 @@ export function updateArcaneRay(player, delta) {
   if (inRange) {
     if (state.phase === 'idle' || state.phase === 'fading') {
       state.phase = 'charging';
-      state.chargeEndAt = now + 180;
+      // 起手更快：避免小怪瞬死导致只看到很淡的蓄力
+      state.chargeEndAt = now + 80;
       spawnChargeFx(scene, player, scheme);
       if (typeof player.playAttackAnimation === 'function') {
         player.playAttackAnimation();
@@ -443,21 +493,32 @@ export function updateArcaneRay(player, delta) {
   } else {
     if (state.phase === 'charging' || state.phase === 'beam') {
       state.phase = 'fading';
+      // 保证淡出期间至少有一个“可画的终点”
+      if (state.lastEnd && typeof state.lastEnd.x === 'number' && typeof state.lastEnd.y === 'number') {
+        state.lastEnd.until = Math.max(state.lastEnd.until || 0, now + 260);
+      }
     }
   }
 
   if (state.phase === 'charging' && now >= (state.chargeEndAt || 0)) {
     state.phase = 'beam';
+    state.beamHoldUntil = now + 140;
   }
 
-  const wantBeamVisible = state.phase === 'beam' && inRange;
+  // 允许短暂保持可见（击杀瞬间）但不继续造成伤害
+  const wantBeamVisible = state.phase === 'beam' && (inRange || now < (state.beamHoldUntil || 0));
   const beamTargetAlpha = wantBeamVisible ? 1 : 0;
-  state.beamAlpha = expApproach(state.beamAlpha || 0, beamTargetAlpha, delta, wantBeamVisible ? 90 : 240);
+  state.beamAlpha = expApproach(state.beamAlpha || 0, beamTargetAlpha, delta, wantBeamVisible ? 55 : 220);
 
   const hasAnyBeam = (state.beamAlpha || 0) > 0.01 || state.phase === 'beam' || state.phase === 'fading';
   if (hasAnyBeam) {
     ensureBeamGraphics(scene, state);
-    updateBeamDraw(state, player, target, scheme, state.beamAlpha || 0);
+    const drawEnd = target
+      ? { x: target.x, y: target.y }
+      : ((state.lastEnd && now <= (state.lastEnd.until || 0)) ? { x: state.lastEnd.x, y: state.lastEnd.y } : null);
+    updateBeamDraw(state, player, drawEnd, scheme, state.beamAlpha || 0);
+
+    // 折射束仅在有真实目标时绘制
     updateRefractBeams(state, player, target, scheme, delta, inRange);
   } else {
     clearBeamGraphics(state);

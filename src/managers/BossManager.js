@@ -53,23 +53,41 @@ export default class BossManager {
     // 因此地图 Boss 统一采用 tracking。
     const resolvedMovePattern = 'tracking';
 
-    // 默认攻击模式：少量、缓慢、体积更大（避免屏幕被弹幕淹没）
+    // 默认攻击模式：近战为主（半月斩，带起手闪光）。
     // 注：BaseBoss 内置支持 attackPatterns；若未来 mapMonsters 为 Boss 提供自定义 patterns，可在此替换。
     const defaultAttackPatterns = [
       {
-        interval: 1700,
+        interval: 1350,
         execute: (boss) => {
           if (!boss || !boss.isAlive) return;
-          if (typeof boss.fireSmartVolley === 'function') {
-            boss.fireSmartVolley({
-              count: 2,
-              spreadRad: 0.14,
-              speed: 135,
-              radius: 14,
-              damage: 7,
-              color: boss.bossColor || bossData.color || 0xff4444,
-              shapeType: 'circle'
-            });
+
+          const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
+          if (!target || !target.active || target.isAlive === false) return;
+
+          const dx = target.x - boss.x;
+          const dy = target.y - boss.y;
+          const dist = Math.hypot(dx, dy);
+
+          // 玩家有“Boss 禁入圈”，距离过近会被推开；因此近战判定要覆盖这个最小距离
+          const padding = boss?.scene?.bossNoGoPadding ?? 60;
+          const hitbox = (typeof target.getHitboxPosition === 'function')
+            ? target.getHitboxPosition()
+            : { radius: Math.max(10, target.visualRadius || 16) };
+          const minReach = (boss.bossSize || 50) + padding + (hitbox.radius || 0) + 8;
+          const meleeRange = Math.max(150, Math.round(minReach));
+
+          if (dist <= meleeRange) {
+            if (typeof boss.castCrescentSlashAtPlayer === 'function') {
+              boss.castCrescentSlashAtPlayer({
+                range: meleeRange,
+                arcDeg: 150,
+                windupMs: 260,
+                slashMs: 220,
+                lingerMs: 240,
+                color: 0xffffff,
+                damage: 10
+              });
+            }
           }
         }
       }
@@ -84,6 +102,8 @@ export default class BossManager {
       color: bossData.color,
       movePattern: resolvedMovePattern,
       moveSpeed: balance.boss.moveSpeed,
+      // 近战：靠近玩家但不要贴脸（玩家会被 Boss 禁入圈推开）
+      trackingStopDist: 150,
       attackPatterns: defaultAttackPatterns,
       combatActive: false,
       entryType: 'fade',
@@ -101,10 +121,46 @@ export default class BossManager {
   }
 
   /**
-   * 生成简易教程 Boss（试炼之地专用，低血量、不动、无攻击）
+   * 生成教程 Boss（试炼之地专用）：纳入统一 Boss 管理（tracking 靠近 + 近战半月斩）
    * @param {object} spawnPt { x, y }
    */
   spawnTutorialBoss(spawnPt) {
+    const attackPatterns = [
+      {
+        interval: 1500,
+        execute: (boss) => {
+          if (!boss || !boss.isAlive) return;
+
+          const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
+          if (!target || !target.active || target.isAlive === false) return;
+
+          const dx = target.x - boss.x;
+          const dy = target.y - boss.y;
+          const dist = Math.hypot(dx, dy);
+
+          // 与地图 Boss 一致：覆盖“Boss 禁入圈”推开距离
+          const padding = boss?.scene?.bossNoGoPadding ?? 60;
+          const hitbox = (typeof target.getHitboxPosition === 'function')
+            ? target.getHitboxPosition()
+            : { radius: Math.max(10, target.visualRadius || 16) };
+          const minReach = (boss.bossSize || 36) + padding + (hitbox.radius || 0) + 6;
+          const meleeRange = Math.max(140, Math.round(minReach));
+
+          if (dist <= meleeRange) {
+            boss.castCrescentSlashAtPlayer?.({
+              range: meleeRange,
+              arcDeg: 150,
+              windupMs: 260,
+              slashMs: 220,
+              lingerMs: 240,
+              color: 0xffffff,
+              damage: 6
+            });
+          }
+        }
+      }
+    ];
+
     const cfg = {
       x: spawnPt.x,
       y: spawnPt.y,
@@ -112,8 +168,10 @@ export default class BossManager {
       hp: 30,
       size: 36,
       color: 0x66ccff,
-      movePattern: 'static',
-      attackPatterns: [],
+      movePattern: 'tracking',
+      moveSpeed: 85,
+      trackingStopDist: 150,
+      attackPatterns,
       entryType: 'fade',
       entryDuration: 600,
       combatActive: false,

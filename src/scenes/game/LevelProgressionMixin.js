@@ -57,8 +57,22 @@ export function applyLevelProgressionMixin(GameScene) {
 
       this.setupWorldMapForLevel(this.currentLevel);
 
-      this.setupSoftFogOfWar();
-      this.setupMiniMap();
+      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
+      this.fogMode = fogEnabled ? 'soft' : 'none';
+      if (fogEnabled) {
+        this.setupSoftFogOfWar();
+        this.setupMiniMap();
+      } else {
+        // 确保彻底关闭：不保留上关的 RT/小地图对象
+        if (this._fogWorldObjects) {
+          this._fogWorldObjects.forEach(o => o?.destroy?.());
+        }
+        this._fogWorldObjects = [];
+        if (this.fogWorldRT) { this.fogWorldRT.destroy(); this.fogWorldRT = null; }
+        if (this.fogBrushImage) { this.fogBrushImage.destroy(); this.fogBrushImage = null; }
+        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
+        this.miniMap = null;
+      }
 
       const mapId = this.currentMapInfo?.id;
       if (mapId) {
@@ -601,6 +615,9 @@ export function applyLevelProgressionMixin(GameScene) {
       if ((level || 1) !== 1) return;
       if (!this.bossManager) return;
 
+      const stage = this.currentStage || 1;
+      const balance = getStageBalance(stage);
+
       const spawn = this.getSpawnPoint();
       const offsets = [
         { x: -140, y: -220 },
@@ -616,11 +633,11 @@ export function applyLevelProgressionMixin(GameScene) {
           y: spawn.y + o.y,
           type: 'chaser',
           name: `游荡小怪${idx + 1}`,
-          hp: 170,
+          hp: Math.round(balance.minions.hp),
           size: 18,
-          moveSpeed: 92,
-          contactDamage: 12,
-          expReward: 100,
+          moveSpeed: balance.minions.speed.chaser,
+          contactDamage: balance.minions.contactDamage,
+          expReward: balance.minions.exp,
           isElite: false
         });
         return m;
@@ -643,6 +660,9 @@ export function applyLevelProgressionMixin(GameScene) {
       const count = 5;
       const spawned = [];
 
+      const stage = this.currentStage || 1;
+      const balance = getStageBalance(stage);
+
       const ringR = 140;
       for (let i = 0; i < count; i++) {
         const a = (Math.PI * 2 * i) / count + Phaser.Math.FloatBetween(-0.12, 0.12);
@@ -653,10 +673,10 @@ export function applyLevelProgressionMixin(GameScene) {
           y: topY + oy,
           type: 'chaser',
           name: `第一波小怪${i + 1}`,
-          hp: 30,
+          hp: Math.max(10, Math.round(balance.minions.hp * 0.35)),
           size: 16,
-          moveSpeed: 125,
-          contactDamage: 8,
+          moveSpeed: balance.minions.speed.chaser,
+          contactDamage: balance.minions.contactDamage,
           expReward: 20,
           isElite: false,
           aggroOnSeen: true,

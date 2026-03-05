@@ -111,6 +111,10 @@ class GameScene extends Phaser.Scene {
     // 注意：Phaser 的 scene.start() 会复用 Scene 实例；constructor 不会再次执行。
     // 因此每次开新局都必须在 init() 重置"六选一/出口门/关卡"状态。
 
+    // 迷雾/小地图默认关闭（用于性能排查）；由设置开关控制
+    const fogEnabled = this.registry?.get?.('fogEnabled') === true;
+    this.fogMode = fogEnabled ? 'soft' : 'none';
+
     this.currentLevel = 1;
     this.levelBossTriggered = false;
 
@@ -417,15 +421,34 @@ class GameScene extends Phaser.Scene {
     const cx = area ? (area.x + area.width * 0.5) : (cam?.midPoint?.x ?? 0);
     const cy = area ? (area.y + area.height * 0.5) : (cam?.midPoint?.y ?? 0);
 
-    if (!this.mapBgImage) {
+    const isValid = (img) => {
+      if (!img) return false;
+      if (img.destroyed) return false;
+      if (img.active === false) return false;
+      if (!img.scene) return false;
+      if (img.scene !== this) return false;
+      return true;
+    };
+
+    const recreate = () => {
+      try { this.mapBgImage?.destroy?.(); } catch (_) { /* ignore */ }
       this.mapBgImage = this.add.image(cx, cy, textureKey)
         .setOrigin(0.5)
         .setDepth(-100);
+    };
+
+    if (!isValid(this.mapBgImage)) {
+      recreate();
     } else {
-      this.mapBgImage.setTexture(textureKey);
-      this.mapBgImage.setPosition(cx, cy);
+      try {
+        this.mapBgImage.setTexture(textureKey);
+        this.mapBgImage.setPosition(cx, cy);
+      } catch (_) {
+        recreate();
+      }
     }
 
+    try { this.mapBgImage?.setVisible?.(true); } catch (_) { /* ignore */ }
     this.refitMapBackground();
   }
 
@@ -443,8 +466,22 @@ class GameScene extends Phaser.Scene {
 
     const tex = this.textures?.get?.(key);
     const src = tex?.getSourceImage?.();
-    const iw = src?.width || this.mapBgImage.width || 1;
-    const ih = src?.height || this.mapBgImage.height || 1;
+    const iw0 = src?.width || 0;
+    const ih0 = src?.height || 0;
+    const iw = iw0 || this.mapBgImage.width || 1;
+    const ih = ih0 || this.mapBgImage.height || 1;
+
+    // 某些流程下，纹理源尺寸可能在同一帧尚未可用；延迟一帧重试，避免 scale 计算异常导致“看起来没显示”。
+    if (!(iw0 > 1 && ih0 > 1) && !(iw > 1 && ih > 1)) {
+      const retries = (this._mapBgRefitRetries || 0);
+      if (retries < 3 && this.time?.delayedCall) {
+        this._mapBgRefitRetries = retries + 1;
+        this.time.delayedCall(0, () => this.refitMapBackground());
+      }
+      return;
+    }
+
+    this._mapBgRefitRetries = 0;
 
     // Cover：等比铺满目标区域（可能会裁切边缘）
     const coverScale = Math.max(targetW / Math.max(1, iw), targetH / Math.max(1, ih));
@@ -495,6 +532,13 @@ class GameScene extends Phaser.Scene {
 
     // 清理三选一 UI
     this.cleanupPathChoiceObjects();
+
+    // 底图对象可能在场景关闭时被 Phaser 自动销毁，但引用仍在；这里显式置空避免复用失效对象
+    if (this.mapBgImage) {
+      try { this.mapBgImage.destroy(); } catch (_) { /* ignore */ }
+      this.mapBgImage = null;
+    }
+    this._mapBgRefitRetries = 0;
 
     if (this._uiToggleHandler) {
       uiBus.off('ui:toggleView', this._uiToggleHandler);
@@ -1119,6 +1163,7 @@ class GameScene extends Phaser.Scene {
     // 地图：迷雾（柔和永久揭开）+ 小地图
     // 帧预算保护：当前帧耗时过长（掉帧中）则跳过迷雾更新，优先保障流畅度
     if (this.fogMode === 'soft' && this.player && delta < 50) {
+      const isTutorial = (this.currentMapInfo?.id === 'tutorial_level');
       // 若进入战斗/敌人接近，扩大视野，避免敌人躲在迷雾里攻击
       const cell = (this.mapConfig?.cellSize || 128);
       const boss = this.bossManager?.getCurrentBoss?.() || null;
@@ -1133,7 +1178,7 @@ class GameScene extends Phaser.Scene {
 
       const playerScale = (inCombat || closeEnemy) ? 1.7 : 1.25;
       // 玩家：适度频率（移动+时间双阈值）
-      this.revealFogAt(this.player.x, this.player.y, false, playerScale, { tag: 'player', minIntervalMs: 60, minDist: 14 });
+      this.revealFogAt(this.player.x, this.player.y, false, playerScale, { tag: 'player', minIntervalMs: isTutorial ? 110 : 60, minDist: isTutorial ? 22 : 14 });
 
       // 额外揭开敌人周围（只在敌人接近时做，避免过度开图）
       const enemyRevealTriggerR = cell * 6;
@@ -1153,7 +1198,7 @@ class GameScene extends Phaser.Scene {
           const dy = m.y - this.player.y;
           if ((dx * dx + dy * dy) <= (enemyRevealTriggerR * enemyRevealTriggerR)) {
             const id = (m.__enemyId != null) ? String(m.__enemyId) : (m.minionName || 'm');
-            this.revealFogAt(m.x, m.y, false, 1.5, { tag: `minion:${id}`, minIntervalMs: 300, minDist: 30 });
+            this.revealFogAt(m.x, m.y, false, 1.5, { tag: `minion:${id}`, minIntervalMs: isTutorial ? 450 : 300, minDist: isTutorial ? 40 : 30 });
           }
         });
       }

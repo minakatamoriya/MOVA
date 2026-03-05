@@ -64,6 +64,13 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.moveSpeed = Phaser.Math.Clamp(resolvedMoveSpeed, 10, 95);
     this.movePattern = config.movePattern || 'static'; // static, horizontal, vertical, circle, random
 
+    // tracking（轻追踪）参数：靠近玩家但保持一个停步距离，便于近战攻击
+    const rawTrackStop = (config.trackingStopDist != null) ? Number(config.trackingStopDist) : 150;
+    this.trackingStopDist = Number.isFinite(rawTrackStop) ? Phaser.Math.Clamp(Math.round(rawTrackStop), 60, 260) : 150;
+
+    // 近战动作锁（避免挥砍时还在滑步）
+    this._meleeLockUntil = 0;
+
     // 可选：限制 Boss 活动范围（世界坐标系矩形）
     // 例如：以出口门为中心的“Boss 房间”区域。
     this.moveBoundsRect = config.moveBoundsRect || null;
@@ -581,6 +588,10 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
         if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
         if (!this.combatActive) return;
 
+        const now = scene?.time?.now ?? 0;
+        // 近战挥砍等动作期间：短暂停止移动
+        if ((this._meleeLockUntil || 0) > now) return;
+
         // 查看菜单打开/关闭中：冻结移动
         if (scene.viewMenuOpen || scene.viewMenuClosing) return;
 
@@ -591,9 +602,23 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
         const b = this.getMoveBounds({ x: 110, top: 90, bottom: 150 });
 
-        const desiredX = Phaser.Math.Clamp(target.x, b.left, b.right);
-        // 倾向站在玩家上方，避免贴脸追击
-        const desiredY = Phaser.Math.Clamp(target.y - 180, b.top, b.bottom);
+        // 计算“停在玩家附近”的目标点：与玩家保持 stopDist
+        const stopDist = Math.max(40, Math.round(this.trackingStopDist || 150));
+        let tx = Phaser.Math.Clamp(target.x, b.left, b.right);
+        let ty = Phaser.Math.Clamp(target.y, b.top, b.bottom);
+
+        let dxp = tx - this.x;
+        let dyp = ty - this.y;
+        let distToPlayer = Math.hypot(dxp, dyp);
+        if (!Number.isFinite(distToPlayer) || distToPlayer <= 0.0001) return;
+
+        // 若已经靠近：不继续贴脸
+        if (distToPlayer <= stopDist) return;
+
+        const nxp = dxp / distToPlayer;
+        const nyp = dyp / distToPlayer;
+        const desiredX = Phaser.Math.Clamp(tx - nxp * stopDist, b.left, b.right);
+        const desiredY = Phaser.Math.Clamp(ty - nyp * stopDist, b.top, b.bottom);
 
         const dx = desiredX - this.x;
         const dy = desiredY - this.y;
@@ -611,6 +636,138 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
         this.y = Phaser.Math.Clamp(this.y + ny * step, b.top, b.bottom);
       }
     });
+  }
+
+  _playWindupFlash(options = {}) {
+    const scene = this.scene;
+    if (!scene?.add || !scene?.tweens) return;
+    if (this.isDestroyed || !this.isAlive) return;
+
+    const {
+      x = this.x,
+      y = this.y,
+      radius = (this.bossSize || 50) + 18,
+      color = 0xffffff,
+      duration = 220
+    } = options;
+
+    const r = Math.max(8, Math.round(radius || 0));
+    const flash = scene.add.circle(x, y, r, color, 0.12);
+    flash.setStrokeStyle(Math.max(2, Math.round(r * 0.12)), color, 0.95);
+    flash.setDepth(9);
+    this._trackHazardObject(flash);
+
+    scene.tweens.add({
+      targets: flash,
+      alpha: { from: 0.95, to: 0 },
+      scale: { from: 0.9, to: 1.35 },
+      duration: Math.max(80, Math.round(duration || 0)),
+      ease: 'Sine.Out',
+      onComplete: () => {
+        try { if (flash?.active) flash.destroy(); } catch (_) { /* ignore */ }
+      }
+    });
+  }
+
+  /**
+   * 近战：半月斩（所有近战都有起手闪光）
+   * - windup: 起手闪光
+   * - slash: 展示弧光并判定一次伤害（圈内/弧内才会受伤）
+   */
+  castCrescentSlashAtPlayer(options = {}) {
+    const target = this.getPrimaryTarget();
+    if (!target || !target.active || target.isAlive === false) return;
+    this.castCrescentSlash(target.x, target.y, { ...(options || {}), target });
+  }
+
+  castCrescentSlash(targetX, targetY, options = {}) {
+    const scene = this.scene;
+    if (!scene?.add || !scene?.time || !scene?.tweens) return;
+    if (this.isDestroyed || !this.isAlive) return;
+
+    const {
+      range = Math.max(85, Math.round((this.bossSize || 50) + 55)),
+      arcDeg = 140,
+      windupMs = 260,
+      slashMs = 220,
+      lingerMs = 260,
+      color = 0xffffff,
+      damage = 10
+    } = options;
+
+    const facing = Math.atan2(targetY - this.y, targetX - this.x);
+    const halfArc = Phaser.Math.DegToRad(Math.max(40, Math.min(175, arcDeg)) * 0.5);
+    const hitRange = Math.max(40, Math.round(range * 0.9));
+
+    // 锁移动：避免挥砍时“滑步”
+    const now = scene?.time?.now ?? 0;
+    const lockMs = Math.max(0, Math.round(windupMs + slashMs));
+    this._meleeLockUntil = Math.max(this._meleeLockUntil || 0, now + lockMs);
+
+    // 起手闪光（强提示）
+    this._playWindupFlash({
+      x: this.x,
+      y: this.y,
+      radius: (this.bossSize || 50) + 22,
+      color: 0xffffff,
+      duration: windupMs
+    });
+
+    const windupTimer = scene.time.delayedCall(Math.max(0, Math.round(windupMs)), () => {
+      if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
+
+      // 弧光展示
+      const g = scene.add.graphics();
+      g.setDepth(9);
+      this._trackHazardObject(g);
+
+      const lineW = Math.max(6, Math.round(hitRange * 0.1));
+      g.lineStyle(lineW, color, 0.92);
+      g.beginPath();
+      g.arc(this.x, this.y, hitRange, facing - halfArc, facing + halfArc, false);
+      g.strokePath();
+
+      // 内层淡色，让“半月”更明显
+      g.lineStyle(Math.max(3, Math.round(lineW * 0.55)), 0xffffff, 0.55);
+      g.beginPath();
+      g.arc(this.x, this.y, Math.max(10, hitRange - Math.max(10, Math.round(lineW * 0.9))), facing - halfArc, facing + halfArc, false);
+      g.strokePath();
+
+      // 判定一次伤害：玩家在弧内且距离足够近
+      const target = options.target || this.getPrimaryTarget();
+      if (target && target.active && target.isAlive !== false) {
+        const pos = (typeof target.getHitboxPosition === 'function')
+          ? target.getHitboxPosition()
+          : { x: target.x, y: target.y, radius: Math.max(10, target.visualRadius || 16) };
+
+        const dx = pos.x - this.x;
+        const dy = pos.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        const delta = Phaser.Math.Angle.Wrap(ang - facing);
+
+        if (dist <= (hitRange + (pos.radius || 0)) && Math.abs(delta) <= halfArc) {
+          const mult = (this.damageDealtMult || 1);
+          const amt = Math.max(0, Math.round((damage || 0) * mult));
+          if (amt > 0 && typeof target.takeDamage === 'function') {
+            target.takeDamage(amt);
+          }
+        }
+      }
+
+      // 消散
+      scene.tweens.add({
+        targets: g,
+        alpha: { from: 1, to: 0 },
+        duration: Math.max(80, Math.round(lingerMs || 0)),
+        ease: 'Sine.Out',
+        onComplete: () => {
+          try { if (g?.active) g.destroy(); } catch (_) { /* ignore */ }
+        }
+      });
+    });
+
+    this._trackHazardTimer(windupTimer);
   }
 
   /**
@@ -734,8 +891,13 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   castGroundBlast(x, y, options = {}) {
     const {
       radius = 90,
-      telegraphMs = 650,
-      activeMs = 220,
+      telegraphMs = 1150,
+      // 爆炸圈展示时间（用户反馈：必须可见，并隔几秒再消失）
+      displayMs = 1800,
+      // 爆炸圈淡出
+      fadeOutMs = 260,
+      // 伤害：默认与 Boss 子弹一致为 10（再乘以 damageDealtMult）
+      damage = 10,
       color = 0xff5533
     } = options;
 
@@ -760,35 +922,76 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       if (ring?.active) ring.destroy();
     };
 
-    // 爆炸：生成一个短命的“静止 Boss 子弹”（让碰撞系统吃到）
-    const telegraphTimer = scene.time.delayedCall(telegraphMs, () => {
+    // 爆炸：展示爆炸圈，并在爆炸窗口内判定“玩家是否在圈内”（只结算一次），圈外不受伤
+    const telegraphTimer = scene.time.delayedCall(Math.max(0, Math.round(telegraphMs)), () => {
       cleanupRing();
       if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
-      if (!scene.bulletManager?.createBossBullet) return;
 
-      const blast = scene.bulletManager.createBossBullet(
-        x,
-        y,
-        0,
-        0,
-        color,
-        {
-          radius,
-          hasTrail: false,
-          hasGlow: false,
-          type: 'ring'
+      // 爆炸圈（纯表现）
+      const blastFx = scene.add.circle(x, y, radius, color, 0.14);
+      blastFx.setStrokeStyle(Math.max(3, Math.round(radius * 0.08)), color, 0.85);
+      blastFx.setDepth(8);
+      blastFx.alpha = 0.9;
+      this._trackHazardObject(blastFx);
+
+      // 判定一次伤害：爆炸圈可见期间，只要玩家进入圈内就会结算一次
+      let didDamage = false;
+      const tryDamageOnce = () => {
+        if (didDamage) return;
+        if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
+
+        const target = this.getPrimaryTarget();
+        if (!target || !target.active || target.isAlive === false) return;
+        if (typeof target.takeDamage !== 'function') return;
+
+        const pos = (typeof target.getHitboxPosition === 'function')
+          ? target.getHitboxPosition()
+          : { x: target.x, y: target.y, radius: Math.max(10, target.visualRadius || 16) };
+
+        const dx = pos.x - x;
+        const dy = pos.y - y;
+        const dist = Math.hypot(dx, dy);
+        if (!Number.isFinite(dist)) return;
+
+        if (dist <= (radius + (pos.radius || 0))) {
+          didDamage = true;
+          const mult = (this.damageDealtMult || 1);
+          const amt = Math.max(0, Math.round((damage || 0) * mult));
+          if (amt > 0) target.takeDamage(amt);
         }
-      );
-      blast.alpha = 0.55;
+      };
 
-      this._trackHazardObject(blast);
+      // 立即尝试一次（玩家站在圈里时不需要额外等待）
+      try { tryDamageOnce(); } catch (_) { /* ignore */ }
 
-      const activeTimer = scene.time.delayedCall(activeMs, () => {
-        if (!scene?.sys?.isActive()) return;
-        if (scene.bulletManager) scene.bulletManager.destroyBullet(blast, false);
-        else if (blast?.active) blast.destroy();
+      const keepMs = Math.max(120, Math.round(displayMs || 0));
+
+      // 在展示窗口内每 80ms 检查一次（只会命中一次）
+      const checkEvent = scene.time.addEvent({
+        delay: 80,
+        loop: true,
+        callback: () => {
+          if (!blastFx?.active) return;
+          try { tryDamageOnce(); } catch (_) { /* ignore */ }
+        }
       });
-      this._trackHazardTimer(activeTimer);
+      this._trackHazardTimer(checkEvent);
+
+      const cleanupTimer = scene.time.delayedCall(keepMs, () => {
+        if (!scene?.sys?.isActive()) return;
+        try { checkEvent?.remove?.(false); } catch (_) { /* ignore */ }
+        if (!blastFx?.active) return;
+        scene.tweens.add({
+          targets: blastFx,
+          alpha: { from: blastFx.alpha ?? 0.8, to: 0 },
+          duration: Math.max(80, Math.round(fadeOutMs || 0)),
+          ease: 'Sine.Out',
+          onComplete: () => {
+            try { if (blastFx?.active) blastFx.destroy(); } catch (_) { /* ignore */ }
+          }
+        });
+      });
+      this._trackHazardTimer(cleanupTimer);
     });
 
     this._trackHazardTimer(telegraphTimer);
@@ -1041,8 +1244,8 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     if (typeof this.castGroundBlastAtPlayer !== 'function') return;
     this.castGroundBlastAtPlayer({
       radius: Math.max(70, Math.round((this.bossSize || 50) * 1.4)),
-      telegraphMs: 0,
-      activeMs: 200,
+      telegraphMs: 800,
+      displayMs: 1400,
       color: this.bossColor || 0xff5533
     });
   }

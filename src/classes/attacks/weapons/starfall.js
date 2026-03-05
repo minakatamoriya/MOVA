@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../basicAttackMods';
-import { getBasicSkillColorScheme, lerpColor } from '../../visual/basicSkillColors';
+import { getBasicSkillColorScheme } from '../../visual/basicSkillColors';
 
 function spawnSparkles(scene, x, y, colorA, colorB) {
   const sparkles = [];
@@ -60,24 +60,6 @@ function createImpactVfx(scene, x, y, scheme, aoeRadius) {
     ease: 'Sine.Out',
     onComplete: () => flash.destroy()
   });
-
-  // 细碎“星尘”散开
-  const dustCount = 10;
-  for (let i = 0; i < dustCount; i++) {
-    const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    const rr = Phaser.Math.Between(8, Math.round(aoeRadius * 0.65));
-    const p = scene.add.circle(x, y, Phaser.Math.Between(1, 2), lerpColor(scheme.coreBright, 0xffffff, 0.4), 0.75);
-    p.setDepth(64);
-    scene.tweens.add({
-      targets: p,
-      x: x + Math.cos(a) * rr,
-      y: y + Math.sin(a) * rr,
-      alpha: 0,
-      duration: Phaser.Math.Between(220, 320),
-      ease: 'Sine.Out',
-      onComplete: () => p.destroy()
-    });
-  }
 }
 
 /**
@@ -228,23 +210,6 @@ export function fireStarfall(player) {
       ease: 'Sine.Out'
     });
 
-    const shimmerTween = scene.tweens.add({
-      targets: star,
-      angle: '+=120',
-      duration: 520,
-      repeat: -1
-    });
-    const pulseTween = scene.tweens.add({
-      targets: [star, glow],
-      scale: { from: 0.95, to: 1.08 },
-      duration: 240,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    spawnSparkles(scene, p0.x, startY, outlineColor, starColor);
-
     const fallMs = big ? 320 : 260;
     const tracker = { p: 0 };
     scene.tweens.add({
@@ -266,9 +231,6 @@ export function fireStarfall(player) {
         }
       },
       onComplete: () => {
-        if (shimmerTween) shimmerTween.stop();
-        if (pulseTween) pulseTween.stop();
-
         if (star && star.active) star.destroy();
         if (glow && glow.active) glow.destroy();
 
@@ -318,7 +280,7 @@ export function fireStarfall(player) {
         }
 
         createImpactVfx(scene, impactX, impactY, scheme, aoeRadius);
-        spawnSparkles(scene, impactX, impactY, outlineColor, starColor);
+        // 性能：星落属于高频普攻，砍掉 sparkles/dust 的对象与 tween 量，避免移动+射击时掉帧
 
         // 星火：30% 概率额外触发一次（不连锁）
         if (allowStarfire && player.druidStarfire && Math.random() < 0.3) {

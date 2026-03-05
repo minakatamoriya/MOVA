@@ -34,6 +34,11 @@ export function fireArcherArrow(player) {
 
   const scheme = getBasicSkillColorScheme(player.mainCoreKey, player.offCoreKey);
 
+  // 需求：箭矢表现为“中心荧光亮绿色、短细条形”
+  const arrowCore = 0x2cff6a;
+  const arrowAccent = 0xeafff2;
+  const arrowGlow = 0x52ff8c;
+
   const spawnX = player.x;
   const spawnY = player.y - player.visualRadius - 4;
 
@@ -94,8 +99,8 @@ export function fireArcherArrow(player) {
     for (let i = 0; i < 7; i++) {
       const dx = Phaser.Math.Between(-90, 90);
       const dy = Phaser.Math.Between(-90, 90);
-      const p = scene.add.rectangle(target.x + dx, target.y - 220 + dy, 4, 18, scheme.coreBright, 0.9);
-      p.setStrokeStyle(1, scheme.accentColor, 0.9);
+      const p = scene.add.rectangle(target.x + dx, target.y - 220 + dy, 3, 16, arrowCore, 0.92);
+      p.setStrokeStyle(1, arrowAccent, 0.9);
       scene.tweens.add({
         targets: p,
         y: target.y + dy,
@@ -115,19 +120,20 @@ export function fireArcherArrow(player) {
       const b = scene.bulletManager.createPlayerBullet(
         spawnX,
         spawnY,
-        scheme.coreColor,
+        arrowCore,
         {
-          radius: 5,
+          radius: 4,
           speed: 720,
-          damage: Math.max(1, Math.round(player.bulletDamage * 0.42)),
+          damage: Math.max(1, Math.round(player.bulletDamage * 0.38)),
           angleOffset: angle + off,
           isAbsoluteAngle: true,
           hasGlow: true,
           hasTrail: true,
-          glowRadius: 10,
-          glowColor: scheme.glowColor,
-          strokeColor: scheme.accentColor,
-          trailColor: scheme.trailColor,
+          glowRadius: 9,
+          glowColor: arrowGlow,
+          strokeColor: arrowAccent,
+          trailColor: arrowCore,
+          type: 'arrow',
           homing: false,
           explode: false,
           skipUpdate: false

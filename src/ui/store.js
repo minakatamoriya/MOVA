@@ -11,6 +11,9 @@ export const useUiStore = create((set) => ({
   showDamage: true,
   setShowDamage: (v) => set({ showDamage: !!v }),
 
+  fogEnabled: false,
+  setFogEnabled: (v) => set({ fogEnabled: !!v }),
+
   viewOpen: false,
   activeTab: 'classes',
   setViewOpen: (open) => set({ viewOpen: !!open }),

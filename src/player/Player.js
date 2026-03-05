@@ -119,13 +119,15 @@ export default class Player extends Phaser.GameObjects.Container {
     this.analogMove = { x: 0, y: 0 };
     
     // 射击属性
-    this.baseFireRate = 240;
-    // 猎人基础射击：不追求夸张频率（避免夸张 DPS）
-    this.baseFireRateScatter = 320;
-    this.baseFireRateMoonfire = 460;
+    // 统一下调初始攻速：让早期战斗更可读（伤害/数字从个位数起步）
+    this.baseFireRate = 420;
+    // 猎人基础射击：起步更慢，后续靠升级提速
+    this.baseFireRateScatter = 560;
+    this.baseFireRateMoonfire = 760;
     this.fireRate = this.baseFireRate; // 射击间隔（毫秒）
     this.bulletSpeed = 380; // 子弹速度
-    this.baseBulletDamage = 34;
+    // 初始伤害：个位数起步
+    this.baseBulletDamage = 6;
     this.bulletDamage = this.baseBulletDamage; // 子弹伤害
     this.canFire = true;
     this.weaponType = 'scatter'; // scatter | laser | moonfire
@@ -134,7 +136,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.mainCoreKey = null;
     this.offCoreKey = null;
     this.offFireRateMult = 1;
-    this.laserDamageMult = 2;
+    // 法师激光：早期不再“一碰就秒”
+    this.laserDamageMult = 1.4;
 
     // 圣骑：制裁（眩晕）
     this.paladinStunLevel = 0;
@@ -528,9 +531,10 @@ export default class Player extends Phaser.GameObjects.Container {
   createBulletAtAngle(angleOffset, isAbsoluteAngle = false) {
     const coreKey = this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'scatter';
     const isArcher = coreKey === 'scatter';
-    // 猎人箭矢：固定荧光色（00ffff）
-    const coreColor = isArcher ? 0x00ffff : getBaseColorForCoreKey(coreKey);
-    const accent = isArcher ? 0x00ffff : lerpColor(coreColor, 0xffffff, 0.42);
+    // 猎人箭矢：固定亮绿色（短细条形 + 中心荧光）
+    const archerCore = 0x2cff6a;
+    const coreColor = isArcher ? archerCore : getBaseColorForCoreKey(coreKey);
+    const accent = isArcher ? 0xeafff2 : lerpColor(coreColor, 0xffffff, 0.42);
 
     const rangePx = isArcher
       ? Phaser.Math.Clamp((this.archerArrowRange || this.archerArrowRangeBase || 330), 120, 360)
@@ -545,17 +549,21 @@ export default class Player extends Phaser.GameObjects.Container {
       this.y - this.visualRadius,
       coreColor,
       {
-        radius: 5,
+        radius: isArcher ? 4 : 5,
         speed: this.bulletSpeed,
         damage: Math.max(1, Math.round(this.bulletDamage * this.scatterDamageMult * (isArcher ? (this.archerArrowDamageMult || 1) : 1))),
         angleOffset: angleOffset,
         isAbsoluteAngle: isAbsoluteAngle,
         type: isArcher ? 'arrow' : 'circle',
-        hasGlow: true,
-        hasTrail: true,
+        arrowLenMult: isArcher ? 1.45 : 1,
+        arrowThickMult: isArcher ? 1.25 : 1,
+        // 性能：箭矢用单贴图 + ADD 混合本身就很亮；关闭独立 glow/trail，避免移动+连射时卡顿
+        hasGlow: isArcher ? false : true,
+        hasTrail: isArcher ? false : true,
         glowRadius: 9,
-        glowColor: coreColor,
+        glowColor: isArcher ? archerCore : coreColor,
         strokeColor: accent,
+        trailColor: isArcher ? archerCore : undefined,
         homing: this.scatterHoming,
         homingTurn: this.scatterHomingTurn,
         explode: this.scatterExplode,
@@ -1170,14 +1178,14 @@ export default class Player extends Phaser.GameObjects.Container {
     } else if (coreKey === 'paladin') {
       // 圣骑主普攻：重锤砸地（近身 AoE，不空挥）
       this.weaponType = 'paladin_hammer';
-      this.baseFireRate = 780;
+      this.baseFireRate = 980;
     } else if (coreKey === 'scatter') {
       // 猎人
       this.enableScatterBuild();
     } else if (coreKey === 'mage') {
       // 法师主普攻：恢复激光
       this.weaponType = 'laser';
-      this.baseFireRate = 320;
+      this.baseFireRate = 560;
     } else if (coreKey === 'drone') {
       // 德鲁伊主普攻：星落
       this.weaponType = 'starfall';

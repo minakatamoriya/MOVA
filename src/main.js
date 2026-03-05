@@ -273,9 +273,15 @@ if (!game.registry.has('showDamage')) {
   game.registry.set('showDamage', true);
 }
 
+// 设置：是否启用迷雾与小地图（默认关闭，用于性能排查）
+if (!game.registry.has('fogEnabled')) {
+  game.registry.set('fogEnabled', false);
+}
+
 const emitSettings = () => {
   uiBus.emit('phaser:settingsChanged', {
-    showDamage: game.registry.get('showDamage') !== false
+    showDamage: game.registry.get('showDamage') !== false,
+    fogEnabled: game.registry.get('fogEnabled') === true
   });
 };
 
@@ -285,6 +291,11 @@ uiBus.on('ui:settings:request', () => {
 
 uiBus.on('ui:settings:setShowDamage', (v) => {
   game.registry.set('showDamage', !!v);
+  emitSettings();
+});
+
+uiBus.on('ui:settings:setFogEnabled', (v) => {
+  game.registry.set('fogEnabled', !!v);
   emitSettings();
 });
 
