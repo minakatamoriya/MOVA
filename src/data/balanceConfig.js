@@ -7,7 +7,9 @@
 export const BALANCE_CONSTANTS = {
   // 出口门（击败 Boss 后出现）的默认位置（相对 cellSize）
   exitDoor: {
-    yFrac: 0.35,
+    // 出口门中心点的 Y：按世界高度比例（0=最顶端，1=最底端）
+    // 目标：不贴边，留出一定顶部空间。
+    yFrac: 0.14,
     widthCells: 1.2,
     heightCells: 0.8,
   },
@@ -194,7 +196,7 @@ export function getExitDoorWorldRect(mapConfig) {
 
   const worldSize = cfg.gridSize * cfg.cellSize;
   const x = Math.floor(worldSize / 2);
-  const y = Math.floor(cfg.cellSize * BALANCE_CONSTANTS.exitDoor.yFrac);
+  const y = Math.floor(worldSize * BALANCE_CONSTANTS.exitDoor.yFrac);
   const w = cfg.cellSize * BALANCE_CONSTANTS.exitDoor.widthCells;
   const h = cfg.cellSize * BALANCE_CONSTANTS.exitDoor.heightCells;
 

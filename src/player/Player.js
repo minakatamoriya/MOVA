@@ -72,6 +72,53 @@ const ARCHER_ANIM_CONFIG = {
   }
 };
 
+// deluyi：当前仅提供向右行走帧序列；仍保留 8 方向移动逻辑
+// 显示规则：右侧（右/右上/右下）用原帧；左侧（左/左上/左下）用 flipX 镜像；纯上/下保持上一次左右朝向。
+// idle 暂时复用走路循环。
+const DELUYI_ANIM_CONFIG = {
+  sheetKey: 'deluyi',
+  frameWidth: 64,
+  frameHeight: 64,
+  // 角色在画布中的显示缩放（同时会驱动 hitbox/visual 半径按比例放大）
+  scale: 1.6,
+  // 目前只有走路帧：攻击/技能/受伤不切动作动画，避免自动射击导致动画频繁被打断或卡锁。
+  disableActionAnimations: true,
+  // deluyi 只有左右镜像：为了避免 8 方向扇区切换导致动画 key 频繁变化而“重头播放”，
+  // 动画统一固定使用同一方向（east）的 key；左右朝向仅由 flipX 控制。
+  animDirectionFor: () => 'east',
+  directions: [
+    'south',
+    'south-east',
+    'east',
+    'north-east',
+    'north',
+    'north-west',
+    'west',
+    'south-west'
+  ],
+  // spritesheet 为 4x4 网格（每行 4 帧）；动画用到 0~13 共 14 帧
+  framesPerDirection: 4,
+  directionRow: {
+    south: 0,
+    'south-east': 0,
+    east: 0,
+    'north-east': 0,
+    north: 0,
+    'north-west': 0,
+    west: 0,
+    'south-west': 0
+  },
+  useFlipForLeft: true,
+  states: {
+    // 停止移动：停在第 0 帧（不循环）
+    idle: { frames: [0], frameRate: 1, repeat: 0 },
+    run: { frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], frameRate: 10, repeat: -1 },
+    attack: { frames: [0], frameRate: 12, repeat: 0, hitFrame: 0 },
+    skill: { frames: [0], frameRate: 10, repeat: 0, effectFrame: 0, cooldown: 2000 },
+    hurt: { frames: [0], frameRate: 15, repeat: 0 }
+  }
+};
+
 /**
  * 玩家类
  * 可移动、自动射击的玩家角色
@@ -93,6 +140,20 @@ export default class Player extends Phaser.GameObjects.Container {
     this.isInvincible = false; // 受伤后短暂无敌
     this.invincibleTime = 1500; // 无敌时长（毫秒）- 增加到1.5秒以避免持续扣血
     this.shieldCharges = 0;
+
+    // 动画状态（默认使用 deluyi；旧 any/archer 方案保留在 ARCHER_ANIM_CONFIG）
+    this.animConfig = DELUYI_ANIM_CONFIG;
+    this.baseSpriteScale = (Number.isFinite(this.animConfig?.scale) && this.animConfig.scale > 0)
+      ? this.animConfig.scale
+      : 1;
+    this.animState = 'idle';
+    this.actionLock = null;
+    this.lastDirection = 'south';
+    this.attackFrameFired = false;
+    this.skillFrameFired = false;
+    this.lastSkillTime = 0;
+    this.onAttackHit = null;
+    this.onSkillEffect = null;
     
     // 移动属性
     this.baseMoveSpeed = 250;
@@ -235,20 +296,6 @@ export default class Player extends Phaser.GameObjects.Container {
     this.bullets = [];
     // 仅用于向后兼容的引用列表，不再用于限制子弹射程
     this.maxBullets = this.scene?.bulletManager?.config?.maxPlayerBullets ?? 300;
-
-    // 动画状态
-    this.animConfig = ARCHER_ANIM_CONFIG;
-    this.baseSpriteScale = (Number.isFinite(this.animConfig?.scale) && this.animConfig.scale > 0)
-      ? this.animConfig.scale
-      : 1;
-    this.animState = 'idle';
-    this.actionLock = null;
-    this.lastDirection = 'south';
-    this.attackFrameFired = false;
-    this.skillFrameFired = false;
-    this.lastSkillTime = 0;
-    this.onAttackHit = null;
-    this.onSkillEffect = null;
     
     // 创建视觉元素
     this.createVisuals();
@@ -384,7 +431,10 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   getAnimKey(state, direction) {
-    return `player_${state}_${direction}`;
+    const resolvedDir = (typeof this.animConfig?.animDirectionFor === 'function')
+      ? this.animConfig.animDirectionFor(direction)
+      : direction;
+    return `player_${state}_${resolvedDir}`;
   }
 
   getDirectionRow(direction) {
@@ -765,10 +815,10 @@ export default class Player extends Phaser.GameObjects.Container {
     const state = isMoving ? 'run' : 'idle';
     this.animState = state;
 
-    if (this.lastDirection === 'left' && this.animConfig.useFlipForLeft) {
-      this.sprite.setFlipX(true);
-    } else if (this.lastDirection !== 'left') {
-      this.sprite.setFlipX(false);
+    if (this.animConfig.useFlipForLeft) {
+      // 8 方向时 lastDirection 可能是 west/north-west/...；用 velocityX 决定左右，并在纯上下移动时保持上次朝向。
+      if (velocityX < 0) this.sprite.setFlipX(true);
+      else if (velocityX > 0) this.sprite.setFlipX(false);
     }
 
     this.playBaseAnimation(state, this.lastDirection);
@@ -776,6 +826,11 @@ export default class Player extends Phaser.GameObjects.Container {
 
   playAttackAnimation() {
     if (this.actionLock) return;
+
+    if (this.animConfig?.disableActionAnimations) {
+      // walk-only：不切换动作动画
+      return;
+    }
 
     this.actionLock = 'attack';
     this.attackFrameFired = false;
@@ -786,6 +841,11 @@ export default class Player extends Phaser.GameObjects.Container {
     const cooldown = this.animConfig.states.skill.cooldown || 0;
     const now = this.scene.time.now;
     if (now - this.lastSkillTime < cooldown) return false;
+
+    if (this.animConfig?.disableActionAnimations) {
+      this.lastSkillTime = now;
+      return true;
+    }
 
     this.actionLock = 'skill';
     this.skillFrameFired = false;
@@ -800,6 +860,10 @@ export default class Player extends Phaser.GameObjects.Container {
 
   playHurtAnimation() {
     if (!this.isAlive) return;
+
+    if (this.animConfig?.disableActionAnimations) {
+      return;
+    }
     this.actionLock = 'hurt';
     this.playBaseAnimation('hurt', this.lastDirection);
   }

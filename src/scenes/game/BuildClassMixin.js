@@ -292,12 +292,6 @@ export function applyBuildClassMixin(GameScene) {
         case 'mage_refract':
           this.player.mageRefract = true;
           break;
-        case 'mage_overheat':
-          this.player.mageOverheat = true;
-          break;
-        case 'mage_charge':
-          this.player.mageCharge = true;
-          break;
         case 'mage_arcane_perception': {
           this.player.mageArcanePerceptionLevel = Math.min(3, (this.player.mageArcanePerceptionLevel || 0) + 1);
           const base = this.player.arcaneRayBaseRange || this.player.arcaneRayRange || 220;
@@ -307,9 +301,6 @@ export function applyBuildClassMixin(GameScene) {
         }
         case 'mage_energy_focus':
           this.player.mageEnergyFocusLevel = Math.min(3, (this.player.mageEnergyFocusLevel || 0) + 1);
-          break;
-        case 'mage_arcane_split':
-          this.player.mageArcaneSplitLevel = Math.min(3, (this.player.mageArcaneSplitLevel || 0) + 1);
           break;
 
         case 'archer_bounce':
@@ -1564,12 +1555,6 @@ export function applyBuildClassMixin(GameScene) {
 
     upgradeMageCritDamage() {
       this.player.critMultiplier = Math.min(3.2, this.player.critMultiplier + 0.25);
-    },
-
-    upgradeMageCharge() {
-      this.player.laserDamageMult = Math.min(3.5, this.player.laserDamageMult + 0.3);
-      this.player.baseFireRate = Math.min(420, this.player.baseFireRate + 30);
-      this.player.applyStatMultipliers(this.player.equipmentMods);
     },
 
     enablePaladinBuild() {

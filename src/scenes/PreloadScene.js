@@ -54,6 +54,15 @@ export default class PreloadScene extends Phaser.Scene {
       frameHeight: 64
     });
 
+    // Character (deluyi): 仅提供向右行走，左向通过 flipX 镜像实现
+    // sprite.png 为等尺寸网格：64x64，每帧间隔 4px（4x4 共 16 格，当前使用前 14 帧）
+    this.load.spritesheet('deluyi', 'assets/characters/deluyi/sprite.png', {
+      frameWidth: 64,
+      frameHeight: 64,
+      spacing: 4,
+      margin: 0
+    });
+
     // Character (any): 8 方向行走（每方向 8 帧）+ rotations 静止朝向
     const archerDirs = [
       'south',
@@ -85,6 +94,9 @@ export default class PreloadScene extends Phaser.Scene {
 
     // 地图底图：第一关（试炼之地）
     this.load.image('map1', 'assets/map/map1.png');
+
+    // Monsters
+    this.load.image('shilaimu', 'assets/monsters/shilaimu.png');
 
     // UI 资源（SVG，可缩放）
     this.load.svg('ui_panel', 'assets/ui/panel.svg');

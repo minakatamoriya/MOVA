@@ -76,8 +76,18 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
   createVisuals(color) {
     const core = color || (this.minionType === 'shooter' ? 0xaa66ff : 0xffaa66);
-    this.body = this.scene.add.circle(0, 0, this.radius, core, 1);
-    this.body.setStrokeStyle(2, 0xffffff, 0.8);
+
+    // 外观贴图：统一替换为史莱姆（保留圆形触碰判定框）
+    const texKey = 'shilaimu';
+    if (this.scene?.textures?.exists?.(texKey)) {
+      this.sprite = this.scene.add.image(0, 0, texKey);
+      this.sprite.setDisplaySize(this.radius * 2, this.radius * 2);
+      this.add(this.sprite);
+    }
+
+    // 圆形触碰判定框：透明填充 + 描边
+    this.body = this.scene.add.circle(0, 0, this.radius, core, 0);
+    this.body.setStrokeStyle(2, 0xffffff, 0.85);
     this.add(this.body);
 
     // 名称标签（显示在圆形下方）

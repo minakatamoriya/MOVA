@@ -10,6 +10,36 @@ import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
 import { START_ROOM } from '../data/mapPool';
 
+function getPlayerTouchRadius(player) {
+  if (!player) return 0;
+  const r = (player.hitboxRadius != null) ? player.hitboxRadius : (player.getHitboxPosition?.().radius);
+  return Math.max(1, Math.floor(Number(r) || 8));
+}
+
+// Ellipse touch (approx): player is a circle; we consider touch when the player center
+// is within an ellipse expanded by (playerRadius + touchPadPx).
+function isTouchingRiftPortal(player, rift) {
+  if (!player || !rift) return false;
+  const a = Number(rift.a) || 0;
+  const b = Number(rift.b) || 0;
+  if (a <= 1 || b <= 1) return false;
+
+  const px = Number(player.x) || 0;
+  const py = Number(player.y) || 0;
+  const cx = Number(rift.x) || 0;
+  const cy = Number(rift.y) || 0;
+  const dx = px - cx;
+  const dy = py - cy;
+
+  const d = Math.sqrt((dx * dx) / (a * a) + (dy * dy) / (b * b));
+  const playerR = getPlayerTouchRadius(player);
+  const touchPadPx = Math.max(0, Math.floor(Number(rift.touchPadPx) || 0));
+  const minR = Math.max(1, Math.min(a, b));
+  const expandN = (playerR + touchPadPx) / minR;
+
+  return d <= (1 + expandN);
+}
+
 // ── Mixins ───────────────────────────────────────────────
 import { applyHudMixin } from './game/HudMixin';
 import { applyMapFogMixin } from './game/MapFogMixin';
@@ -51,6 +81,7 @@ class GameScene extends Phaser.Scene {
     this.exitDoorActive = false;
     this.exitDoorZone = null;
     this.exitDoorVisuals = null;
+    this.exitDoorRift = null;
 
     // 新流程：起始房间（无迷雾、无 Boss），选武器后进门进入第一关
     this.inStartRoom = true;
@@ -58,6 +89,7 @@ class GameScene extends Phaser.Scene {
     this.startRoomDoorActive = false;
     this.startRoomDoorZone = null;
     this.startRoomDoorVisuals = null;
+    this.startRoomDoorRift = null;
     this._startRoomObjects = [];
 
     // 迷雾模式：soft = "柔和笔刷式永久揭开（非网格）"
@@ -1136,11 +1168,17 @@ class GameScene extends Phaser.Scene {
         this.spawnStartRoomDoor();
       }
       if (this.startRoomDoorActive && this.startRoomDoorZone && this.player) {
-        const dx = this.player.x - this.startRoomDoorZone.x;
-        const dy = this.player.y - this.startRoomDoorZone.y;
-        const hx = (this.startRoomDoorZone.width || 0) * 0.5;
-        const hy = (this.startRoomDoorZone.height || 0) * 0.5;
-        if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) {
+        const touched = this.startRoomDoorRift
+          ? isTouchingRiftPortal(this.player, this.startRoomDoorRift)
+          : (() => {
+            const dx = this.player.x - this.startRoomDoorZone.x;
+            const dy = this.player.y - this.startRoomDoorZone.y;
+            const hx = (this.startRoomDoorZone.width || 0) * 0.5;
+            const hy = (this.startRoomDoorZone.height || 0) * 0.5;
+            return (Math.abs(dx) <= hx && Math.abs(dy) <= hy);
+          })();
+
+        if (touched) {
           this.beginAdventureFromStartRoom();
         }
       }
@@ -1236,7 +1274,12 @@ class GameScene extends Phaser.Scene {
         // 第一关：未选武器前不允许开战（避免"没拿武器就被打"）
         const gated = ((this.currentLevel || 1) === 1 && !this.weaponSelected);
         if (!gated && boss.combatActive === false) {
-          const aggroR = Math.floor((this.mapConfig?.cellSize || 128) * 3.0);
+          const cellSize = Math.max(64, Math.round(this.mapConfig?.cellSize || 128));
+          const fallbackAggroR = Phaser.Math.Clamp(Math.floor(cellSize * 6.0), 520, 980);
+          const aggroR = (Number.isFinite(boss.aggroRadius) && boss.aggroRadius > 0) ? boss.aggroRadius : fallbackAggroR;
+          if (typeof boss.setAggroRadius === 'function' && (!Number.isFinite(boss.aggroRadius) || boss.aggroRadius <= 0)) {
+            boss.setAggroRadius(aggroR);
+          }
           const dx = this.player.x - boss.x;
           const dy = this.player.y - boss.y;
           if ((dx * dx + dy * dy) <= (aggroR * aggroR)) {
@@ -1253,11 +1296,17 @@ class GameScene extends Phaser.Scene {
 
     // 出口门：击败 Boss 后，进入门才进入下一关
     if (this.exitDoorActive && this.exitDoorZone && this.player) {
-      const dx = this.player.x - this.exitDoorZone.x;
-      const dy = this.player.y - this.exitDoorZone.y;
-      const hx = (this.exitDoorZone.width || 0) * 0.5;
-      const hy = (this.exitDoorZone.height || 0) * 0.5;
-      if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) {
+      const touched = this.exitDoorRift
+        ? isTouchingRiftPortal(this.player, this.exitDoorRift)
+        : (() => {
+          const dx = this.player.x - this.exitDoorZone.x;
+          const dy = this.player.y - this.exitDoorZone.y;
+          const hx = (this.exitDoorZone.width || 0) * 0.5;
+          const hy = (this.exitDoorZone.height || 0) * 0.5;
+          return (Math.abs(dx) <= hx && Math.abs(dy) <= hy);
+        })();
+
+      if (touched) {
         // 防止重复触发
         this.exitDoorActive = false;
         this.advanceToNextLevel();
@@ -1269,11 +1318,17 @@ class GameScene extends Phaser.Scene {
       for (const entry of this._pathDoorZones) {
         const z = entry.zone;
         if (!z) continue;
-        const dx = this.player.x - z.x;
-        const dy = this.player.y - z.y;
-        const hx = (z.width || 0) * 0.5;
-        const hy = (z.height || 0) * 0.5;
-        if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) {
+        const touched = entry.rift
+          ? isTouchingRiftPortal(this.player, entry.rift)
+          : (() => {
+            const dx = this.player.x - z.x;
+            const dy = this.player.y - z.y;
+            const hx = (z.width || 0) * 0.5;
+            const hy = (z.height || 0) * 0.5;
+            return (Math.abs(dx) <= hx && Math.abs(dy) <= hy);
+          })();
+
+        if (touched) {
           this.selectPathChoice(entry.choice);
           break;
         }

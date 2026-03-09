@@ -4,6 +4,7 @@ import { getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } 
 import { BALANCE_CONSTANTS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
+import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
 import TestMinion from '../../enemies/minions/TestMinion';
 
 /**
@@ -19,6 +20,7 @@ export function applyLevelProgressionMixin(GameScene) {
       this._pathChoiceActive = false;
 
       this.exitDoorActive = false;
+      this.exitDoorRift = null;
       if (this.exitDoorZone) {
         this.exitDoorZone.destroy();
         this.exitDoorZone = null;
@@ -378,23 +380,27 @@ export function applyLevelProgressionMixin(GameScene) {
       this.exitDoorZone = this.add.zone(x, y, w, h);
       this.exitDoorActive = true;
 
-      const frame = this.add.rectangle(x, y, w, h, 0x0b0b18, 0.65);
-      frame.setStrokeStyle(3, 0xffdd88, 0.95);
-      frame.setDepth(210);
+      const portal = createRiftPortal(this, x, y, {
+        width: w,
+        height: h,
+        depth: 210,
+        label: '空间裂隙\n下一关',
+        labelFontSize: '20px',
+        labelColor: '#ffdd88'
+      });
 
-      const txt = this.add.text(x, y, '进入大门\n下一关', {
-        fontSize: '20px',
-        color: '#ffdd88',
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-      txt.setDepth(211);
+      this.exitDoorRift = {
+        x,
+        y,
+        a: portal.a,
+        b: portal.b,
+        touchPadPx: getDefaultRiftTouchPadPx(this.mapConfig?.cellSize)
+      };
 
-      this.exitDoorVisuals = [frame, txt];
+      this.exitDoorVisuals = [portal.root];
 
       if (this.systemMessage) {
-        this.systemMessage.show('Boss 已被击败！前往最上方大门进入下一关。', {
+        this.systemMessage.show('Boss 已被击败！前往上方空间裂隙进入下一关。', {
           key: 'boss_defeated_exit_door',
           durationMs: 3600
         });
@@ -514,7 +520,9 @@ export function applyLevelProgressionMixin(GameScene) {
       const gap = Math.floor(cell * 0.6);
       const totalW = doorW * 3 + gap * 2;
       const startX = Math.floor((worldSize - totalW) / 2 + doorW / 2);
-      const doorY = Math.floor(cell * 0.55);
+      // 不贴最顶端：沿用出口门的“世界高度比例”位置
+      const yFrac = (BALANCE_CONSTANTS?.exitDoor?.yFrac != null) ? BALANCE_CONSTANTS.exitDoor.yFrac : 0.14;
+      const doorY = Math.floor(worldSize * yFrac);
 
       this._pathDoorZones = [];
 
@@ -524,14 +532,18 @@ export function applyLevelProgressionMixin(GameScene) {
 
         const doorColor = (LINE_META[choice.line] || LINE_META[NEUTRAL])?.color || 0x888888;
 
-        const doorBg = this.add.rectangle(cx, cy, doorW, doorH, 0x0b0b20, 0.85);
-        doorBg.setStrokeStyle(3, doorColor, 0.95);
-        doorBg.setDepth(210);
+        const portal = createRiftPortal(this, cx, cy, {
+          width: doorW,
+          height: doorH,
+          depth: 210,
+          label: '',
+        });
 
-        const colorBar = this.add.rectangle(cx, cy - doorH / 2 + 5, doorW - 8, 5, doorColor, 0.9);
+        // 用一条细色条保留“线路颜色”语义（不增加额外 UI 结构）
+        const colorBar = this.add.rectangle(cx, cy - doorH / 2 - 6, Math.max(10, doorW - 10), 5, doorColor, 0.9);
         colorBar.setDepth(211);
 
-        const nameText = this.add.text(cx, cy - 10, choice.name, {
+        const nameText = this.add.text(cx, cy - doorH * 0.70, choice.name, {
           fontSize: '16px',
           fontFamily: 'Arial, sans-serif',
           color: '#ffffff',
@@ -542,7 +554,7 @@ export function applyLevelProgressionMixin(GameScene) {
         }).setOrigin(0.5);
         nameText.setDepth(212);
 
-        const subText = this.add.text(cx, cy + 14, choice.subtitle, {
+        const subText = this.add.text(cx, cy - doorH * 0.70 + 22, choice.subtitle, {
           fontSize: '13px',
           fontFamily: 'Arial, sans-serif',
           color: '#ccddaa',
@@ -555,8 +567,18 @@ export function applyLevelProgressionMixin(GameScene) {
 
         const zone = this.add.zone(cx, cy, doorW, doorH);
 
-        this._pathDoorZones.push({ zone, choice });
-        this._pathChoiceObjects.push(doorBg, colorBar, nameText, subText, zone);
+        this._pathDoorZones.push({
+          zone,
+          choice,
+          rift: {
+            x: cx,
+            y: cy,
+            a: portal.a,
+            b: portal.b,
+            touchPadPx: getDefaultRiftTouchPadPx(cell)
+          }
+        });
+        this._pathChoiceObjects.push(portal.root, colorBar, nameText, subText, zone);
       });
 
       if (this.systemMessage) {

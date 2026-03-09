@@ -53,12 +53,9 @@
 - 月牙扩展（id=warrior_range）：月牙斩有效范围提升（可叠加）
 
 ### 法师·激光（coreKey=mage）
-- 折射（id=mage_refract）：额外生成 2 道较短折射光束
-- 过热（id=mage_overheat）：持续命中 3 秒后爆炸造成范围伤害
-- 蓄能（id=mage_charge）：每 2 秒充能；下一次攻击 3 倍伤害并击退
+- 折射（id=mage_refract）：激光命中目标后，从该目标分裂 2 道短射线到附近敌人（伤害 -50%）
 - 奥术感知（id=mage_arcane_perception，maxLevel=3）：索敌范围提升
 - 能量汇集（id=mage_energy_focus，maxLevel=3）：射线伤害提升并随层数更粗更亮
-- 奥术分裂（id=mage_arcane_split，maxLevel=3）：多目标时额外分裂射线（分裂伤害 50%）
 
 ### 圣骑士（coreKey=paladin）
 - 重锤（id=paladin_pierce）：锤击范围略扩大，落点更靠前

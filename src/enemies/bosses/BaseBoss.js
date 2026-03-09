@@ -83,6 +83,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 视觉属性
     this.bossColor = config.color || 0xff0000;
     this.bossSize = config.size || 50;
+
+    // Boss 预警圈（更大的索敌/开战半径，可视化）
+    const rawAggroR = (config.aggroRadius != null) ? Number(config.aggroRadius) : 0;
+    this.aggroRadius = (Number.isFinite(rawAggroR) && rawAggroR > 0) ? Math.round(rawAggroR) : 0;
+    this._aggroRing = null;
     
     // 弹幕组
     this.bullets = null;
@@ -273,9 +278,27 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
    * 创建视觉元素
    */
   createVisuals() {
+    // Boss 预警圈：淡红色（仅描边为主，轻微填充）
+    if (this.aggroRadius > 0) {
+      // 注：alpha 过低时在多数地图背景下会“看不见”，这里略提高但仍保持“淡红预警”观感。
+      this._aggroRing = this.scene.add.circle(0, 0, this.aggroRadius, 0xff2b2b, 0.05);
+      this._aggroRing.setStrokeStyle(3, 0xff2b2b, 0.24);
+      this._aggroRing.setVisible(true);
+      this.add(this._aggroRing);
+    }
+
     // Boss 本体（圆形占位符）
-    this.body = this.scene.add.circle(0, 0, this.bossSize, this.bossColor);
-    this.body.setStrokeStyle(3, 0xffffff);
+    // 外观贴图：统一替换为史莱姆（保留圆形触碰判定框）
+    const texKey = 'shilaimu';
+    if (this.scene?.textures?.exists?.(texKey)) {
+      this.sprite = this.scene.add.image(0, 0, texKey);
+      this.sprite.setDisplaySize((this.bossSize || 50) * 2, (this.bossSize || 50) * 2);
+      this.add(this.sprite);
+    }
+
+    // 圆形触碰判定框：透明填充 + 描边
+    this.body = this.scene.add.circle(0, 0, this.bossSize, this.bossColor, 0);
+    this.body.setStrokeStyle(3, 0xffffff, 0.95);
     this.body.isBoss = true; // 标记为 Boss 部件
     this.add(this.body);
     
@@ -308,6 +331,23 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
     // Debuff 图标行（显示在 Boss“头像/本体”上方；支持未来多个图标并排）
     this.createDebuffUi();
+  }
+
+  setAggroRadius(r) {
+    const nr = Number(r);
+    if (!Number.isFinite(nr) || nr <= 0) return;
+    this.aggroRadius = Math.round(nr);
+    if (this._aggroRing && this._aggroRing.active && this._aggroRing.setRadius) {
+      this._aggroRing.setRadius(this.aggroRadius);
+      return;
+    }
+    // 若 visuals 已创建但 ring 不存在：补建
+    if (!this._aggroRing && this.scene?.add) {
+      this._aggroRing = this.scene.add.circle(0, 0, this.aggroRadius, 0xff2b2b, 0.05);
+      this._aggroRing.setStrokeStyle(3, 0xff2b2b, 0.24);
+      this._aggroRing.setVisible(true);
+      this.addAt(this._aggroRing, 0);
+    }
   }
 
   createDebuffUi() {

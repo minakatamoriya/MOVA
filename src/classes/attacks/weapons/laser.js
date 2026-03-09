@@ -163,6 +163,8 @@ function getEnemyRadius(enemy) {
     enemy.radius,
     enemy.bossSize,
     enemy.body?.radius,
+    enemy.body?.width,
+    enemy.body?.height,
     enemy.sprite?.radius,
   ];
 
@@ -196,6 +198,33 @@ function getEnemyRadius(enemy) {
   }
 
   return Math.max(0, r);
+}
+
+function isEnemyTouchingRange(px, py, range, enemy) {
+  if (!enemy || enemy.isAlive === false) return false;
+
+  const r = getEnemyRadius(enemy);
+  if (Number.isFinite(r) && r > 0) {
+    const d = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y);
+    return d <= (range + r);
+  }
+
+  if (typeof enemy.getBounds === 'function') {
+    try {
+      const b = enemy.getBounds();
+      const bw = Number(b?.width ?? 0);
+      const bh = Number(b?.height ?? 0);
+      if (Number.isFinite(bw) && Number.isFinite(bh) && (bw > 0 || bh > 0)) {
+        const c = new Phaser.Geom.Circle(px, py, Math.max(1, range));
+        const rect = new Phaser.Geom.Rectangle(b.x, b.y, bw, bh);
+        return Phaser.Geom.Intersects.CircleToRectangle(c, rect);
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  // 最后兜底：用中心点
+  const d = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y);
+  return d <= range;
 }
 
 function getBeamStart(player) {
@@ -282,38 +311,6 @@ function updateBeamDraw(state, player, end, scheme, beamAlpha) {
   state.beamG.fillCircle(endX, endY, Math.max(6, Math.round(baseWidth * 0.55)));
 }
 
-function ensureSplitGraphics(scene, state, count) {
-  state._splits = state._splits || [];
-  const arr = state._splits;
-
-  while (arr.length > count) {
-    const g = arr.pop();
-    if (g && g.active) g.destroy();
-  }
-  while (arr.length < count) {
-    const g = scene.add.graphics();
-    g.setDepth(6);
-    g.alpha = 0;
-    arr.push(g);
-  }
-
-  return arr;
-}
-
-function clearSplitGraphics(state) {
-  if (!Array.isArray(state._splits)) return;
-  state._splits.forEach((g) => g && g.active && g.clear());
-}
-
-function destroySplitGraphics(state) {
-  if (!Array.isArray(state._splits)) {
-    state._splits = [];
-    return;
-  }
-  state._splits.forEach((g) => g && g.active && g.destroy());
-  state._splits = [];
-}
-
 function getEnemyUid(scene, enemy) {
   if (!enemy) return '0';
   if (!scene._enemyUidSeq) scene._enemyUidSeq = 1;
@@ -329,7 +326,34 @@ function applyArcaneRayDirectDamage(scene, player, enemy, baseDamage, hitX, hitY
   if (now < nextAt) return;
   player._arcaneRayTickNext.set(tickKey, now + tickIntervalMs);
 
-  const dmg = Math.max(1, Math.round(baseDamage));
+  // 直伤兜底（尤其用于教程 Boss）：尽量复用 CollisionManager 中的通用增伤窗口
+  let dmg = Math.max(1, Math.round(baseDamage));
+  let damageMult = 1;
+  // 不屈：血怒
+  if (player?.bloodrageEnabled && player.maxHp > 0) {
+    const missing = 1 - (player.hp / player.maxHp);
+    const stacks = Math.max(0, Math.floor(missing / 0.1));
+    damageMult *= (1 + stacks * 0.03);
+  }
+  // 不屈：战吼
+  if ((player?.battlecryUntil || 0) > now) {
+    damageMult *= 1.15;
+  }
+  // 自然伙伴（熊系）：自然之怒
+  if ((player?.natureRageUntil || 0) > now) {
+    damageMult *= (player.natureRageMult || 1.1);
+  }
+  // 鹰系：猎手标记（目标身上的 debuff）
+  if (enemy?.debuffs?.huntMarkEnd && now < enemy.debuffs.huntMarkEnd) {
+    damageMult *= (enemy.debuffs.huntMarkMult || 1.1);
+  }
+  // 术士：吞噬（斩杀）
+  if (player?.warlockExecute && enemy?.maxHp > 0) {
+    const hpPct = enemy.currentHp / enemy.maxHp;
+    if (hpPct < 0.3) damageMult *= 2;
+  }
+
+  dmg = Math.max(1, Math.round(dmg * damageMult));
   const dr = player.calculateDamage ? player.calculateDamage(dmg) : { amount: dmg, isCrit: false };
 
   enemy.takeDamage?.(dr.amount);
@@ -343,49 +367,55 @@ function applyArcaneRayDirectDamage(scene, player, enemy, baseDamage, hitX, hitY
   }
 }
 
-function updateRefractBeams(state, player, target, scheme, delta, inRange) {
+function updateRefractBeams(state, player, start, refractTargets, scheme, delta, enabled) {
   const scene = player.scene;
   const beams = state._refract || [];
   state._refract = beams;
 
-  const need = player.mageRefract && inRange ? 2 : 0;
+  const targets = Array.isArray(refractTargets) ? refractTargets.filter(Boolean) : [];
+  const need = (enabled && start && targets.length > 0) ? Math.min(2, targets.length) : 0;
 
-  while (beams.length > need) {
+  while (beams.length > 2) {
     const b = beams.pop();
     if (b && b.active) b.destroy();
   }
 
-  while (beams.length < need) {
+  while (beams.length < 2) {
     const g = scene.add.graphics();
     g.setDepth(6);
     g.alpha = 0;
     beams.push(g);
   }
 
-  if (need === 0) return;
-
-  const baseWidth = Math.max(8, Math.round((player.arcaneRayWidth || 16) * 0.55));
-  const beamAlpha = Math.min(1, state.beamAlpha) * 0.65;
-  const startX = player.x;
-  const startY = player.y - (player.visualRadius || 15) * 0.55;
-  const baseAngle = Phaser.Math.Angle.Between(startX, startY, target.x, target.y);
-  const offsets = [-0.16, 0.16];
-  const len = Math.min(240, Phaser.Math.Distance.Between(startX, startY, target.x, target.y) * 0.55);
+  const baseWidth = Math.max(6, Math.round((player.arcaneRayWidth || 16) * 0.50));
+  const beamAlpha = Math.min(1, state.beamAlpha) * 0.70;
 
   for (let i = 0; i < beams.length; i++) {
     const g = beams[i];
     if (!g || !g.active) continue;
 
-    g.alpha = expApproach(g.alpha, beamAlpha, delta, 120);
+    const has = i < need;
+    g.alpha = expApproach(g.alpha, has ? beamAlpha : 0, delta, has ? 110 : 180);
     g.clear();
 
-    const a = baseAngle + offsets[i];
-    const ex = startX + Math.cos(a) * len;
-    const ey = startY + Math.sin(a) * len;
+    if (!has || g.alpha <= 0.01) continue;
 
-    g.lineStyle(baseWidth, scheme.coreColor, 0.55 * g.alpha);
+    const t = targets[i];
+    const sx = start.x;
+    const sy = start.y;
+    const ex = t.x;
+    const ey = t.y;
+
+    // 外层微弱辉光 + 内层亮芯
+    g.lineStyle(Math.round(baseWidth * 1.8), scheme.glowColor, Math.min(0.30, 0.12 * g.alpha));
     g.beginPath();
-    g.moveTo(startX, startY);
+    g.moveTo(sx, sy);
+    g.lineTo(ex, ey);
+    g.strokePath();
+
+    g.lineStyle(baseWidth, scheme.coreBright, Math.min(1, 0.72 * g.alpha));
+    g.beginPath();
+    g.moveTo(sx, sy);
     g.lineTo(ex, ey);
     g.strokePath();
   }
@@ -436,7 +466,7 @@ export function updateArcaneRay(player, delta) {
       const e = enemies[i];
       const r = getEnemyRadius(e);
       const d = Phaser.Math.Distance.Between(player.x, player.y, e.x, e.y);
-      const inR = d <= (range + r);
+      const inR = isEnemyTouchingRange(player.x, player.y, range, e);
       if (!inR) continue;
       const score = Math.max(0, d - r);
       if (score < bestScore) {
@@ -453,7 +483,23 @@ export function updateArcaneRay(player, delta) {
   // 触碰范围：以“圆圈边界触碰到敌方外边缘”为进入/脱离标准
   // - 进入：distance(center, center) <= range + enemyRadius
   // - 脱离：distance(center, center) > range + enemyRadius
-  const inRange = !!(target && Phaser.Math.Distance.Between(player.x, player.y, target.x, target.y) <= (range + targetRadius));
+  const inRange = !!(target && isEnemyTouchingRange(player.x, player.y, range, target));
+
+  // 折射：命中 A 后，从 A 分裂两道短束到附近 B/C（小范围寻怪）
+  const refractEnabled = !!(player.mageRefract && inRange && target && target.isAlive);
+  const refractStart = refractEnabled ? { x: target.x, y: target.y } : null;
+  const refractTargets = [];
+  if (refractEnabled) {
+    const refractSearchR = 180; // 先定一个“小幅度范围”
+    const candidates = enemies.filter((e) => e && e.isAlive && e !== target);
+    candidates.sort((a, b) => Phaser.Math.Distance.Between(target.x, target.y, a.x, a.y) - Phaser.Math.Distance.Between(target.x, target.y, b.x, b.y));
+    for (let i = 0; i < candidates.length; i++) {
+      const e = candidates[i];
+      const d = Phaser.Math.Distance.Between(target.x, target.y, e.x, e.y);
+      if (d <= refractSearchR) refractTargets.push(e);
+      if (refractTargets.length >= 2) break;
+    }
+  }
 
   // 记录上一帧终点：用于“敌人瞬死”时仍能看到完整光束
   if (target && target.isAlive) {
@@ -518,34 +564,17 @@ export function updateArcaneRay(player, delta) {
       : ((state.lastEnd && now <= (state.lastEnd.until || 0)) ? { x: state.lastEnd.x, y: state.lastEnd.y } : null);
     updateBeamDraw(state, player, drawEnd, scheme, state.beamAlpha || 0);
 
-    // 折射束仅在有真实目标时绘制
-    updateRefractBeams(state, player, target, scheme, delta, inRange);
+    // 折射束：仅在“命中 A 且 A 周围找到 B/C”时绘制（从 A 身上发出）
+    updateRefractBeams(state, player, refractStart, refractTargets, scheme, delta, refractEnabled);
   } else {
     clearBeamGraphics(state);
-    clearSplitGraphics(state);
   }
 
   // 命中判定：用“隐形 hitbox 子弹”复用既有碰撞/伤害/特效/天赋
   if (wantBeamVisible && target) {
-    // 蓄能：每 2 秒下一次射线强化（3 倍伤害 + 击退）
-    let chargeMult = 1;
-    let chargeKnockback = 0;
-    if (player.mageCharge) {
-      player._mageChargeNextAt = player._mageChargeNextAt || (now + 2000);
-      if (!player._mageChargeCharged && now >= player._mageChargeNextAt) {
-        player._mageChargeCharged = true;
-      }
-      if (player._mageChargeCharged) {
-        player._mageChargeCharged = false;
-        player._mageChargeNextAt = now + 2000;
-        chargeMult = 3;
-        chargeKnockback = 30;
-      }
-    }
-
     const focusLvl = Math.max(0, Math.min(3, player.mageEnergyFocusLevel || 0));
     const focusMult = 1 + 0.10 * focusLvl;
-    const baseDamage = Math.max(1, Math.round((player.bulletDamage || 1) * (player.laserDamageMult || 2) * chargeMult * focusMult));
+    const baseDamage = Math.max(1, Math.round((player.bulletDamage || 1) * (player.laserDamageMult || 2) * focusMult));
     ensureBeamHitbox(scene, state, player, scheme, baseDamage);
 
     // “截断”：命中点固定到敌方外圈（不穿透）
@@ -559,77 +588,28 @@ export function updateArcaneRay(player, delta) {
     state.hitbox.x = startX + (dx / dist) * cut;
     state.hitbox.y = startY + (dy / dist) * cut;
 
-    // 以玩家朝向为参考的击退方向（更自然）
-    if (chargeKnockback > 0) {
-      state.hitbox.knockback = chargeKnockback;
-    } else {
-      delete state.hitbox.knockback;
-    }
-
-    // ====== 奥术分裂 + 路径伤害 ======
-    const splitLvl = Math.max(0, Math.min(3, player.mageArcaneSplitLevel || 0));
+    // ====== 路径伤害 ======
     const tickIntervalMs = Math.max(60, Math.round(player.fireRate || 320));
     const start = getBeamStart(player);
-    // 分裂起点：主束首次接触点（命中外圈点）
-    const splitStart = { x: state.hitbox.x, y: state.hitbox.y };
-
-    // 若主目标不是 Boss（例如测试小怪），需要走 direct tick 才能扣血
-    if (target !== boss) {
+    // 主目标直伤：
+    // - 常规情况下（Boss）由碰撞系统扣血
+    // - 兜底：若教程/试炼 Boss 的碰撞链路异常，走直伤 tick，避免“激光不掉血”
+    {
       const r = getEnemyRadius(target);
       const hp = r > 0
         ? getHitPointOnCircleEdge(start.x, start.y, target.x, target.y, target.x, target.y, r)
         : { x: target.x, y: target.y };
-      const key = `primary:${getEnemyUid(scene, target)}`;
-      applyArcaneRayDirectDamage(scene, player, target, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
-    }
 
-    // 分裂目标：按距离挑选（排除主目标）
-    const extraTargets = [];
-    if (splitLvl > 0) {
-      const candidates = enemies.filter((e) => e && e.isAlive && e !== target);
-      candidates.sort((a, b) => Phaser.Math.Distance.Between(start.x, start.y, a.x, a.y) - Phaser.Math.Distance.Between(start.x, start.y, b.x, b.y));
-      for (let i = 0; i < Math.min(splitLvl, candidates.length); i++) {
-        extraTargets.push(candidates[i]);
+      const isBossTarget = !!(boss && target === boss);
+      const lastHitAt = state.hitbox?.lastHitAt || 0;
+      const collisionLikelyApplied = isBossTarget && lastHitAt > 0 && (now - lastHitAt) < (tickIntervalMs * 1.1);
+      if (!isBossTarget || !collisionLikelyApplied) {
+        const key = `primary:${getEnemyUid(scene, target)}`;
+        applyArcaneRayDirectDamage(scene, player, target, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
       }
     }
 
-    // 画分裂束
-    const splitGs = ensureSplitGraphics(scene, state, extraTargets.length);
-    for (let i = 0; i < splitGs.length; i++) {
-      const g = splitGs[i];
-      const t = extraTargets[i];
-      if (!g || !g.active || !t) continue;
-      g.alpha = expApproach(g.alpha, Math.min(1, state.beamAlpha) * 0.85, delta, 120);
-      g.clear();
-
-      const endX = t.x;
-      const endY = t.y;
-
-      const focusLvl2 = Math.max(0, Math.min(3, player.mageEnergyFocusLevel || 0));
-      const widthScale = 1 + 0.12 * focusLvl2;
-      const baseWidth = Math.max(8, (player.arcaneRayWidth || 16) * widthScale * 0.72);
-      const glowWidth = Math.round(baseWidth * 1.9);
-
-      g.lineStyle(glowWidth, scheme.glowColor, Math.min(0.35, 0.12 * g.alpha));
-      g.beginPath();
-      g.moveTo(splitStart.x, splitStart.y);
-      g.lineTo(endX, endY);
-      g.strokePath();
-
-      g.lineStyle(baseWidth, scheme.coreBright, Math.min(1, 0.72 * g.alpha));
-      g.beginPath();
-      g.moveTo(splitStart.x, splitStart.y);
-      g.lineTo(endX, endY);
-      g.strokePath();
-
-      g.lineStyle(Math.max(3, Math.round(baseWidth * 0.35)), 0xffffff, Math.min(0.9, 0.45 * g.alpha));
-      g.beginPath();
-      g.moveTo(splitStart.x, splitStart.y);
-      g.lineTo(endX, endY);
-      g.strokePath();
-    }
-
-    // 路径伤害：主束对“路径上的其它敌人”；分裂束对各自路径
+    // 路径伤害：主束对“路径上的其它敌人”
     const mainEndX = target.x;
     const mainEndY = target.y;
     for (let i = 0; i < enemies.length; i++) {
@@ -643,20 +623,18 @@ export function updateArcaneRay(player, delta) {
       applyArcaneRayDirectDamage(scene, player, e, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
     }
 
-    for (let si = 0; si < extraTargets.length; si++) {
-      const t = extraTargets[si];
-      if (!t || !t.isAlive) continue;
-      const endX = t.x;
-      const endY = t.y;
-      for (let i = 0; i < enemies.length; i++) {
-        const e = enemies[i];
+    // ====== 折射：从 A 分裂到 B/C（50% 伤害，小范围） ======
+    if (refractEnabled && refractStart && refractTargets.length > 0) {
+      const tickIntervalMs2 = Math.max(60, Math.round(player.fireRate || 320));
+      for (let i = 0; i < Math.min(2, refractTargets.length); i++) {
+        const e = refractTargets[i];
         if (!e || !e.isAlive) continue;
         const r = getEnemyRadius(e);
-        if (r <= 0) continue;
-        if (!segmentIntersectsCircle(splitStart.x, splitStart.y, endX, endY, e.x, e.y, r)) continue;
-        const hp = getHitPointOnCircleEdge(splitStart.x, splitStart.y, endX, endY, e.x, e.y, r);
-        const key = `split${si}:${getEnemyUid(scene, e)}`;
-        applyArcaneRayDirectDamage(scene, player, e, baseDamage * 0.5, hp.x, hp.y, scheme, now, key, tickIntervalMs);
+        const hp = (r > 0)
+          ? getHitPointOnCircleEdge(refractStart.x, refractStart.y, e.x, e.y, e.x, e.y, r)
+          : { x: e.x, y: e.y };
+        const key = `refract${i}:${getEnemyUid(scene, e)}`;
+        applyArcaneRayDirectDamage(scene, player, e, baseDamage * 0.5, hp.x, hp.y, scheme, now, key, tickIntervalMs2);
       }
     }
   } else {
@@ -664,7 +642,6 @@ export function updateArcaneRay(player, delta) {
       destroyHitbox(scene, state.hitbox);
       state.hitbox = null;
     }
-    clearSplitGraphics(state);
   }
 
   // 淡出结束：清理光束图形
@@ -675,8 +652,6 @@ export function updateArcaneRay(player, delta) {
       state._refract.forEach((g) => g && g.active && g.destroy());
       state._refract = [];
     }
-
-    destroySplitGraphics(state);
     state.phase = 'idle';
   }
 }
@@ -698,11 +673,6 @@ export function destroyArcaneRay(player) {
     state._refract.forEach((g) => g && g.active && g.destroy());
   }
   state._refract = [];
-
-  if (Array.isArray(state._splits) && state._splits.length > 0) {
-    state._splits.forEach((g) => g && g.active && g.destroy());
-  }
-  state._splits = [];
 
   delete player._arcaneRayState;
 }

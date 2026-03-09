@@ -35,13 +35,10 @@ export const UPGRADE_POOLS = {
 
   // 🔵 法师·激光
   mage: [
-    { id: 'mage_refract', category: 'build', name: '折射', desc: '激光额外生成 2 道较短的折射光束（清群质变）', icon: '法主' },
-    { id: 'mage_overheat', category: 'build', name: '过热', desc: '激光持续命中同一目标 3 秒后引发爆炸，造成范围伤害', icon: '法主' },
-    { id: 'mage_charge', category: 'build', name: '蓄能', desc: '激光每 2 秒充能一次，下一次攻击造成 3 倍伤害并击退', icon: '法主' }
-    ,
+    { id: 'mage_refract', category: 'build', name: '折射', desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%', icon: '法主' },
     { id: 'mage_arcane_perception', category: 'build', name: '奥术感知', desc: '奥术射线索敌范围提升（可叠加）', icon: '法主' },
     { id: 'mage_energy_focus', category: 'build', name: '能量汇集', desc: '奥术射线伤害 +10%，并随层数变粗更亮（可叠加）', icon: '法主' },
-    { id: 'mage_arcane_split', category: 'build', name: '奥术分裂', desc: '多目标时额外分裂 1/2/3 股射线，分裂射线伤害为 50%（可叠加）', icon: '法主' }
+    
   ],
 
   // 🛡️ 圣骑士·矛

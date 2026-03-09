@@ -53,12 +53,10 @@ export const TREE_DEFS = [
     color: resolveClassColor('mage'),
     core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为奥术射线。' },
     nodes: [
-      { id: 'mage_refract', name: '折射', maxLevel: 1, desc: '激光额外生成 2 道较短折射光束。' },
-      { id: 'mage_overheat', name: '过热', maxLevel: 1, desc: '激光持续命中 3 秒后引发爆炸。' },
-      { id: 'mage_charge', name: '蓄能', maxLevel: 1, desc: '每 2 秒充能一次：下一次激光 3 倍伤害并击退。' },
+      { id: 'mage_refract', name: '折射', maxLevel: 1, desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%。' },
       { id: 'mage_arcane_perception', name: '奥术感知', maxLevel: 3, desc: '奥术射线索敌范围提升。' },
       { id: 'mage_energy_focus', name: '能量汇集', maxLevel: 3, desc: '奥术射线伤害提升，并随层数变粗更亮（+10%/+20%/+30%）。' },
-      { id: 'mage_arcane_split', name: '奥术分裂', maxLevel: 3, desc: '多目标时，额外分裂 1/2/3 股射线，分裂射线伤害为 50%。' }
+      
     ],
     ultimate: { id: 'mage_ultimate', name: '终极：贯穿聚焦', maxLevel: 1, desc: '激光聚焦并贯穿。' }
   },
@@ -216,11 +214,8 @@ export const SKILL_TO_TREE = {
 
   mage_core: 'mage',
   mage_refract: 'mage',
-  mage_overheat: 'mage',
-  mage_charge: 'mage',
   mage_arcane_perception: 'mage',
   mage_energy_focus: 'mage',
-  mage_arcane_split: 'mage',
   mage_ultimate: 'mage',
 
   paladin_core: 'paladin',

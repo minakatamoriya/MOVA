@@ -494,29 +494,6 @@ export default class CollisionManager {
           }
         }
 
-        // 法师专精：过热（持续命中 3 秒爆炸）
-        if (this.player?.mageOverheat && bullet?.laserBeam) {
-          boss._laserOverheat = boss._laserOverheat || { accMs: 0, lastAt: 0 };
-          const prev = boss._laserOverheat.lastAt || 0;
-          const deltaMs = prev > 0 ? (now - prev) : 0;
-          boss._laserOverheat.lastAt = now;
-          if (deltaMs > 0 && deltaMs < 260) {
-            boss._laserOverheat.accMs += deltaMs;
-          } else {
-            boss._laserOverheat.accMs = 0;
-          }
-
-          if (boss._laserOverheat.accMs >= 3000) {
-            boss._laserOverheat.accMs = 0;
-            const extra = Math.max(1, Math.round(this.player.bulletDamage * 1.2));
-            if (!boss.isInvincible) {
-              boss.takeDamage(extra, { attacker: this.player, source: 'mageOverheat', suppressHitReaction: true });
-              this.showDamageNumber(boss.x, boss.y - 26, extra, { color: '#66ccff', fontSize: 24, whisper: true });
-              this.createHitEffect(boss.x, boss.y, 0x66ccff);
-            }
-          }
-        }
-
         // 术士专精：回响（命中后留法阵）
         if (this.player?.warlockEcho && this.scene?.bulletManager?.createPlayerBullet) {
           const warlockColor = getBaseColorForCoreKey('warlock');

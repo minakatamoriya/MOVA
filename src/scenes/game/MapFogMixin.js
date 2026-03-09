@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { START_ROOM, NEUTRAL } from '../../data/mapPool';
 import { getMapBoss } from '../../data/mapMonsters';
 import { getBossArenaWorldRect, getBossSpawnWorldPoint } from '../../data/balanceConfig';
+import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
 
 /**
  * 地图/迷雾/小地图 相关方法
@@ -198,6 +199,7 @@ export function applyMapFogMixin(GameScene) {
       }
       this.startRoomDoorVisuals = null;
       this.startRoomDoorActive = false;
+      this.startRoomDoorRift = null;
     },
 
     enterStartRoom() {
@@ -281,26 +283,34 @@ export function applyMapFogMixin(GameScene) {
 
       const cfg = this.getStartRoomConfig();
       const x = Math.floor(cfg.worldW / 2);
-      const y = Math.floor(cfg.cellSize * 0.65);
+      // 不贴最顶端：留出顶部空间
+      const y = Math.floor(cfg.worldH * 0.20);
 
       this.startRoomDoorZone = this.add.zone(x, y, cfg.cellSize * 2.0, cfg.cellSize * 1.0);
       this.startRoomDoorActive = true;
 
-      const frame = this.add.rectangle(x, y, cfg.cellSize * 2.0, cfg.cellSize * 1.0, 0x0b0b18, 0.70);
-      frame.setStrokeStyle(4, 0xffffff, 0.95);
-      frame.setDepth(380);
+      const w = cfg.cellSize * 2.0;
+      const h = cfg.cellSize * 1.0;
 
-      const txt = this.add.text(x, y, '进入大门\n开始冒险', {
-        fontSize: '22px',
-        color: '#ffffff',
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 4
-      }).setOrigin(0.5);
-      txt.setDepth(381);
+      const portal = createRiftPortal(this, x, y, {
+        width: w,
+        height: h,
+        depth: 380,
+        label: '空间裂隙\n开始冒险',
+        labelFontSize: '22px',
+        labelColor: '#ffffff'
+      });
 
-      this.startRoomDoorVisuals = [frame, txt];
-      this._startRoomObjects.push(frame, txt, this.startRoomDoorZone);
+      this.startRoomDoorRift = {
+        x,
+        y,
+        a: portal.a,
+        b: portal.b,
+        touchPadPx: getDefaultRiftTouchPadPx(cfg.cellSize)
+      };
+
+      this.startRoomDoorVisuals = [portal.root];
+      this._startRoomObjects.push(portal.root, this.startRoomDoorZone);
     },
 
     beginAdventureFromStartRoom() {

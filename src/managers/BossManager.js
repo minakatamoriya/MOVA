@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import BaseBoss from '../enemies/bosses/BaseBoss';
 import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
@@ -48,6 +49,8 @@ export default class BossManager {
     const stage = Math.max(1, Math.floor(layer || 1));
     const balance = getStageBalance(stage);
     const bossSize = getRoleSize('boss');
+    const cellSize = Math.max(64, Math.round(this.scene?.mapConfig?.cellSize || 128));
+    const aggroRadius = Phaser.Math.Clamp(Math.floor(cellSize * 6.0), 520, 980);
 
     // 需求：Boss 预警发现玩家后，应缓慢、智能地朝玩家移动（而不是左右巡逻/随机漂移）。
     // 因此地图 Boss 统一采用 tracking。
@@ -102,6 +105,7 @@ export default class BossManager {
       color: bossData.color,
       movePattern: resolvedMovePattern,
       moveSpeed: balance.boss.moveSpeed,
+      aggroRadius,
       // 近战：靠近玩家但不要贴脸（玩家会被 Boss 禁入圈推开）
       trackingStopDist: 150,
       attackPatterns: defaultAttackPatterns,
@@ -161,6 +165,9 @@ export default class BossManager {
       }
     ];
 
+    const cellSize = Math.max(64, Math.round(this.scene?.mapConfig?.cellSize || 128));
+    const aggroRadius = Phaser.Math.Clamp(Math.floor(cellSize * 6.0), 520, 980);
+
     const cfg = {
       x: spawnPt.x,
       y: spawnPt.y,
@@ -175,6 +182,7 @@ export default class BossManager {
       entryType: 'fade',
       entryDuration: 600,
       combatActive: false,
+      aggroRadius,
     };
 
     this.currentBoss = new BaseBoss(this.scene, cfg);
