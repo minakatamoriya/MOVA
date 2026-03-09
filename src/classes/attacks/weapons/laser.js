@@ -2,6 +2,17 @@ import Phaser from 'phaser';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../basicAttackMods';
 import { getBasicSkillColorScheme } from '../../visual/basicSkillColors';
 
+function getRangeCenter(player) {
+  // 与全局“职业射程圈”一致：以玩家核心判定点为中心
+  if (player && typeof player.getHitboxPosition === 'function') {
+    const hp = player.getHitboxPosition();
+    if (hp && Number.isFinite(hp.x) && Number.isFinite(hp.y)) {
+      return { x: hp.x, y: hp.y };
+    }
+  }
+  return { x: player.x, y: player.y };
+}
+
 function expApproach(current, target, deltaMs, timeConstantMs) {
   const tc = Math.max(1, timeConstantMs || 1);
   const t = 1 - Math.exp(-(deltaMs || 0) / tc);
@@ -42,9 +53,10 @@ function destroyHitbox(scene, hitbox) {
 }
 
 function ensureCircle(scene, state, player, scheme) {
-  const range = Math.max(60, player.arcaneRayRange || 220);
+  const range = Math.max(60, player.arcaneRayRange || player.arcaneRayBaseRange || 220);
+  const rc = getRangeCenter(player);
   if (!state.circle || !state.circle.active) {
-    const c = scene.add.circle(player.x, player.y, range, scheme.accentColor, 0);
+    const c = scene.add.circle(rc.x, rc.y, range, scheme.accentColor, 0);
     c.setStrokeStyle(2, scheme.accentColor, 0.55);
     c.setDepth(2);
     c.setVisible(false);
@@ -53,8 +65,8 @@ function ensureCircle(scene, state, player, scheme) {
   }
 
   if (state.circle.setRadius) state.circle.setRadius(range);
-  state.circle.x = player.x;
-  state.circle.y = player.y;
+  state.circle.x = rc.x;
+  state.circle.y = rc.y;
   state.circle.setStrokeStyle(2, scheme.accentColor, 0.55);
 }
 
@@ -174,15 +186,19 @@ function getEnemyRadius(enemy) {
     if (Number.isFinite(v) && v > r) r = v;
   }
 
-  // 显示尺寸兜底（适用于 sprite / image / container）
-  const dw = Number(enemy.displayWidth ?? enemy.width ?? 0);
-  const dh = Number(enemy.displayHeight ?? enemy.height ?? 0);
-  if (Number.isFinite(dw) && Number.isFinite(dh)) {
-    r = Math.max(r, 0.5 * Math.max(dw, dh));
-  } else if (Number.isFinite(dw)) {
-    r = Math.max(r, 0.5 * dw);
-  } else if (Number.isFinite(dh)) {
-    r = Math.max(r, 0.5 * dh);
+  // 兜底：仅在没有明确半径字段时，才尝试用显示尺寸/Bounds。
+  // 注意：小怪常为 Container，内部包含血条/文字等 UI，displayWidth/getBounds
+  // 会被这些子节点“撑大”，导致半径被错误放大，进而让激光命中点/生效范围看起来不对。
+  if (!(r > 0)) {
+    const dw = Number(enemy.displayWidth ?? enemy.width ?? 0);
+    const dh = Number(enemy.displayHeight ?? enemy.height ?? 0);
+    if (Number.isFinite(dw) && Number.isFinite(dh) && (dw > 0 || dh > 0)) {
+      r = Math.max(r, 0.5 * Math.max(dw, dh));
+    } else if (Number.isFinite(dw) && dw > 0) {
+      r = Math.max(r, 0.5 * dw);
+    } else if (Number.isFinite(dh) && dh > 0) {
+      r = Math.max(r, 0.5 * dh);
+    }
   }
 
   // 最后兜底：bounds（仅在其它信息都缺失时使用）
@@ -203,26 +219,8 @@ function getEnemyRadius(enemy) {
 function isEnemyTouchingRange(px, py, range, enemy) {
   if (!enemy || enemy.isAlive === false) return false;
 
-  const r = getEnemyRadius(enemy);
-  if (Number.isFinite(r) && r > 0) {
-    const d = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y);
-    return d <= (range + r);
-  }
-
-  if (typeof enemy.getBounds === 'function') {
-    try {
-      const b = enemy.getBounds();
-      const bw = Number(b?.width ?? 0);
-      const bh = Number(b?.height ?? 0);
-      if (Number.isFinite(bw) && Number.isFinite(bh) && (bw > 0 || bh > 0)) {
-        const c = new Phaser.Geom.Circle(px, py, Math.max(1, range));
-        const rect = new Phaser.Geom.Rectangle(b.x, b.y, bw, bh);
-        return Phaser.Geom.Intersects.CircleToRectangle(c, rect);
-      }
-    } catch (_) { /* ignore */ }
-  }
-
-  // 最后兜底：用中心点
+  // 统一规则：仅用“敌人中心点”做射程判定。
+  // 需求：当攻击范围触碰到怪物中心点就开始施放；不要求包裹敌方体积。
   const d = Phaser.Math.Distance.Between(px, py, enemy.x, enemy.y);
   return d <= range;
 }
@@ -447,14 +445,15 @@ export function updateArcaneRay(player, delta) {
 
   // 选目标：若 Boss 在圈内，优先 Boss；否则选最近的可达目标
   let target = null;
-  const range = Math.max(60, player.arcaneRayRange || 220);
+  const range = Math.max(60, player.arcaneRayRange || player.arcaneRayBaseRange || 220);
   let targetRadius = 0;
+  const rc = getRangeCenter(player);
 
   if (enemies.length > 0) {
     if (boss && boss.isAlive) {
       const br = getEnemyRadius(boss);
-      const bd = Phaser.Math.Distance.Between(player.x, player.y, boss.x, boss.y);
-      if (bd <= (range + br)) {
+      const bd = Phaser.Math.Distance.Between(rc.x, rc.y, boss.x, boss.y);
+      if (bd <= range) {
         target = boss;
         targetRadius = br;
       }
@@ -465,10 +464,10 @@ export function updateArcaneRay(player, delta) {
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       const r = getEnemyRadius(e);
-      const d = Phaser.Math.Distance.Between(player.x, player.y, e.x, e.y);
-      const inR = isEnemyTouchingRange(player.x, player.y, range, e);
+      const d = Phaser.Math.Distance.Between(rc.x, rc.y, e.x, e.y);
+      const inR = isEnemyTouchingRange(rc.x, rc.y, range, e);
       if (!inR) continue;
-      const score = Math.max(0, d - r);
+      const score = d;
       if (score < bestScore) {
         bestScore = score;
         target = e;
@@ -480,10 +479,10 @@ export function updateArcaneRay(player, delta) {
 
   ensureCircle(scene, state, player, scheme);
 
-  // 触碰范围：以“圆圈边界触碰到敌方外边缘”为进入/脱离标准
-  // - 进入：distance(center, center) <= range + enemyRadius
-  // - 脱离：distance(center, center) > range + enemyRadius
-  const inRange = !!(target && isEnemyTouchingRange(player.x, player.y, range, target));
+  // 触碰范围：以“圆圈触碰到敌方中心点”为进入/脱离标准
+  // - 进入：distance(center, center) <= range
+  // - 脱离：distance(center, center) > range
+  const inRange = !!(target && isEnemyTouchingRange(rc.x, rc.y, range, target));
 
   // 折射：命中 A 后，从 A 分裂两道短束到附近 B/C（小范围寻怪）
   const refractEnabled = !!(player.mageRefract && inRange && target && target.isAlive);

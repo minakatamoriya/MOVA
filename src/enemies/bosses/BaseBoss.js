@@ -24,6 +24,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 记录移动 tween，便于暂停/恢复
     this.moveTween = null;
 
+    // tracking 移动：逐帧兜底（当 scene.time 被暂停/TimerEvent 不推进时，仍能保持追踪）
+    this._trackingLastStepAt = 0;
+
     // 战斗开关：Boss 可常驻，但只有进入范围才开打
     // 默认 true 以兼容旧 Boss Rush
     this.combatActive = (config.combatActive !== undefined) ? !!config.combatActive : true;
@@ -74,6 +77,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 可选：限制 Boss 活动范围（世界坐标系矩形）
     // 例如：以出口门为中心的“Boss 房间”区域。
     this.moveBoundsRect = config.moveBoundsRect || null;
+
+    // 记录默认活动范围（用于脱战时恢复）
+    this._defaultMoveBoundsRect = null;
     
     // 攻击属性
     this.attackPatterns = config.attackPatterns || [];
@@ -209,6 +215,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     const h = Number(rect.height);
     const ok = Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
     this.moveBoundsRect = ok ? { x, y, width: w, height: h } : null;
+
+    // 非战斗状态下设置的边界，认为是“默认房间范围”，用于后续脱战恢复
+    if (ok && !this.combatActive) {
+      this._defaultMoveBoundsRect = { x, y, width: w, height: h };
+    }
   }
 
   /**
@@ -541,6 +552,22 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     if (this.combatActive === next) return;
     this.combatActive = next;
 
+    // 追踪型 Boss：一旦开战就允许跨出“Boss 房间”边界继续追玩家。
+    // 否则玩家跑出房间后目标点会被 clamp 到矩形边缘，Boss 走到边缘就会看起来“停住”。
+    if (this.combatActive && (this.movePattern === 'tracking' || this.movePattern === 'track')) {
+      // 先记住默认边界（后续脱战要恢复）
+      if (this.moveBoundsRect && !this._defaultMoveBoundsRect) {
+        const r = this.moveBoundsRect;
+        this._defaultMoveBoundsRect = { x: r.x, y: r.y, width: r.width, height: r.height };
+      }
+      if (this.moveBoundsRect) this.setMoveBoundsRect(null);
+    }
+
+    // 脱战：恢复默认房间边界（若存在）
+    if (!this.combatActive && (this.movePattern === 'tracking' || this.movePattern === 'track')) {
+      if (this._defaultMoveBoundsRect) this.setMoveBoundsRect(this._defaultMoveBoundsRect);
+    }
+
     // 预警触发：Boss 从“待机”进入“开战”时，头顶出现感叹号
     if (this.combatActive) {
       this.showAlertIcon(1200);
@@ -617,65 +644,89 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     }
 
     const scene = this.scene;
-    if (!scene?.time) return;
+    if (!scene) return;
 
-    // 使用 time event，便于 setCombatActive/applyStun 统一暂停
-    const tickMs = 16;
-    this.moveTimer = scene.time.addEvent({
-      delay: tickMs,
-      loop: true,
-      callback: () => {
-        if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
-        if (!this.combatActive) return;
+    // tracking 的实际移动在 update() / _stepTrackingMovement() 里逐帧驱动。
+    // 仍保留 moveTimer 字段为 null，避免旧逻辑对 moveTimer.paused 的依赖报错。
+    this.moveTimer = null;
+  }
 
-        const now = scene?.time?.now ?? 0;
-        // 近战挥砍等动作期间：短暂停止移动
-        if ((this._meleeLockUntil || 0) > now) return;
+  _stepTrackingMovement(deltaMs) {
+    const scene = this.scene;
+    if (!scene?.sys?.isActive() || this.isDestroyed || !this.isAlive) return;
+    if (!this.combatActive) return;
 
-        // 查看菜单打开/关闭中：冻结移动
-        if (scene.viewMenuOpen || scene.viewMenuClosing) return;
+    const now = scene?.time?.now ?? 0;
+    // 近战挥砍等动作期间：短暂停止移动
+    if ((this._meleeLockUntil || 0) > now) return;
 
-        if (this.isStunned()) return;
+    // 查看菜单打开/关闭中：冻结移动
+    if (scene.viewMenuOpen || scene.viewMenuClosing) return;
 
-        const target = this.getPrimaryTarget();
-        if (!target || !target.active || target.isAlive === false) return;
+    if (this.isStunned()) return;
 
-        const b = this.getMoveBounds({ x: 110, top: 90, bottom: 150 });
+    const target = this.getPrimaryTarget();
+    if (!target || !target.active || target.isAlive === false) return;
 
-        // 计算“停在玩家附近”的目标点：与玩家保持 stopDist
-        const stopDist = Math.max(40, Math.round(this.trackingStopDist || 150));
-        let tx = Phaser.Math.Clamp(target.x, b.left, b.right);
-        let ty = Phaser.Math.Clamp(target.y, b.top, b.bottom);
+    const b = this.getMoveBounds({ x: 110, top: 90, bottom: 150 });
 
-        let dxp = tx - this.x;
-        let dyp = ty - this.y;
-        let distToPlayer = Math.hypot(dxp, dyp);
-        if (!Number.isFinite(distToPlayer) || distToPlayer <= 0.0001) return;
+    // 计算“停在玩家附近”的目标点：与玩家保持 stopDist
+    const stopDist = Math.max(40, Math.round(this.trackingStopDist || 150));
+    const tx = Phaser.Math.Clamp(target.x, b.left, b.right);
+    const ty = Phaser.Math.Clamp(target.y, b.top, b.bottom);
 
-        // 若已经靠近：不继续贴脸
-        if (distToPlayer <= stopDist) return;
+    const dxp = tx - this.x;
+    const dyp = ty - this.y;
+    const distToPlayer = Math.hypot(dxp, dyp);
+    if (!Number.isFinite(distToPlayer) || distToPlayer <= 0.0001) return;
 
-        const nxp = dxp / distToPlayer;
-        const nyp = dyp / distToPlayer;
-        const desiredX = Phaser.Math.Clamp(tx - nxp * stopDist, b.left, b.right);
-        const desiredY = Phaser.Math.Clamp(ty - nyp * stopDist, b.top, b.bottom);
+    // 若已经靠近：不继续贴脸
+    if (distToPlayer <= stopDist) return;
 
-        const dx = desiredX - this.x;
-        const dy = desiredY - this.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist < 0.5) return;
+    const nxp = dxp / distToPlayer;
+    const nyp = dyp / distToPlayer;
+    const desiredX = Phaser.Math.Clamp(tx - nxp * stopDist, b.left, b.right);
+    const desiredY = Phaser.Math.Clamp(ty - nyp * stopDist, b.top, b.bottom);
 
-        const dt = tickMs / 1000;
-        // 轻微追踪：只走 moveSpeed 的一部分，避免过快
-        const maxStep = this.moveSpeed * 0.55 * dt;
-        const step = Math.min(maxStep, dist);
+    const dx = desiredX - this.x;
+    const dy = desiredY - this.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.5) return;
 
-        const nx = dx / dist;
-        const ny = dy / dist;
-        this.x = Phaser.Math.Clamp(this.x + nx * step, b.left, b.right);
-        this.y = Phaser.Math.Clamp(this.y + ny * step, b.top, b.bottom);
+    const dms = Math.max(0, Math.min(50, Math.round(Number(deltaMs) || 0)));
+    const dt = dms / 1000;
+    if (dt <= 0) return;
+
+    // 轻微追踪：只走 moveSpeed 的一部分，避免过快（但要能看出来在动）
+    const maxStep = this.moveSpeed * 0.75 * dt;
+    const step = Math.min(maxStep, dist);
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    this.x = Phaser.Math.Clamp(this.x + nx * step, b.left, b.right);
+    this.y = Phaser.Math.Clamp(this.y + ny * step, b.top, b.bottom);
+  }
+
+  update(_time, delta) {
+    if (this.isDestroyed || !this.isAlive) return;
+
+    // 脱战规则：玩家离开预警圈（红圈）后 Boss 立刻停下（停止移动与攻击）
+    if (this.combatActive && Number.isFinite(this.aggroRadius) && this.aggroRadius > 0) {
+      const target = this.getPrimaryTarget();
+      if (target && target.active && target.isAlive !== false) {
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+        const r = this.aggroRadius;
+        if ((dx * dx + dy * dy) > (r * r)) {
+          this.setCombatActive(false);
+        }
       }
-    });
+    }
+
+    // tracking：逐帧驱动，避免因 scene.time.paused / TimerEvent 异常导致“进入视野后不动”
+    if (this.movePattern === 'tracking' || this.movePattern === 'track') {
+      this._stepTrackingMovement(delta);
+    }
   }
 
   _playWindupFlash(options = {}) {

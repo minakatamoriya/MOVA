@@ -18,6 +18,12 @@ export function fireScatter(player) {
   const spawnX = player.x;
   const spawnY = player.y - (player.visualRadius || 0);
 
+  // 射程判定以“玩家核心判定点”为中心，避免子弹生成点偏移导致
+  // 小体积敌人（试炼之地）看起来“进圈了却不射”。
+  const hp = (typeof player.getHitboxPosition === 'function') ? player.getHitboxPosition() : null;
+  const rangeX = (hp && Number.isFinite(hp.x)) ? hp.x : player.x;
+  const rangeY = (hp && Number.isFinite(hp.y)) ? hp.y : player.y;
+
   let target = enemies.length > 0 ? enemies[0] : null;
   if (enemies.length > 1) {
     let bestD = (target.x - spawnX) ** 2 + (target.y - spawnY) ** 2;
@@ -38,17 +44,9 @@ export function fireScatter(player) {
   );
   const hasTargetInRange = (() => {
     if (!target || !target.isAlive) return false;
-    const enemyR = Math.max(0,
-      target.bossSize || 0,
-      target.hitRadius || 0,
-      target.radius || 0,
-      (target.width ? Math.round(target.width * 0.5) : 0),
-      (target.displayWidth ? Math.round(target.displayWidth * 0.5) : 0)
-    );
-    const dx = target.x - spawnX;
-    const dy = target.y - spawnY;
-    const r = acquireRange + enemyR;
-    return (dx * dx + dy * dy) <= (r * r);
+    const dx = target.x - rangeX;
+    const dy = target.y - rangeY;
+    return (dx * dx + dy * dy) <= (acquireRange * acquireRange);
   })();
 
   // 未遇敌：不射箭

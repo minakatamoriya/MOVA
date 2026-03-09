@@ -72,7 +72,7 @@ export default class BossManager {
           const dist = Math.hypot(dx, dy);
 
           // 玩家有“Boss 禁入圈”，距离过近会被推开；因此近战判定要覆盖这个最小距离
-          const padding = boss?.scene?.bossNoGoPadding ?? 60;
+          const padding = boss?.scene?.bossNoGoPadding ?? 0;
           const hitbox = (typeof target.getHitboxPosition === 'function')
             ? target.getHitboxPosition()
             : { radius: Math.max(10, target.visualRadius || 16) };
@@ -143,7 +143,7 @@ export default class BossManager {
           const dist = Math.hypot(dx, dy);
 
           // 与地图 Boss 一致：覆盖“Boss 禁入圈”推开距离
-          const padding = boss?.scene?.bossNoGoPadding ?? 60;
+          const padding = boss?.scene?.bossNoGoPadding ?? 0;
           const hitbox = (typeof target.getHitboxPosition === 'function')
             ? target.getHitboxPosition()
             : { radius: Math.max(10, target.visualRadius || 16) };
@@ -330,6 +330,11 @@ export default class BossManager {
       const bossHpText = this.scene?.infoTexts?.bossHp;
       if (bossHpText && bossHpText.setText) {
         bossHpText.setText(`Boss HP: ${this.currentBoss.currentHp}/${this.currentBoss.maxHp}`);
+      }
+
+      // Boss 行为更新（tracking 追踪等）
+      if (typeof this.currentBoss.update === 'function') {
+        this.currentBoss.update(time, delta);
       }
     }
 

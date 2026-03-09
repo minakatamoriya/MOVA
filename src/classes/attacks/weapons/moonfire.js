@@ -8,6 +8,12 @@ export function fireMoonfire(player, pointer) {
   const spawnX = player.x;
   const spawnY = player.y - player.visualRadius - 6;
 
+  // 索敌/射程以“玩家核心判定点”为中心，避免因子弹生成点偏移导致
+  // 小体积敌人（例如试炼之地小怪）看起来“进圈了却不施放”。
+  const hp = (typeof player.getHitboxPosition === 'function') ? player.getHitboxPosition() : null;
+  const rangeX = (hp && Number.isFinite(hp.x)) ? hp.x : player.x;
+  const rangeY = (hp && Number.isFinite(hp.y)) ? hp.y : player.y;
+
   const boss = player.scene?.bossManager?.getCurrentBoss?.();
   const minions = player.scene?.bossManager?.getMinions?.() || player.scene?.bossManager?.minions || [];
 
@@ -23,17 +29,17 @@ export function fireMoonfire(player, pointer) {
   const acquireRange = Math.max(120, Math.round(player.moonfireRange || player.moonfireRangeBase || 620));
   const acquireR2 = acquireRange * acquireRange;
   const inRange = enemies.filter((e) => {
-    const dx = (e.x || 0) - spawnX;
-    const dy = (e.y || 0) - spawnY;
+    const dx = (e.x || 0) - rangeX;
+    const dy = (e.y || 0) - rangeY;
     return (dx * dx + dy * dy) <= acquireR2;
   });
 
   let target = inRange.length > 0 ? inRange[0] : null;
   if (inRange.length > 1) {
-    let bestD = (target.x - spawnX) ** 2 + (target.y - spawnY) ** 2;
+    let bestD = (target.x - rangeX) ** 2 + (target.y - rangeY) ** 2;
     for (let i = 1; i < inRange.length; i++) {
       const e = inRange[i];
-      const d = (e.x - spawnX) ** 2 + (e.y - spawnY) ** 2;
+      const d = (e.x - rangeX) ** 2 + (e.y - rangeY) ** 2;
       if (d < bestD) {
         target = e;
         bestD = d;

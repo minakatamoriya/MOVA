@@ -18,7 +18,7 @@ export const TREE_DEFS = [
       { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+1/+2/+3）。' },
       { id: 'archer_rate', name: '射速', maxLevel: 3, desc: '基础射击攻速提升（+1/+2/+3）。' },
       { id: 'archer_damage', name: '攻击力', maxLevel: 3, desc: '基础射击伤害提升（+1/+2/+3）。' },
-      { id: 'archer_scatter', name: '散射', maxLevel: 3, desc: '基础射击散射升级：1列→3列→5列（扇形角度不宜过宽）。' }
+      { id: 'archer_scatter', name: '散射', maxLevel: 3, desc: '基础射击散射升级：1列→3列→5列。' }
     ],
     ultimate: { id: 'scatter_ultimate', name: '终极：弹幕风暴', maxLevel: 1, desc: '散射进化为高密度弹幕。' }
   },

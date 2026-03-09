@@ -494,9 +494,9 @@ export function applyBuildClassMixin(GameScene) {
     getNearestEnemy(maxDist = Infinity) {
       if (!this.player) return null;
 
-      const px = this.player.x;
-      const py = this.player.y;
-      const maxD2 = Number.isFinite(maxDist) ? (maxDist * maxDist) : Infinity;
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
       const enemies = [];
       const boss = this.bossManager?.getCurrentBoss?.();
@@ -514,6 +514,13 @@ export function applyBuildClassMixin(GameScene) {
       let bestD2 = Infinity;
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i];
+        const er = Number.isFinite(e?.bossSize)
+          ? e.bossSize
+          : (Number.isFinite(e?.radius) ? e.radius : 0);
+        const effectiveMax = Number.isFinite(maxDist)
+          ? Math.max(0, maxDist + Math.max(0, er))
+          : Infinity;
+        const maxD2 = Number.isFinite(effectiveMax) ? (effectiveMax * effectiveMax) : Infinity;
         const dx = e.x - px;
         const dy = e.y - py;
         const d2 = dx * dx + dy * dy;
@@ -834,7 +841,7 @@ export function applyBuildClassMixin(GameScene) {
       this.meleeEnabled = true;
       this.thornsPercent = Math.max(this.thornsPercent, 0.12);
       // 初始索敌/攻击范围更小（从近到远排序最短）
-      this.meleeRange = 180;
+      this.meleeRange = 220;
       this.meleeLifesteal = 0;
       this.player.canFire = false;
       this.player.maxHp += 30;
@@ -847,6 +854,8 @@ export function applyBuildClassMixin(GameScene) {
       this.slashSwingDir = 1;
       this.slashSwingStartTime = 0;
       this.slashSwingDuration = 650;
+      // 每一挥开始时只生成一次命中判定（用于修复“第一挥只出动画不出判定”）
+      this.slashLastHitSwingStartTime = null;
       // 保证一次挥砍完整性：挥砍进行中不因击杀/重选目标而重置或瞬间改向
       this.slashLockedFacingAngle = null;
       this.slashLockUntil = 0;
@@ -874,7 +883,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradeWarriorRange() {
-      this.meleeRange = Math.min(320, (this.meleeRange || 220) + 25);
+      this.meleeRange = Math.min(360, (this.meleeRange || 220) + 25);
     },
 
     upgradeWarriorLifesteal() {
@@ -885,6 +894,10 @@ export function applyBuildClassMixin(GameScene) {
       if (!this.meleeEnabled || !this.player || this.player.isAlive === false) return;
 
       const range = this.meleeRange || 150;
+
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
       const baseSwingDuration = this.slashSwingDuration || 1000;
       const swingDuration = baseSwingDuration;
@@ -899,9 +912,15 @@ export function applyBuildClassMixin(GameScene) {
         if (!this.isRangeIndicatorEnabled()) {
           this._warriorTargetRing.setVisible(false);
         } else {
-          const r = Phaser.Math.Clamp(range, 90, 420);
+          // 战士“索敌/攻击范围框”：对齐半月斩（非旋风）实际命中半径
+          // - 半月斩命中半径在 spawnWarriorMeleeHit() 内为 (meleeRange * 0.60) 并 clamp 到 46..140
+          // - 旋风斩（360°）则以 meleeRange 为准
+          const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
+          const r = this.player.warriorSpin
+            ? Phaser.Math.Clamp(range, 90, 420)
+            : Phaser.Math.Clamp(halfMoonR, 46, 220);
           this._warriorTargetRing.setRadius(r);
-          this._warriorTargetRing.setPosition(this.player.x, this.player.y);
+          this._warriorTargetRing.setPosition(px, py);
           this._warriorTargetRing.setVisible(true);
         }
       }
@@ -919,8 +938,8 @@ export function applyBuildClassMixin(GameScene) {
           const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
           const visualRange = range * 0.48;
           this.displaySlashFan(
-            this.player.x,
-            this.player.y,
+            px,
+            py,
             visualRange,
             facingAngle,
             this.slashSwingDir,
@@ -936,8 +955,13 @@ export function applyBuildClassMixin(GameScene) {
         return;
       }
 
-      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
-      const inAttackRange = dist <= range;
+      const dist = Phaser.Math.Distance.Between(px, py, target.x, target.y);
+      const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
+      const attackStartRange = this.player.warriorSpin ? range : halfMoonR;
+      const targetR = Number.isFinite(target?.bossSize)
+        ? target.bossSize
+        : (Number.isFinite(target?.radius) ? target.radius : 0);
+      const inAttackRange = dist <= (attackStartRange + Math.max(0, targetR));
 
       if (!inAttackRange) {
         if (swingInProgress && Number.isFinite(this.slashLockedFacingAngle)) {
@@ -951,8 +975,8 @@ export function applyBuildClassMixin(GameScene) {
           const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
           const visualRange = range * 0.48;
           this.displaySlashFan(
-            this.player.x,
-            this.player.y,
+            px,
+            py,
             visualRange,
             facingAngle,
             this.slashSwingDir,
@@ -969,7 +993,7 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       // 正常开打：锁定本次挥砍的朝向，避免中途因重选目标而瞬间改向/重置
-      const computedFacingAngle = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+      const computedFacingAngle = Math.atan2(target.y - py, target.x - px);
       if (!Number.isFinite(this.slashSwingStartTime) || this.slashSwingStartTime <= 0) {
         this.slashSwingStartTime = time;
       }
@@ -982,6 +1006,19 @@ export function applyBuildClassMixin(GameScene) {
       this.slashFacingAngle = facingAngle;
 
       this.slashArcSpan = this.player.warriorSpin ? Math.PI * 2 : Math.PI;
+
+      // 进入攻击范围后的“当前这一挥”：立刻生成一次命中判定
+      // 注意：后续挥砍的判定仍由 while 循环在“新一挥开始”时生成。
+      if (this.slashLastHitSwingStartTime !== this.slashSwingStartTime) {
+        this.slashLastHitSwingStartTime = this.slashSwingStartTime;
+        if (this.player.warriorSpin) {
+          this.spawnWarriorMeleeHit(facingAngle);
+        } else if (this.player.warriorSwordQi) {
+          this.spawnWarriorCrescentProjectile(facingAngle, this.slashSwingDir);
+        } else {
+          this.spawnWarriorMeleeHit(facingAngle);
+        }
+      }
 
       while (time - this.slashSwingStartTime >= swingDuration) {
         this.slashSwingStartTime += swingDuration;
@@ -1003,6 +1040,9 @@ export function applyBuildClassMixin(GameScene) {
         } else {
           this.spawnWarriorMeleeHit(facingAngle);
         }
+
+        // while 循环生成的判定对应“新一挥开始”，同步标记避免下一帧重复生成
+        this.slashLastHitSwingStartTime = this.slashSwingStartTime;
       }
       const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
       const bezier01 = (t, p1, p2) => {
@@ -1013,8 +1053,8 @@ export function applyBuildClassMixin(GameScene) {
 
       const visualRange = range * 0.48;
       this.displaySlashFan(
-        this.player.x,
-        this.player.y,
+        px,
+        py,
         visualRange,
         facingAngle,
         this.slashSwingDir,
@@ -1047,8 +1087,13 @@ export function applyBuildClassMixin(GameScene) {
       const end = arcSpan / 2;
       const yScale = Phaser.Math.Clamp(this.slashEllipseYScale ?? 0.78, 0.55, 0.95);
 
-      const hitRange = (this.meleeRange || 220) * 0.60;
-      const radius = Phaser.Math.Clamp(Math.floor(hitRange), 46, 140);
+      // 旋风斩（360°）：期望“敌人中心点进 meleeRange 就能开始稳定吃到伤害”
+      // 因此把命中采样半径对齐到 meleeRange（避免出现“进圈开始转但打不到”的体感）
+      const rawRange = (this.meleeRange || 220);
+      const hitRange = this.player.warriorSpin ? rawRange : (rawRange * 0.60);
+      const spinMax = Phaser.Math.Clamp(rawRange, 90, 420);
+      const halfMoonMax = 260;
+      const radius = Phaser.Math.Clamp(Math.floor(hitRange), 46, this.player.warriorSpin ? spinMax : halfMoonMax);
 
       const ellipsePoint = (phi, r) => ({
         x: Math.cos(phi) * r,
@@ -1069,14 +1114,15 @@ export function applyBuildClassMixin(GameScene) {
 
       g.radius = 14;
       g.hitShape = 'arcSamples';
-      g.arcSampleRadius = 14;
+      // 半月斩需要更“连续”的命中覆盖：提高采样圆半径，避免只在非常近/踩点才命中
+      g.arcSampleRadius = this.player.warriorSpin ? 14 : 18;
       g.arcSamples = [];
 
       const ringRadii = this.player.warriorSpin
         ? [radius * 0.35, radius * 0.70, radius]
-        : [radius * 0.55, radius];
+        : [radius * 0.45, radius * 0.72, radius];
 
-      const sampleCount = this.player.warriorSpin ? 20 : 12;
+      const sampleCount = this.player.warriorSpin ? 20 : 18;
       for (let r = 0; r < ringRadii.length; r++) {
         const rr = ringRadii[r];
         for (let s = 0; s < sampleCount; s++) {
@@ -1599,15 +1645,17 @@ export function applyBuildClassMixin(GameScene) {
 
       // 常显：不依赖是否找到目标
       // 初始更短：保证“战士 < 圣骑 < 法师 < 德鲁伊 < 猎人”
-      const baseReach = 110;
-      const reach = this.player.paladinPierce ? Math.round(baseReach * 1.12) : baseReach;
-      const baseRadius = 130;
-      const radius = this.player.paladinPierce ? Math.round(baseRadius * 1.12) : baseRadius;
-      const attackRange = reach + radius + 10;
+      // 圣骑锤击：索敌范围内才出手，范围圈显示“索敌半径”
+      // 具体落点/伤害在 firePaladinHammer() 内处理
+      const baseAcquireRange = 260;
+      const acquireRange = this.player.paladinPierce ? Math.round(baseAcquireRange * 1.06) : baseAcquireRange;
 
-      const r = Phaser.Math.Clamp(attackRange, 120, 520);
+      const r = Phaser.Math.Clamp(acquireRange, 120, 520);
       this._paladinTargetRing.setRadius(r);
-      this._paladinTargetRing.setPosition(this.player.x, this.player.y);
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      this._paladinTargetRing.setPosition(px, py);
       this._paladinTargetRing.setVisible(true);
     },
 
@@ -1638,7 +1686,10 @@ export function applyBuildClassMixin(GameScene) {
       );
 
       this._archerRangeRing.setRadius(r);
-      this._archerRangeRing.setPosition(this.player.x, this.player.y);
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      this._archerRangeRing.setPosition(px, py);
       this._archerRangeRing.setVisible(true);
     },
 
@@ -1664,13 +1715,22 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_mageRangeRing', 'mage');
 
-      // 法师主普攻：奥术射线；同时兼容“法师飞弹”武器
+      // 法师范围圈严格对齐“当前武器”的实际索敌/生效范围
+      // - laser: updateArcaneRay() 使用 arcaneRayRange || arcaneRayBaseRange || 220
+      // - mage_missile: fireMageMissile() 使用 mageMissileRange || 480，并且最小 120
       const ray = Math.max(60, Math.round(this.player.arcaneRayRange || this.player.arcaneRayBaseRange || 220));
-      const missile = Math.max(60, Math.round(this.player.mageMissileRange || 280));
-      const r = Phaser.Math.Clamp(Math.max(ray, missile), 160, 860);
+      const missile = Math.max(120, Math.round(this.player.mageMissileRange || 480));
+
+      let r = ray;
+      if (this.player.weaponType === 'mage_missile') r = missile;
+      else if (this.player.weaponType === 'laser') r = ray;
+      else r = Math.max(ray, missile);
 
       this._mageRangeRing.setRadius(r);
-      this._mageRangeRing.setPosition(this.player.x, this.player.y);
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      this._mageRangeRing.setPosition(px, py);
       this._mageRangeRing.setVisible(true);
     },
 
@@ -1703,7 +1763,10 @@ export function applyBuildClassMixin(GameScene) {
       const r = Phaser.Math.Clamp(range, 200, 980);
 
       this._druidRangeRing.setRadius(r);
-      this._druidRangeRing.setPosition(this.player.x, this.player.y);
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      this._druidRangeRing.setPosition(px, py);
       this._druidRangeRing.setVisible(true);
     },
 
@@ -1736,7 +1799,10 @@ export function applyBuildClassMixin(GameScene) {
       const r = Phaser.Math.Clamp(radius, 60, 360);
 
       this._warlockRangeRing.setRadius(r);
-      this._warlockRangeRing.setPosition(this.player.x, this.player.y);
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      this._warlockRangeRing.setPosition(px, py);
       this._warlockRangeRing.setVisible(true);
     },
 
@@ -1745,6 +1811,9 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradePaladinPulse() {
+      // 第一次点出时启用基础值；后续升级在此基础上叠加
+      if (!Number.isFinite(this.paladinPulseRadius) || this.paladinPulseRadius <= 0) this.paladinPulseRadius = 130;
+      if (!Number.isFinite(this.paladinPulseDamage) || this.paladinPulseDamage <= 0) this.paladinPulseDamage = 70;
       this.paladinPulseDamage += 24;
       this.paladinPulseRadius += 16;
     },
@@ -1758,9 +1827,13 @@ export function applyBuildClassMixin(GameScene) {
       if (!this.paladinEnabled || !this.player || this.player.isAlive === false) return;
       if (time - this.paladinLastTime < this.paladinCooldown) return;
 
+      const radius = this.paladinPulseRadius;
+      const damage = this.paladinPulseDamage;
+      if (!Number.isFinite(radius) || radius <= 0) return;
+      if (!Number.isFinite(damage) || damage <= 0) return;
+
       const boss = this.bossManager.getCurrentBoss();
       const bullets = this.getBossBullets();
-      const radius = this.paladinPulseRadius;
       const radiusSq = radius * radius;
 
       bullets.forEach(bullet => {
@@ -1775,8 +1848,8 @@ export function applyBuildClassMixin(GameScene) {
         const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boss.x, boss.y);
         if (dist <= radius + 40) {
           if (!boss.isInvincible) {
-            boss.takeDamage(this.paladinPulseDamage);
-            this.showDamageNumber(boss.x, boss.y - 50, this.paladinPulseDamage);
+            boss.takeDamage(damage);
+            this.showDamageNumber(boss.x, boss.y - 50, damage);
           }
         }
       }

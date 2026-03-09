@@ -696,7 +696,8 @@ class GameScene extends Phaser.Scene {
     this.levelUpChoiceCount = 3;
 
     // 玩家无法靠近 Boss 的额外缓冲（像"Boss 专属区域"）
-    this.bossNoGoPadding = 60;
+    // Boss 禁入圈：与 Boss 体积圈一致（不再额外扩大），避免“Boss 触边就停/不攻击”的体感问题
+    this.bossNoGoPadding = 0;
 
     // Build 系统
     this.droneEnabled = false;
@@ -720,8 +721,9 @@ class GameScene extends Phaser.Scene {
     this.paladinEnabled = false;
     this.paladinCooldown = 5000;
     this.paladinLastTime = 0;
-    this.paladinPulseRadius = 130;
-    this.paladinPulseDamage = 70;
+    // Paladin Pulse（定时脉冲圈）：只有点出升级后才启用
+    this.paladinPulseRadius = 0;
+    this.paladinPulseDamage = 0;
 
     this.warlockEnabled = false;
     // 旧"中毒/虚弱 debuff"是否在命中时自动施加

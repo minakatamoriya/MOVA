@@ -915,7 +915,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // Boss 禁入区：玩家无法进入 Boss 判定圈，并保持额外缓冲距离
     const boss = this.scene?.bossManager?.getCurrentBoss?.();
     if (boss && boss.isAlive && boss.active) {
-      const padding = this.scene?.bossNoGoPadding ?? 60;
+      const padding = this.scene?.bossNoGoPadding ?? 0;
       const bossR = (boss.bossSize || 0) + padding;
       const playerR = (this.visualRadius || 0) + 6;
       const minDist = bossR + playerR;
@@ -1201,7 +1201,7 @@ export default class Player extends Phaser.GameObjects.Container {
   upgradeArcherScatter() {
     this.archerArrowScatterLevel = Math.min(3, (this.archerArrowScatterLevel || 0) + 1);
 
-    // L1: 3 列；L2: 5 列；L3: 5 列但扇形略加宽（仍不宜过宽）
+    // L1: 3 列；L2: 5 列；L3: 5 列但扇形略加宽
     if (this.archerArrowScatterLevel === 1) {
       this.scatterBulletCount = 3;
       this.scatterSpread = Phaser.Math.DegToRad(7);

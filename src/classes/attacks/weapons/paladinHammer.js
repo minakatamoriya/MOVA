@@ -11,8 +11,9 @@ export function firePaladinHammer(player) {
 
   const scheme = getBasicSkillColorScheme(player.mainCoreKey, player.offCoreKey);
 
-  const px = player.x;
-  const py = player.y;
+  const hp = player.getHitboxPosition?.();
+  const px = (hp && Number.isFinite(hp.x)) ? hp.x : player.x;
+  const py = (hp && Number.isFinite(hp.y)) ? hp.y : player.y;
 
   const enemies = [];
   if (boss && boss.isAlive) enemies.push(boss);
@@ -38,27 +39,18 @@ export function firePaladinHammer(player) {
   }
 
   // 只有在一定索敌范围内才出手
-  const acquireRange = 520;
+  const baseAcquireRange = 260;
+  const acquireRange = player.paladinPierce ? Math.round(baseAcquireRange * 1.06) : baseAcquireRange;
   const distToTarget = Phaser.Math.Distance.Between(px, py, target.x, target.y);
   if (distToTarget > acquireRange) return false;
-
-  const baseAngle = Phaser.Math.Angle.Between(px, py, target.x, target.y);
-
-  const baseReach = 140;
-  const reach = player.paladinPierce ? Math.round(baseReach * 1.12) : baseReach;
 
   // 当前版本先简化：一个“金色大圆圈” + 伤害
   const baseRadius = 160;
   const radius = player.paladinPierce ? Math.round(baseRadius * 1.12) : baseRadius;
 
-  // 进入有效范围后才攻击（避免远距离“隔空砸地”）
-  const attackRange = reach + radius + 10;
-  if (distToTarget > attackRange) return false;
-
-  const travel = Phaser.Math.Clamp(distToTarget, 44, reach);
-
-  const impactX = px + Math.cos(baseAngle) * travel;
-  const impactY = py + Math.sin(baseAngle) * travel;
+  // 敌人进入索敌范围才出手：落点以目标位置为准（类似星落的“点名落地 AoE”）
+  const impactX = target.x;
+  const impactY = target.y;
 
   const now = scene.time?.now ?? 0;
 
@@ -68,13 +60,49 @@ export function firePaladinHammer(player) {
     if (!scene?.bulletManager?.createPlayerBullet) return;
 
     // 地面金色大圆圈（渐隐）
-    const ring = scene.add.circle(x, y, radius, scheme.coreColor, 0.06);
-    ring.setStrokeStyle(3, scheme.coreBright || scheme.coreColor, 0.72);
+    const ring = scene.add.circle(x, y, radius, scheme.coreColor, 0.10);
+    ring.setStrokeStyle(4, scheme.coreBright || scheme.coreColor, 0.86);
     ring.setDepth(7);
+
+    // 冲击波 + 闪光（增强砸地表现）
+    const shock = scene.add.circle(x, y, Math.max(12, Math.round(radius * 0.22)), 0xffffff, 0.35);
+    shock.setDepth(8);
+    const shockOuter = scene.add.circle(x, y, Math.max(10, Math.round(radius * 0.70)), scheme.coreBright || scheme.coreColor, 0.06);
+    shockOuter.setStrokeStyle(2, 0xffffff, 0.22);
+    shockOuter.setDepth(6);
+
+    // 碎光粒子（少量、短命）
+    const sparks = [];
+    const sparkCount = 10;
+    for (let i = 0; i < sparkCount; i++) {
+      const a = (Math.PI * 2 * i) / sparkCount + Phaser.Math.FloatBetween(-0.18, 0.18);
+      const r0 = Phaser.Math.Between(6, 16);
+      const p = scene.add.circle(
+        x + Math.cos(a) * r0,
+        y + Math.sin(a) * r0,
+        Phaser.Math.Between(2, 3),
+        Phaser.Math.RND.pick([scheme.coreBright || scheme.coreColor, scheme.accentColor || scheme.coreColor, 0xffffff]),
+        0.9
+      );
+      p.setDepth(9);
+      sparks.push(p);
+      scene.tweens.add({
+        targets: p,
+        alpha: 0,
+        scale: 0.2,
+        x: p.x + Math.cos(a) * Phaser.Math.Between(14, 28),
+        y: p.y + Math.sin(a) * Phaser.Math.Between(14, 28),
+        duration: Phaser.Math.Between(180, 260),
+        ease: 'Sine.Out',
+        onComplete: () => {
+          if (p && p.active) p.destroy();
+        }
+      });
+    }
 
     // 轻微“力度感”
     if (scene?.cameras?.main?.shake) {
-      scene.cameras.main.shake(70, 0.002);
+      scene.cameras.main.shake(100, 0.004);
     }
 
     scene.tweens.add({
@@ -84,6 +112,24 @@ export function firePaladinHammer(player) {
       duration: 320,
       ease: 'Sine.Out',
       onComplete: () => ring.destroy()
+    });
+
+    scene.tweens.add({
+      targets: shock,
+      alpha: 0,
+      scale: 2.4,
+      duration: 170,
+      ease: 'Sine.Out',
+      onComplete: () => shock.destroy()
+    });
+
+    scene.tweens.add({
+      targets: shockOuter,
+      alpha: 0,
+      scale: 1.12,
+      duration: 260,
+      ease: 'Cubic.Out',
+      onComplete: () => shockOuter.destroy()
     });
 
     // 碰撞用 AoE 子弹（短命、静止、多目标）

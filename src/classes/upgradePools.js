@@ -15,7 +15,7 @@ export const UPGRADE_POOLS = {
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+1/+2/+3）', icon: '距', maxLevel: 3 },
     { id: 'archer_rate', category: 'build', name: '射速', desc: '基础射击攻速提升（+1/+2/+3）', icon: '速', maxLevel: 3 },
     { id: 'archer_damage', category: 'build', name: '攻击力', desc: '基础射击伤害提升（+1/+2/+3）', icon: '力', maxLevel: 3 },
-    { id: 'archer_scatter', category: 'build', name: '散射', desc: '基础射击散射升级：1列→3列→5列（扇形不宜过宽）', icon: '散', maxLevel: 3 }
+    { id: 'archer_scatter', category: 'build', name: '散射', desc: '基础射击散射升级：1列→3列→5列', icon: '散', maxLevel: 3 }
   ],
 
   // 🌿 德鲁伊·星落（主职业输出）
