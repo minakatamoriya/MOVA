@@ -1,11 +1,22 @@
 import Phaser from 'phaser';
 import { STAGE_FLOW, LINE_META, NEUTRAL, getLayerChoices, getMapById } from '../../data/mapPool';
 import { getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
-import { BALANCE_CONSTANTS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
+import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
 import TestMinion from '../../enemies/minions/TestMinion';
+
+function distributeExpRewards(totalExp, count) {
+  const nCount = Math.max(0, Math.floor(count || 0));
+  if (nCount <= 0) return [];
+
+  const nTotal = Math.max(0, Math.floor(totalExp || 0));
+  const baseReward = Math.floor(nTotal / nCount);
+  const remainder = nTotal % nCount;
+
+  return Array.from({ length: nCount }, (_, index) => baseReward + (index < remainder ? 1 : 0));
+}
 
 /**
  * 关卡推进/武器选择/Boss门/路径/怪物生成 相关方法
@@ -681,6 +692,7 @@ export function applyLevelProgressionMixin(GameScene) {
 
       const count = 5;
       const spawned = [];
+  const introWaveExpRewards = distributeExpRewards(TUTORIAL_EXP_REWARDS.introWaveTotal, count);
 
       const stage = this.currentStage || 1;
       const balance = getStageBalance(stage);
@@ -695,11 +707,11 @@ export function applyLevelProgressionMixin(GameScene) {
           y: topY + oy,
           type: 'chaser',
           name: `第一波小怪${i + 1}`,
-          hp: Math.max(10, Math.round(balance.minions.hp * 0.35)),
+          hp: Math.max(8, Math.round(balance.minions.hp * 0.25)),
           size: 16,
           moveSpeed: balance.minions.speed.chaser,
           contactDamage: balance.minions.contactDamage,
-          expReward: 20,
+          expReward: introWaveExpRewards[i] ?? 0,
           isElite: false,
           aggroOnSeen: true,
           hitReactionCdMs: Infinity
@@ -734,6 +746,7 @@ export function applyLevelProgressionMixin(GameScene) {
       const balance = getStageBalance(stage);
 
       const minionCount = Phaser.Math.Between(balance.minions.countMin, balance.minions.countMax);
+      const minionExpRewards = distributeExpRewards(balance.minions.totalExp, minionCount);
       const spawned = [];
 
       for (let i = 0; i < minionCount; i++) {
@@ -754,7 +767,7 @@ export function applyLevelProgressionMixin(GameScene) {
           color: def.color,
           moveSpeed: balance.minions.speed[def.moveType] ?? balance.minions.speed.chaser,
           contactDamage: balance.minions.contactDamage,
-          expReward: balance.minions.exp,
+          expReward: minionExpRewards[i] ?? 0,
           isElite: false,
           aggroOnSeen: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
@@ -770,6 +783,7 @@ export function applyLevelProgressionMixin(GameScene) {
       }
 
       const eliteCount = Phaser.Math.Between(balance.elites.countMin, balance.elites.countMax);
+      const eliteExpRewards = distributeExpRewards(balance.elites.totalExp, eliteCount);
       for (let i = 0; i < eliteCount; i++) {
         const def = elites[i % elites.length];
         const size = getRoleSize('elite');
@@ -788,7 +802,7 @@ export function applyLevelProgressionMixin(GameScene) {
           color: def.color,
           moveSpeed: balance.elites.speed[def.moveType] ?? balance.elites.speed.chaser,
           contactDamage: balance.elites.contactDamage,
-          expReward: balance.elites.exp,
+          expReward: eliteExpRewards[i] ?? 0,
           isElite: true,
           aggroOnSeen: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,

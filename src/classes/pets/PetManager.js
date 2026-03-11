@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { calculateResolvedDamage } from '../../combat/damageModel';
 
 const PET_TYPES = /** @type {const} */ ({
   bear: 'bear',
@@ -354,8 +355,10 @@ export default class PetManager {
         this.lastBearAttackAt = time;
         if (!target.isInvincible) {
           const base = Math.max(1, Math.round((this.player.bulletDamage || 30) * (pet.damageMult || 1)));
-          const damageResult = this.player?.calculateDamage ? this.player.calculateDamage(base) : { amount: base, isCrit: false };
+          // 熊灵近战现在也吃统一增伤/暴击/目标承伤，避免和主武器脱节
+          const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: base, now: time });
           target.takeDamage(damageResult.amount);
+          this.player?.onDealDamage?.(damageResult.amount);
           this.scene.showDamageNumber(target.x, target.y - 42, damageResult.amount, { isCrit: damageResult.isCrit, color: '#ffdd88', fontSize: 26 });
 
           // 轻微撞击特效
@@ -391,9 +394,11 @@ export default class PetManager {
     if (time - this.lastHawkAttackAt >= this.hawkAttackCd * focusMult) {
       this.lastHawkAttackAt = time;
       if (!target.isInvincible) {
-        const dmg = Math.max(1, Math.round((this.player.bulletDamage || 30) * 0.22));
-        target.takeDamage(dmg);
-        this.scene.showDamageNumber(target.x, target.y - 34, dmg, { color: '#aee8ff', fontSize: 22, whisper: true });
+        // 鹰灵的直伤、风刃、天降全部复用同一结算入口
+        const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * 0.22)), now: time });
+        target.takeDamage(damageResult.amount);
+        this.player?.onDealDamage?.(damageResult.amount);
+        this.scene.showDamageNumber(target.x, target.y - 34, damageResult.amount, { color: '#aee8ff', fontSize: 22, whisper: true, isCrit: damageResult.isCrit });
 
         // 鹰系：猎手标记（提高玩家对 Boss 伤害）
         const markLvl = this.player?.natureHuntMarkLevel || 0;
@@ -410,9 +415,10 @@ export default class PetManager {
           this._windSlashNextAt = this._windSlashNextAt || (now + cd);
           if (now >= this._windSlashNextAt) {
             this._windSlashNextAt = now + cd;
-            const extra = Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.28 + 0.06 * (windLvl - 1))));
-            target.takeDamage(extra);
-            this.scene.showDamageNumber(target.x, target.y - 18, extra, { color: '#d7f6ff', fontSize: 20, whisper: true });
+            const extraResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.28 + 0.06 * (windLvl - 1)))), now: time });
+            target.takeDamage(extraResult.amount);
+            this.player?.onDealDamage?.(extraResult.amount);
+            this.scene.showDamageNumber(target.x, target.y - 18, extraResult.amount, { color: '#d7f6ff', fontSize: 20, whisper: true, isCrit: extraResult.isCrit });
             if (this.scene.createHitEffect) this.scene.createHitEffect(target.x, target.y, 0xaee8ff);
           }
         }
@@ -422,9 +428,10 @@ export default class PetManager {
         if (skyLvl > 0) {
           const chance = Math.min(0.5, 0.12 + 0.05 * (skyLvl - 1));
           if (Math.random() < chance) {
-            const extra = Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.45 + 0.08 * (skyLvl - 1))));
-            target.takeDamage(extra);
-            this.scene.showDamageNumber(target.x, target.y - 52, extra, { color: '#ffffff', fontSize: 22, whisper: true });
+            const extraResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.45 + 0.08 * (skyLvl - 1)))), now: time });
+            target.takeDamage(extraResult.amount);
+            this.player?.onDealDamage?.(extraResult.amount);
+            this.scene.showDamageNumber(target.x, target.y - 52, extraResult.amount, { color: '#ffffff', fontSize: 22, whisper: true, isCrit: extraResult.isCrit });
             if (this.scene.createHitEffect) this.scene.createHitEffect(target.x, target.y, 0xffffff);
           }
         }

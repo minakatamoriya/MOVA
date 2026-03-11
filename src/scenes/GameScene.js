@@ -6,6 +6,7 @@ import BulletManager from '../managers/BulletManager';
 import Player from '../player/Player';
 import { ITEM_DEFS, getItemById } from '../data/items';
 import PetManager from '../classes/pets/PetManager';
+import UndeadSummonManager from '../classes/pets/UndeadSummonManager';
 import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
 import { START_ROOM } from '../data/mapPool';
@@ -166,6 +167,8 @@ class GameScene extends Phaser.Scene {
 
     // 玩家死亡状态（Scene 实例复用，需要重置）
     this._playerDeathHandled = false;
+    this._levelUpCinematicActive = false;
+    this.clearLevelUpPresentation?.();
 
     this.exitDoorActive = false;
     this.exitDoorZone = null;
@@ -225,6 +228,7 @@ class GameScene extends Phaser.Scene {
     this._pathChoiceObjects = [];
     this._pathDoorZones = [];
     this._mapNameText = null;
+    this._levelUpCinematicActive = false;
 
     // 范围圈全局开关（可由 UI/调试统一控制）
     const v = this.registry?.get?.('showRangeIndicators');
@@ -430,6 +434,9 @@ class GameScene extends Phaser.Scene {
       // 恢复时先清掉摇杆/模拟移动输入，防止暂停期间抬手导致方向残留
       this.resetTouchJoystickInput?.();
 
+      this._levelUpCinematicActive = false;
+      this.clearLevelUpPresentation?.();
+
       if (this.physics?.world) this.physics.world.resume();
       if (this.anims) this.anims.resumeAll();
       if (this.time) this.time.paused = false;
@@ -602,6 +609,36 @@ class GameScene extends Phaser.Scene {
       this._uiToggleRangeIndicatorsHandler = null;
     }
 
+    if (this._updatePlayerInfoHandler) {
+      this.events.off('updatePlayerInfo', this._updatePlayerInfoHandler);
+      this._updatePlayerInfoHandler = null;
+    }
+
+    if (this._upgradeSelectedHandler) {
+      this.game.events.off('upgradeSelected', this._upgradeSelectedHandler);
+      this._upgradeSelectedHandler = null;
+    }
+
+    if (this._minionKilledHandler) {
+      this.events.off('minionKilled', this._minionKilledHandler);
+      this._minionKilledHandler = null;
+    }
+
+    if (this._tutorialBossDefeatedHandler) {
+      this.events.off('tutorialBossDefeated', this._tutorialBossDefeatedHandler);
+      this._tutorialBossDefeatedHandler = null;
+    }
+
+    if (this._playerDiedHandler) {
+      this.events.off('playerDied', this._playerDiedHandler);
+      this._playerDiedHandler = null;
+    }
+
+    if (this._sceneShutdownHandler) {
+      this.events.off('shutdown', this._sceneShutdownHandler);
+      this._sceneShutdownHandler = null;
+    }
+
     // 解绑调试网格键与指针监听
     if (this._debugGridKey && this._debugGridKeyHandler) {
       try { this._debugGridKey.off('down', this._debugGridKeyHandler); } catch (_) { /* ignore */ }
@@ -726,7 +763,7 @@ class GameScene extends Phaser.Scene {
     this.paladinPulseDamage = 0;
 
     this.warlockEnabled = false;
-    // 旧"中毒/虚弱 debuff"是否在命中时自动施加
+    // 术士体系：是否允许命中时附加中毒/易伤效果
     this.warlockDebuffEnabled = false;
     this.warlockPoisonDps = 6;
     this.warlockPoisonDuration = 3500;
@@ -751,6 +788,10 @@ class GameScene extends Phaser.Scene {
     this.petManager = new PetManager(this);
     this.petManager.setPlayer(this.player);
 
+    // 初始化亡灵召唤管理器（骷髅卫士 / 骷髅法师）
+    this.undeadSummonManager = new UndeadSummonManager(this);
+    this.undeadSummonManager.setPlayer(this.player);
+
     // 应用装备加成
     this.applyEquippedEffects();
     
@@ -763,17 +804,28 @@ class GameScene extends Phaser.Scene {
     this.collisionManager.setBossManager(this.bossManager);
     
     // 监听玩家信息更新
-    this.events.on('updatePlayerInfo', () => {
+    if (this._updatePlayerInfoHandler) {
+      this.events.off('updatePlayerInfo', this._updatePlayerInfoHandler);
+    }
+    this._updatePlayerInfoHandler = () => {
       this.updateInfoPanel();
-    });
+    };
+    this.events.on('updatePlayerInfo', this._updatePlayerInfoHandler);
 
     // 监听升级选择
-    this.game.events.on('upgradeSelected', (upgrade) => {
+    if (this._upgradeSelectedHandler) {
+      this.game.events.off('upgradeSelected', this._upgradeSelectedHandler);
+    }
+    this._upgradeSelectedHandler = (upgrade) => {
       this.applyUpgrade(upgrade);
-    });
+    };
+    this.game.events.on('upgradeSelected', this._upgradeSelectedHandler);
 
     // 小怪击杀：经验 + 概率掉金币
-    this.events.on('minionKilled', (payload) => {
+    if (this._minionKilledHandler) {
+      this.events.off('minionKilled', this._minionKilledHandler);
+    }
+    this._minionKilledHandler = (payload) => {
       const exp = Math.max(0, payload?.expReward || 0);
       if (exp > 0) this.addExp(exp, { source: 'minion' });
 
@@ -816,10 +868,14 @@ class GameScene extends Phaser.Scene {
           console.log('[Level1] intro wave cleared');
         }
       }
-    });
+    };
+    this.events.on('minionKilled', this._minionKilledHandler);
 
     // 教程Boss：击杀后直接进入三选一路径（核心已在起始房间选武器时确定）
-    this.events.on('tutorialBossDefeated', (data) => {
+    if (this._tutorialBossDefeatedHandler) {
+      this.events.off('tutorialBossDefeated', this._tutorialBossDefeatedHandler);
+    }
+    this._tutorialBossDefeatedHandler = (data) => {
       console.log('[TutorialBoss] defeated, scheduling path choice');
 
       // 给予Boss经验/分数奖励
@@ -840,10 +896,14 @@ class GameScene extends Phaser.Scene {
       this.time.delayedCall(700, () => {
         this.onBossDefeatedOpenExitDoor();
       });
-    });
+    };
+    this.events.on('tutorialBossDefeated', this._tutorialBossDefeatedHandler);
     
     // 监听玩家死亡
-    this.events.on('playerDied', () => {
+    if (this._playerDiedHandler) {
+      this.events.off('playerDied', this._playerDiedHandler);
+    }
+    this._playerDiedHandler = () => {
       console.log('游戏结束 - 玩家死亡');
       // 兜底：所有死亡场景都能弹出结算菜单
       if (!this._playerDeathHandled) {
@@ -860,12 +920,17 @@ class GameScene extends Phaser.Scene {
           });
         }
       });
-    });
+    };
+    this.events.on('playerDied', this._playerDiedHandler);
 
     // 监听场景关闭事件
-    this.events.on('shutdown', () => {
+    if (this._sceneShutdownHandler) {
+      this.events.off('shutdown', this._sceneShutdownHandler);
+    }
+    this._sceneShutdownHandler = () => {
       this.onSceneShutdown();
-    });
+    };
+    this.events.on('shutdown', this._sceneShutdownHandler);
     
     console.log('游戏系统初始化完成');
     
@@ -1095,7 +1160,7 @@ class GameScene extends Phaser.Scene {
     // - 打开查看菜单/升级/商店等暂停期间不推进
     // - 恢复后的第一帧跳过 delta，避免补算
     if (!Number.isFinite(this._gameplayNowMs)) this._gameplayNowMs = 0;
-    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing);
+    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive);
     if (this._skipGameplayDeltaOnce) {
       this._skipGameplayDeltaOnce = false;
     } else if (!menuFrozen) {
@@ -1162,6 +1227,9 @@ class GameScene extends Phaser.Scene {
     // 更新宠物
     if (this.petManager) {
       this.petManager.update(time, delta);
+    }
+    if (this.undeadSummonManager) {
+      this.undeadSummonManager.update(time, delta);
     }
 
     // 起始房间流程：选武器 -> 出现门 -> 进门开始第一关
@@ -1362,6 +1430,11 @@ class GameScene extends Phaser.Scene {
       this.petManager = null;
     }
 
+    if (this.undeadSummonManager) {
+      this.undeadSummonManager.destroy();
+      this.undeadSummonManager = null;
+    }
+
     // 销毁玩家
     if (this.player) {
       this.player.destroy();
@@ -1395,6 +1468,11 @@ class GameScene extends Phaser.Scene {
           pet?.destroy?.();
         }
         this.petManager.active?.clear?.();
+      } catch (_) { /* ignore */ }
+    }
+    if (this.undeadSummonManager) {
+      try {
+        this.undeadSummonManager.clearUnits?.();
       } catch (_) { /* ignore */ }
     }
 

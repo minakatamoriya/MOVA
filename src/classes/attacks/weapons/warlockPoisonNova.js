@@ -45,7 +45,8 @@ export function fireWarlockPoisonNova(player) {
 
   // 基础数值（0级）
   const baseIntervalMs = 2000;
-  const baseRadiusPx = 96; // “2 格”的像素近似（后续可统一成 tileSize）
+  // 半径优先读取玩家当前派生值，这样范围道具/通用范围加成都能直接生效
+  const baseRadiusPx = Math.max(24, Math.round(player.warlockPoisonNovaRadius || player.warlockPoisonNovaRadiusBase || 96));
   // 持续略长一点，符合“走位引导”而不是瞬发 AOE
   const baseDurationMs = 7500;
   // 注意：Boss 的毒伤由 GameScene.updateWarlockDebuff 按“叠层”结算；

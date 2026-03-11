@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getItemById } from '../../data/items';
+import { calculateResolvedDamage, normalizeStatMods } from '../../combat/damageModel';
 
 /**
  * 掉落物/背包/碎片 相关方法
@@ -10,10 +11,12 @@ export function applyDropsInventoryMixin(GameScene) {
     applyEquippedEffects() {
       if (!this.player) return;
 
+      // 装备区先把所有加成聚合成一份结构，再统一交给玩家派生属性刷新
       const mods = {
         damageMult: 1,
         fireRateMult: 1,
         speedMult: 1,
+        rangeMult: 1,
         critChance: 0,
         critMultiplier: 0,
         lifestealPercent: 0,
@@ -27,6 +30,7 @@ export function applyDropsInventoryMixin(GameScene) {
         if (item.effects.damageMult) mods.damageMult *= item.effects.damageMult;
         if (item.effects.fireRateMult) mods.fireRateMult *= item.effects.fireRateMult;
         if (item.effects.speedMult) mods.speedMult *= item.effects.speedMult;
+        if (item.effects.rangeMult) mods.rangeMult *= item.effects.rangeMult;
         if (item.effects.critChance) mods.critChance += item.effects.critChance;
         if (item.effects.critMultiplier) mods.critMultiplier += item.effects.critMultiplier;
         if (item.effects.lifestealPercent) mods.lifestealPercent += item.effects.lifestealPercent;
@@ -35,8 +39,10 @@ export function applyDropsInventoryMixin(GameScene) {
         if (item.effects.dodgeChance) mods.dodgeChance += item.effects.dodgeChance;
       });
 
-      this.player.applyStatMultipliers(mods);
-      this.player.applyEquipmentEffects(mods);
+      // 规范化后可同时兼容伤害、攻速、范围和各种附加属性
+      const resolvedMods = normalizeStatMods(mods);
+      this.player.applyStatMultipliers(resolvedMods);
+      this.player.applyEquipmentEffects(resolvedMods);
     },
 
     testAttackBoss(pointer) {
@@ -45,8 +51,10 @@ export function applyDropsInventoryMixin(GameScene) {
         if (boss.isInvincible) return;
         const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, boss.x, boss.y);
         if (distance < boss.bossSize + 20) {
-          boss.takeDamage(100);
-          this.showDamageNumber(boss.x, boss.y - 60, 100);
+          // 调试伤害也复用统一结算，方便直接验证 debuff/承伤是否生效
+          const damageResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: 100, now: this.time?.now ?? 0, canCrit: false });
+          boss.takeDamage(damageResult.amount);
+          this.showDamageNumber(boss.x, boss.y - 60, damageResult.amount);
         }
       }
     },
@@ -313,7 +321,8 @@ export function applyDropsInventoryMixin(GameScene) {
       p.runLootMods = {
         damageMult: Math.max(0.1, damageMult),
         speedMult: Math.max(0.1, speedMult),
-        fireRateMult: Math.max(0.1, fireRateMult)
+        fireRateMult: Math.max(0.1, fireRateMult),
+        rangeMult: 1
       };
 
       p.applyStatMultipliers(p.equipmentMods || { damageMult: 1, fireRateMult: 1, speedMult: 1 });

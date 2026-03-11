@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { getBaseColorForCoreKey, lerpColor } from '../classes/visual/basicSkillColors';
+import { calculateResolvedDamage } from '../combat/damageModel';
 
 /**
  * 碰撞检测管理器
@@ -178,32 +179,14 @@ export default class CollisionManager {
           bullet._hitAtByEnemy.set(enemy.__enemyId, now);
         }
 
-        // 伤害（简化版：保留暴击与玩家增伤）
-        let baseDamage = Math.max(1, Math.round(bullet.damage || 1));
-        let damageMult = 1;
-
-        // 不屈：血怒
-        if (this.player?.bloodrageEnabled && this.player.maxHp > 0) {
-          const missing = 1 - (this.player.hp / this.player.maxHp);
-          const stacks = Math.max(0, Math.floor(missing / 0.1));
-          damageMult *= (1 + stacks * 0.03);
-        }
-
-        // 不屈：战吼
-        if ((this.player?.battlecryUntil || 0) > now) {
-          damageMult *= 1.15;
-        }
-
-        baseDamage = Math.max(1, Math.round(baseDamage * damageMult));
-
-        const damageResult = bullet.noCrit
-          ? { amount: baseDamage, isCrit: false }
-          : (() => {
-            const critChance = Math.min(0.95, (this.player.critChance || 0));
-            const isCrit = Math.random() < critChance;
-            const amount = isCrit ? Math.round(baseDamage * (this.player.critMultiplier || 1.5)) : baseDamage;
-            return { amount, isCrit };
-          })();
+        // 小怪命中统一走同一套结算：攻击者状态、暴击、目标承伤都在这里收口
+        const damageResult = calculateResolvedDamage({
+          attacker: this.player,
+          target: enemy,
+          baseDamage: Math.max(1, Math.round(bullet.damage || 1)),
+          now,
+          canCrit: !bullet.noCrit
+        });
 
         enemy.takeDamage(damageResult.amount, {
           attacker: this.player,
@@ -356,53 +339,14 @@ export default class CollisionManager {
         }
         bullet.lastHitAt = now;
 
-        // ====== 伤害修正（通用天赋/主职业专精） ======
-        let baseDamage = bullet.damage;
-        let damageMult = 1;
-
-        // 不屈：血怒（血越少打越痛）
-        if (this.player?.bloodrageEnabled && this.player.maxHp > 0) {
-          const missing = 1 - (this.player.hp / this.player.maxHp);
-          const stacks = Math.max(0, Math.floor(missing / 0.1));
-          damageMult *= (1 + stacks * 0.03);
-        }
-
-        // 不屈：战吼（临时增伤）
-        if ((this.player?.battlecryUntil || 0) > now) {
-          damageMult *= 1.15;
-        }
-
-        // 自然伙伴（熊系）：自然之怒（临时增伤）
-        if ((this.player?.natureRageUntil || 0) > now) {
-          damageMult *= (this.player.natureRageMult || 1.1);
-        }
-
-        // 自然伙伴（鹰系）：猎手标记（对被标记的 Boss 增伤）
-        if (boss?.debuffs?.huntMarkEnd && now < boss.debuffs.huntMarkEnd) {
-          damageMult *= (boss.debuffs.huntMarkMult || 1.1);
-        }
-
-        // 术士专精：吞噬（斩杀）
-        if (this.player?.warlockExecute && boss.maxHp > 0) {
-          const hpPct = boss.currentHp / boss.maxHp;
-          if (hpPct < 0.3) damageMult *= 2;
-        }
-
-        baseDamage = Math.max(1, Math.round(baseDamage * damageMult));
-
-        // 暴击：游侠猎手（对高血敌人额外暴击率）
-        const extraCrit = (this.player?.hunterCritBonus || 0) > 0 && boss.maxHp > 0 && (boss.currentHp / boss.maxHp) > 0.8
-          ? (this.player.hunterCritBonus || 0)
-          : 0;
-
-        const damageResult = bullet.noCrit
-          ? { amount: baseDamage, isCrit: false }
-          : (() => {
-            const critChance = Math.min(0.95, (this.player.critChance || 0) + extraCrit);
-            const isCrit = Math.random() < critChance;
-            const amount = isCrit ? Math.round(baseDamage * (this.player.critMultiplier || 1.5)) : baseDamage;
-            return { amount, isCrit };
-          })();
+        // Boss 命中与小怪保持同源，避免某些增伤只对其中一类目标生效
+        const damageResult = calculateResolvedDamage({
+          attacker: this.player,
+          target: boss,
+          baseDamage: Math.max(1, Math.round(bullet.damage || 1)),
+          now,
+          canCrit: !bullet.noCrit
+        });
 
         // 造成伤害
         const isDead = boss.takeDamage(damageResult.amount, {
@@ -525,30 +469,6 @@ export default class CollisionManager {
           }
         }
 
-        // 通用：诅咒（腐蚀/虚弱/凋零）
-        if (this.player?.curseCorrosion && this.scene?.applyWarlockOnHit) {
-          if (Math.random() < 0.15) {
-            // 5% 攻击力/秒，持续 3 秒（tick=0.5s => *0.5）
-            this.scene.warlockPoisonDuration = 3000;
-            this.scene.warlockPoisonDps = Math.max(1, Math.round((this.player.bulletDamage || 1) * 0.05));
-            this.scene.warlockWeakenAmount = 0;
-            this.scene.applyWarlockOnHit(boss, true);
-            boss.debuffs.poisonStacks = boss.debuffs.poisonStacks || 1;
-          }
-        }
-
-        if (this.player?.curseWeakness) {
-          if (Math.random() < 0.2) {
-            boss.debuffs = boss.debuffs || { poisonEnd: 0, poisonTick: 0, weakenEnd: 0 };
-            boss.debuffs.damageDownEnd = now + 3000;
-            boss.damageDealtMult = 0.85;
-          }
-        }
-
-        if (this.player?.curseWither && boss.debuffs && boss.debuffs.poisonEnd && now < boss.debuffs.poisonEnd) {
-          boss.debuffs.poisonStacks = Math.min(2, (boss.debuffs.poisonStacks || 1) + 1);
-        }
-
         // 副职业强化：命中触发
         const enh = bullet.basicEnh;
         if (enh) {
@@ -610,9 +530,9 @@ export default class CollisionManager {
         }
         this.showDamageNumber(hitX, hitY, damageResult.amount, dmgOptions);
 
-        // Warlock debuff on hit（旧系统）：仅在明确启用时触发
-        // - bullet.poison: 来自“毒性附加/宠物减益”等
-        // - scene.warlockDebuffEnabled: 场景侧显式开启“命中自动上毒”
+        // Warlock debuff on hit：仅在明确启用时触发
+        // - bullet.poison: 来自毒性附加/宠物减益等来源
+        // - scene.warlockDebuffEnabled: 场景侧显式开启“命中自动附加术士效果”
         if (this.scene && this.scene.applyWarlockOnHit) {
           if (bullet.poison || this.scene.warlockDebuffEnabled) {
             this.scene.applyWarlockOnHit(boss, true);
@@ -707,6 +627,8 @@ export default class CollisionManager {
     const allBossBullets = this.scene.bulletManager?.getBossBullets() || [];
 
     const hittablePets = this.scene?.petManager?.getHittablePets?.() || [];
+    const hittableUndead = this.scene?.undeadSummonManager?.getHittableSummons?.() || [];
+    const hittableAllies = hittablePets.concat(hittableUndead);
     
     if (allBossBullets.length === 0) {
       return;
@@ -732,9 +654,9 @@ export default class CollisionManager {
       
       // 1) 先检测可受击宠物（熊/树精）
       let handledByPet = false;
-      if (hittablePets.length > 0) {
-        for (let p = 0; p < hittablePets.length; p++) {
-          const pet = hittablePets[p];
+      if (hittableAllies.length > 0) {
+        for (let p = 0; p < hittableAllies.length; p++) {
+          const pet = hittableAllies[p];
           if (!pet || !pet.active) continue;
           const petR = pet.hitRadius || 0;
           if (petR <= 0) continue;
@@ -749,7 +671,9 @@ export default class CollisionManager {
             const dmg = Math.max(0, Math.round(10 * bossDamageMult));
             pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
 
-            if (this.scene?.petManager?.onPetDamaged) {
+            if (pet.isUndeadSummon) {
+              this.scene?.undeadSummonManager?.onSummonDamaged?.(pet, dmg);
+            } else if (this.scene?.petManager?.onPetDamaged) {
               this.scene.petManager.onPetDamaged(pet, dmg);
             }
 
@@ -785,7 +709,9 @@ export default class CollisionManager {
 
             // 宠物死亡：交给 PetManager 进入冷却并销毁
             if (pet.currentHp <= 0) {
-              if (this.scene?.petManager?.onPetKilled) {
+              if (pet.isUndeadSummon) {
+                this.scene?.undeadSummonManager?.onSummonKilled?.(pet);
+              } else if (this.scene?.petManager?.onPetKilled) {
                 this.scene.petManager.onPetKilled(pet.petType);
               } else if (pet.active) {
                 pet.destroy();
@@ -834,9 +760,10 @@ export default class CollisionManager {
         if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
           const b = this.bossManager?.getCurrentBoss?.();
           if (b && b.isAlive && !b.isInvincible) {
-            const counter = Math.max(1, Math.round(this.player.bulletDamage || 1));
-            b.takeDamage(counter, { attacker: this.player, source: 'counterOnBlock', suppressHitReaction: true });
-            this.showDamageNumber(b.x, b.y - 44, counter, { color: '#88ccff', fontSize: 22, whisper: true });
+            // 反制属于“玩家对 Boss 的直接伤害”，也走统一承伤链，但关闭暴击
+            const counterResult = calculateResolvedDamage({ attacker: this.player, target: b, baseDamage: Math.max(1, Math.round(this.player.bulletDamage || 1)), now, canCrit: false });
+            b.takeDamage(counterResult.amount, { attacker: this.player, source: 'counterOnBlock', suppressHitReaction: true });
+            this.showDamageNumber(b.x, b.y - 44, counterResult.amount, { color: '#88ccff', fontSize: 22, whisper: true });
             this.createHitEffect(b.x, b.y, 0x88ccff);
           }
         }
@@ -845,10 +772,12 @@ export default class CollisionManager {
         if (this.scene && this.scene.thornsPercent) {
           const boss = this.bossManager?.getCurrentBoss();
           if (boss && boss.isAlive) {
-            const reflectDamage = Math.round(incoming * this.scene.thornsPercent);
+            const reflectBaseDamage = Math.round(incoming * this.scene.thornsPercent);
             if (!boss.isInvincible) {
-              boss.takeDamage(reflectDamage, { attacker: this.player, source: 'thorns', suppressHitReaction: true });
-              this.showDamageNumber(boss.x, boss.y - 40, reflectDamage, '#ff9999');
+              // 反伤同样视为玩家造成的直接伤害，保持与普通命中的 debuff 结算一致
+              const reflectResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: reflectBaseDamage, now, canCrit: false });
+              boss.takeDamage(reflectResult.amount, { attacker: this.player, source: 'thorns', suppressHitReaction: true });
+              this.showDamageNumber(boss.x, boss.y - 40, reflectResult.amount, '#ff9999');
             }
           }
         }

@@ -32,12 +32,17 @@ export const BALANCE_CONSTANTS = {
   },
 };
 
+export const TUTORIAL_EXP_REWARDS = {
+  introWaveTotal: 100,
+  boss: 20,
+};
+
 const STAGE_OVERRIDES = {
   1: {
     minions: {
       countMin: 20,
       countMax: 24,
-      hp: 45,
+      hp: 30,
       exp: 12,
       speed: { chaser: 60, shooter: 52, patrol: 40, static: 0 },
       contactDamage: 6,
@@ -53,7 +58,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 1,
       countMax: 1,
-      hp: 170,
+      hp: 120,
       exp: 90,
       speed: { chaser: 55, shooter: 50, patrol: 42, static: 0 },
       contactDamage: 10,
@@ -67,7 +72,7 @@ const STAGE_OVERRIDES = {
       },
     },
     boss: {
-      hp: 320,
+      hp: 220,
       moveSpeed: 45,
     },
   },
@@ -76,7 +81,7 @@ const STAGE_OVERRIDES = {
     minions: {
       countMin: 24,
       countMax: 28,
-      hp: 55,
+      hp: 40,
       exp: 14,
       speed: { chaser: 66, shooter: 55, patrol: 42, static: 0 },
       contactDamage: 7,
@@ -92,7 +97,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 2,
       countMax: 2,
-      hp: 210,
+      hp: 165,
       exp: 110,
       speed: { chaser: 60, shooter: 52, patrol: 45, static: 0 },
       contactDamage: 12,
@@ -106,8 +111,20 @@ const STAGE_OVERRIDES = {
       },
     },
     boss: {
-      hp: 400,
+      hp: 300,
       moveSpeed: 48,
+    },
+  },
+
+  3: {
+    minions: {
+      hp: 52,
+    },
+    elites: {
+      hp: 210,
+    },
+    boss: {
+      hp: 400,
     },
   },
 };
@@ -116,6 +133,33 @@ function scaleStageValue(base, stage, perStageMult, minValue = 1) {
   const s = Math.max(1, Math.floor(stage || 1));
   const mult = Math.pow(perStageMult, Math.max(0, s - 1));
   return Math.max(minValue, Math.round(base * mult));
+}
+
+function getAverageSpawnCount(group) {
+  const countMin = Math.max(0, Math.floor(group?.countMin || 0));
+  const countMax = Math.max(countMin, Math.floor(group?.countMax || 0));
+  return Math.round((countMin + countMax) / 2);
+}
+
+function attachStageExpPlan(balance) {
+  const minionAvgCount = getAverageSpawnCount(balance.minions);
+  const eliteAvgCount = getAverageSpawnCount(balance.elites);
+
+  return {
+    ...balance,
+    minions: {
+      ...balance.minions,
+      totalExp: Math.max(0, Math.round(minionAvgCount * Math.max(0, balance.minions.exp || 0)))
+    },
+    elites: {
+      ...balance.elites,
+      totalExp: Math.max(0, Math.round(eliteAvgCount * Math.max(0, balance.elites.exp || 0)))
+    },
+    boss: {
+      ...balance.boss,
+      exp: Math.max(1, Math.round((balance.boss.hp || 0) / 10))
+    }
+  };
 }
 
 /**
@@ -171,9 +215,9 @@ export function getStageBalance(stage) {
   };
 
   const override = STAGE_OVERRIDES[s];
-  if (!override) return derived;
+  if (!override) return attachStageExpPlan(derived);
 
-  return {
+  return attachStageExpPlan({
     minions: {
       ...derived.minions,
       ...override.minions,
@@ -187,7 +231,7 @@ export function getStageBalance(stage) {
       projectiles: { ...derived.elites.projectiles, ...(override.elites?.projectiles || {}) },
     },
     boss: { ...derived.boss, ...override.boss },
-  };
+  });
 }
 
 export function getExitDoorWorldRect(mapConfig) {

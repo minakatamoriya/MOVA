@@ -12,11 +12,13 @@ import {
   NATURE_CONTRACT_OPTIONS,
   THIRD_SPEC_PREP_OPTIONS,
   DEPTH_SPEC_POOLS,
-  DUAL_SPEC_POOLS
+  DUAL_SPEC_POOLS,
+  TALENT_OFFER_WEIGHT_CONFIG
 } from '../../classes/upgradePools';
-import { shouldOfferSecondCore } from '../../classes/dualClass';
+import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
-import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel } from '../../classes/talentTrees';
+import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill } from '../../classes/talentTrees';
+import { calculateResolvedDamage } from '../../combat/damageModel';
 
 /**
  * 职业构建 / 升级 / 近战 / 法师 / 圣骑 / 术士 / 德鲁伊宠物 相关方法
@@ -82,9 +84,8 @@ export function applyBuildClassMixin(GameScene) {
           unyielding_bloodrage: 'unyielding',
           unyielding_battlecry: 'unyielding',
           unyielding_duel: 'unyielding',
-          curse_corrosion: 'curse',
-          curse_weakness: 'curse',
-          curse_wither: 'curse',
+          curse_skeleton_guard: 'curse',
+          curse_skeleton_mage: 'curse',
           guardian_block: 'guardian',
           guardian_armor: 'guardian',
           guardian_counter: 'guardian',
@@ -390,17 +391,13 @@ export function applyBuildClassMixin(GameScene) {
           this.player.deathDuelEnabled = true;
           break;
 
-        case 'curse_corrosion':
-          this.player.curseCorrosion = true;
-          this.warlockEnabled = true;
+        case 'curse_skeleton_guard':
+          this.player.curseSkeletonGuardLevel = Math.min(3, (this.player.curseSkeletonGuardLevel || 0) + 1);
+          this.undeadSummonManager?.refreshFromPlayer?.();
           break;
-        case 'curse_weakness':
-          this.player.curseWeakness = true;
-          this.warlockEnabled = true;
-          break;
-        case 'curse_wither':
-          this.player.curseWither = true;
-          this.warlockEnabled = true;
+        case 'curse_skeleton_mage':
+          this.player.curseSkeletonMageLevel = Math.min(3, (this.player.curseSkeletonMageLevel || 0) + 1);
+          this.undeadSummonManager?.refreshFromPlayer?.();
           break;
 
         case 'guardian_block':
@@ -548,21 +545,334 @@ export function applyBuildClassMixin(GameScene) {
 
       const options = this.getLevelUpOptions();
 
-      // 关键：暂停期间 pointerup 可能丢失（尤其移动端摇杆按住时弹出三选一）。
-      // 在真正 pause 之前，先把摇杆/模拟移动输入清空，避免恢复后持续移动。
+      this.playLevelUpPresentation({
+        level: levelOverride || this.playerData.level,
+        options
+      });
+    },
+
+    ensureLevelUpFxTexture() {
+      const textureKey = 'levelup_gold_particle';
+      if (this.textures.exists(textureKey)) return textureKey;
+
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(6, 6, 5);
+      g.lineStyle(2, 0xfff6cc, 0.95);
+      g.strokeCircle(6, 6, 5);
+      g.generateTexture(textureKey, 12, 12);
+      g.destroy();
+      return textureKey;
+    },
+
+    clearLevelUpPresentation() {
+      if (this._levelUpPresentationTimer) {
+        this._levelUpPresentationTimer.remove(false);
+        this._levelUpPresentationTimer = null;
+      }
+
+      if (this._levelUpParticleEmitter) {
+        this._levelUpParticleEmitter.stop();
+        this._levelUpParticleEmitter = null;
+      }
+
+      if (this._levelUpParticleManager) {
+        this._levelUpParticleManager.destroy();
+        this._levelUpParticleManager = null;
+      }
+
+      if (Array.isArray(this._levelUpPresentationObjects)) {
+        this._levelUpPresentationObjects.forEach((obj) => obj?.destroy?.());
+      }
+      this._levelUpPresentationObjects = [];
+    },
+
+    playLevelUpPresentation(payload = {}) {
+      const level = payload.level || this.playerData?.level || 1;
+      const options = payload.options || [];
+      const duration = 2000;
+
+      this.clearLevelUpPresentation();
+
+      // 演出期间冻结主要战斗推进，但保留 tween / 粒子 / 镜头特效。
+      this._levelUpCinematicActive = true;
+
+      // 关键：演出开始前先清空输入，避免摇杆/按键残留导致恢复后持续移动。
       this.resetTouchJoystickInput?.();
       this.player?.clearAnalogMove?.();
 
       if (this.physics?.world) this.physics.world.pause();
-      if (this.anims) this.anims.pauseAll();
-      if (this.time) this.time.paused = true;
-      if (this.tweens) this.tweens.pauseAll();
 
-      this.scene.pause('GameScene');
-      this.scene.launch('LevelUpScene', {
-        level: levelOverride || this.playerData.level,
-        choices: options.length,
-        options
+      const playerX = this.player?.x ?? this.cameras.main.centerX;
+      const playerY = this.player?.y ?? this.cameras.main.centerY;
+      const beamHeight = Math.max(620, Math.round(this.cameras.main.height * 1.45));
+      const beamCenterY = playerY - Math.round(beamHeight * 0.48);
+      const objects = [];
+
+      const pillar = this.add.rectangle(playerX, beamCenterY, 132, beamHeight, 0xf2b63d, 0.10);
+      pillar.setBlendMode(Phaser.BlendModes.ADD);
+      pillar.setDepth(21);
+      objects.push(pillar);
+
+      const pillarMid = this.add.rectangle(playerX, beamCenterY, 84, beamHeight, 0xffdd72, 0.15);
+      pillarMid.setBlendMode(Phaser.BlendModes.ADD);
+      pillarMid.setDepth(22);
+      objects.push(pillarMid);
+
+      const pillarCore = this.add.rectangle(playerX, beamCenterY, 34, beamHeight + 40, 0xfffbef, 0.34);
+      pillarCore.setBlendMode(Phaser.BlendModes.ADD);
+      pillarCore.setDepth(23);
+      objects.push(pillarCore);
+
+      const pillarEdgeLeft = this.add.ellipse(playerX - 26, beamCenterY + 18, 26, beamHeight - 120, 0xffefb4, 0.14);
+      pillarEdgeLeft.setBlendMode(Phaser.BlendModes.ADD);
+      pillarEdgeLeft.setDepth(22);
+      objects.push(pillarEdgeLeft);
+
+      const pillarEdgeRight = this.add.ellipse(playerX + 26, beamCenterY - 12, 22, beamHeight - 160, 0xffcf63, 0.12);
+      pillarEdgeRight.setBlendMode(Phaser.BlendModes.ADD);
+      pillarEdgeRight.setDepth(22);
+      objects.push(pillarEdgeRight);
+
+      const pillarTopGlow = this.add.ellipse(playerX, beamCenterY - Math.round(beamHeight * 0.48), 166, 54, 0xfff4c6, 0.26);
+      pillarTopGlow.setStrokeStyle(3, 0xfffff2, 0.68);
+      pillarTopGlow.setBlendMode(Phaser.BlendModes.ADD);
+      pillarTopGlow.setDepth(24);
+      objects.push(pillarTopGlow);
+
+      const pillarTopFlare = this.add.ellipse(playerX, beamCenterY - Math.round(beamHeight * 0.48) + 8, 84, 180, 0xfff9dc, 0.14);
+      pillarTopFlare.setBlendMode(Phaser.BlendModes.ADD);
+      pillarTopFlare.setDepth(24);
+      objects.push(pillarTopFlare);
+
+      const haloOuter = this.add.ellipse(playerX, playerY + 18, 118, 42, 0xffd34d, 0.10);
+      haloOuter.setStrokeStyle(4, 0xffd34d, 0.72);
+      haloOuter.setBlendMode(Phaser.BlendModes.ADD);
+      haloOuter.setDepth(23);
+      objects.push(haloOuter);
+
+      const haloInner = this.add.ellipse(playerX, playerY + 16, 72, 24, 0xfff3b0, 0.14);
+      haloInner.setStrokeStyle(3, 0xfff8d9, 0.78);
+      haloInner.setBlendMode(Phaser.BlendModes.ADD);
+      haloInner.setDepth(24);
+      objects.push(haloInner);
+
+      const flashCore = this.add.circle(playerX, playerY - 8, 22, 0xfffcf0, 0.88);
+      flashCore.setBlendMode(Phaser.BlendModes.ADD);
+      flashCore.setDepth(25);
+      objects.push(flashCore);
+
+      const flashGlow = this.add.circle(playerX, playerY - 8, 34, 0xffefb4, 0.36);
+      flashGlow.setBlendMode(Phaser.BlendModes.ADD);
+      flashGlow.setDepth(24);
+      objects.push(flashGlow);
+
+      const flashMist = this.add.container(playerX, playerY + 2);
+      flashMist.setDepth(23);
+      const flashMistPuffs = [
+        this.add.ellipse(-18, 6, 68, 42, 0xffd977, 0.13),
+        this.add.ellipse(22, -6, 74, 48, 0xffc95a, 0.11),
+        this.add.ellipse(6, 18, 92, 38, 0xffefb4, 0.09),
+        this.add.ellipse(-2, -18, 58, 30, 0xfff6d8, 0.07)
+      ];
+      flashMistPuffs.forEach((puff) => {
+        puff.setBlendMode(Phaser.BlendModes.ADD);
+      });
+      flashMist.add(flashMistPuffs);
+      objects.push(flashMist);
+
+      const crown = this.add.ellipse(playerX, playerY - 92, 120, 30, 0xffe07a, 0.18);
+      crown.setStrokeStyle(3, 0xfff1ba, 0.75);
+      crown.setBlendMode(Phaser.BlendModes.ADD);
+      crown.setDepth(24);
+      objects.push(crown);
+
+      this.tweens.add({
+        targets: pillar,
+        alpha: { from: 0.02, to: 0.18 },
+        scaleX: { from: 0.18, to: 1.22 },
+        scaleY: { from: 0.5, to: 1.02 },
+        duration: 300,
+        ease: 'Sine.easeOut',
+        yoyo: true,
+        hold: 1220
+      });
+
+      this.tweens.add({
+        targets: pillarMid,
+        alpha: { from: 0.04, to: 0.26 },
+        scaleX: { from: 0.22, to: 1.08 },
+        scaleY: { from: 0.45, to: 1.03 },
+        duration: 260,
+        ease: 'Quad.easeOut',
+        yoyo: true,
+        hold: 1240
+      });
+
+      this.tweens.add({
+        targets: pillarCore,
+        alpha: { from: 0.12, to: 0.46 },
+        scaleX: { from: 0.3, to: 1.04 },
+        scaleY: { from: 0.22, to: 1.04 },
+        duration: 220,
+        ease: 'Quad.easeOut',
+        yoyo: true,
+        hold: 1260
+      });
+
+      this.tweens.add({
+        targets: [pillarEdgeLeft, pillarEdgeRight],
+        alpha: { from: 0.03, to: 0.24 },
+        scaleY: { from: 0.4, to: 1.08 },
+        duration: 280,
+        ease: 'Sine.easeOut',
+        yoyo: true,
+        hold: 1180
+      });
+
+      this.tweens.add({
+        targets: pillarEdgeLeft,
+        x: playerX - 40,
+        duration: 760,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.tweens.add({
+        targets: pillarEdgeRight,
+        x: playerX + 38,
+        duration: 680,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.tweens.add({
+        targets: pillarTopGlow,
+        alpha: { from: 0.08, to: 0.42 },
+        scaleX: { from: 0.45, to: 1.2 },
+        scaleY: { from: 0.35, to: 1.05 },
+        duration: 260,
+        ease: 'Quad.easeOut',
+        yoyo: true,
+        hold: 1080
+      });
+
+      this.tweens.add({
+        targets: pillarTopFlare,
+        alpha: { from: 0.04, to: 0.22 },
+        scaleY: { from: 0.35, to: 1.15 },
+        y: pillarTopFlare.y - 30,
+        duration: 320,
+        ease: 'Cubic.easeOut',
+        yoyo: true,
+        hold: 980
+      });
+
+      this.tweens.add({
+        targets: haloOuter,
+        alpha: { from: 0.95, to: 0 },
+        scaleX: { from: 0.42, to: 2.8 },
+        scaleY: { from: 0.55, to: 1.9 },
+        y: playerY + 28,
+        duration: 920,
+        ease: 'Cubic.easeOut'
+      });
+
+      this.tweens.add({
+        targets: haloInner,
+        alpha: { from: 1, to: 0 },
+        scaleX: { from: 0.55, to: 2.2 },
+        scaleY: { from: 0.7, to: 1.55 },
+        y: playerY + 24,
+        duration: 760,
+        ease: 'Sine.easeOut'
+      });
+
+      this.tweens.add({
+        targets: flashCore,
+        alpha: { from: 0.88, to: 0 },
+        scale: { from: 0.45, to: 2.8 },
+        y: playerY - 28,
+        duration: 620,
+        ease: 'Sine.easeOut'
+      });
+
+      this.tweens.add({
+        targets: flashGlow,
+        alpha: { from: 0.36, to: 0 },
+        scale: { from: 0.55, to: 4.6 },
+        y: playerY - 42,
+        duration: 820,
+        ease: 'Quad.easeOut'
+      });
+
+      this.tweens.add({
+        targets: flashMist,
+        alpha: { from: 1, to: 0 },
+        scaleX: { from: 0.75, to: 4.9 },
+        scaleY: { from: 0.68, to: 2.4 },
+        y: playerY - 58,
+        angle: 18,
+        duration: 980,
+        ease: 'Cubic.easeOut'
+      });
+
+      this.tweens.add({
+        targets: crown,
+        alpha: { from: 0.1, to: 0.42 },
+        scaleX: { from: 0.5, to: 1.15 },
+        scaleY: { from: 0.6, to: 1.05 },
+        y: playerY - 116,
+        duration: 380,
+        yoyo: true,
+        hold: 1040,
+        ease: 'Sine.easeInOut'
+      });
+
+      const textureKey = this.ensureLevelUpFxTexture();
+      const particleManager = this.add.particles(playerX, playerY + 10, textureKey, {
+        speedX: { min: -90, max: 90 },
+        speedY: { min: -280, max: -90 },
+        lifespan: { min: 450, max: 980 },
+        scale: { start: 0.7, end: 0 },
+        alpha: { start: 0.95, end: 0 },
+        quantity: 3,
+        frequency: 45,
+        emitting: true,
+        tint: [0xffc94e, 0xffe8a3, 0xfffcf2],
+        blendMode: 'ADD',
+        gravityY: -18
+      });
+      particleManager.setDepth(26);
+      this._levelUpParticleManager = particleManager;
+      this._levelUpParticleEmitter = particleManager.emitters?.list?.[0] || null;
+
+      this._levelUpPresentationObjects = objects;
+
+      this.cameras.main.shake(180, 0.010);
+      if (this.time) {
+        this.time.delayedCall(260, () => {
+          if (this._levelUpCinematicActive) this.cameras.main.shake(220, 0.006);
+        });
+      }
+
+      this._levelUpPresentationTimer = this.time.delayedCall(duration, () => {
+        this._levelUpPresentationTimer = null;
+        this.clearLevelUpPresentation();
+        this._levelUpCinematicActive = false;
+
+        if (this.anims) this.anims.pauseAll();
+        if (this.time) this.time.paused = true;
+        if (this.tweens) this.tweens.pauseAll();
+
+        this.scene.pause('GameScene');
+        this.scene.launch('LevelUpScene', {
+          level,
+          choices: options.length,
+          options
+        });
       });
     },
 
@@ -577,11 +887,12 @@ export function applyBuildClassMixin(GameScene) {
       const universalPools = UNIVERSAL_POOLS;
 
       const choiceCount = this.levelUpChoiceCount || 3;
-
-      const selectedTrees = this.registry.get('selectedTrees') || [];
+      const offFactionEntryIds = new Set(OFF_FACTION_ENTRY_OPTIONS.map((opt) => opt.id));
 
       const skillTreeLevels = this.registry.get('skillTreeLevels') || {};
       const isMaxed = (id) => (skillTreeLevels[id] || 0) >= getMaxLevel(id);
+      // 这里按“升级次数阶段”控制候选池，而不是继续固定第二次升级只出副职业。
+      const stage = getTalentOfferStage(this.buildState.levelUps);
 
       const mainCore = this.registry.get('mainCore') || this.buildState.core;
       const offFaction = this.registry.get('offFaction') || null;
@@ -593,17 +904,23 @@ export function applyBuildClassMixin(GameScene) {
         if (thirdSpecType) this.registry.set('thirdSpecType', thirdSpecType);
       }
 
-      if (shouldOfferSecondCore(this.buildState.levelUps, selectedTrees.length) && !offFaction) {
-        return this.pickRandomUpgrades(OFF_FACTION_ENTRY_OPTIONS, choiceCount);
-      }
-
       if (offFaction === 'nature' && !naturePetType) {
         return [...NATURE_CONTRACT_OPTIONS];
       }
 
       let combinedPool = [];
-      if (mainCore) combinedPool = combinedPool.concat(pools[mainCore] || []);
-      if (offFaction) {
+
+      if (mainCore) {
+        combinedPool = combinedPool.concat(pools[mainCore] || []);
+      }
+
+      if (stage !== 'main_only') {
+        if (!offFaction) {
+          combinedPool = combinedPool.concat(OFF_FACTION_ENTRY_OPTIONS);
+        }
+      }
+
+      if (offFaction && stage !== 'main_only') {
         if (offFaction === 'nature' && naturePetType && NATURE_BRANCH_POOLS[naturePetType]) {
           combinedPool = combinedPool.concat(NATURE_BRANCH_POOLS[naturePetType] || []);
         } else {
@@ -611,7 +928,7 @@ export function applyBuildClassMixin(GameScene) {
         }
       }
 
-      if (mainCore && offFaction && thirdSpecType) {
+      if (stage === 'all' && mainCore && offFaction && thirdSpecType) {
         const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
 
         if (thirdSpecType === 'depth') {
@@ -626,19 +943,114 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       combinedPool = combinedPool.filter(opt => !isMaxed(opt.id));
+      combinedPool = combinedPool.filter((opt, index, arr) => arr.findIndex((item) => item?.id === opt?.id) === index);
 
-      let options = this.pickRandomUpgrades(combinedPool, choiceCount);
+      const weightContext = {
+        stage,
+        mainCore,
+        offFaction,
+        skillTreeLevels,
+        offFactionEntryIds,
+      };
+
+      let options = this.pickWeightedUpgrades(combinedPool, choiceCount, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
 
       return options;
     },
 
-    pickRandomUpgrades(options, count) {
-      const pool = [...options];
-      const result = [];
-      while (pool.length > 0 && result.length < count) {
-        const index = Phaser.Math.Between(0, pool.length - 1);
-        result.push(pool.splice(index, 1)[0]);
+    getUpgradeOfferWeight(option, context = {}) {
+      if (!option?.id) return 0;
+
+      const cfg = TALENT_OFFER_WEIGHT_CONFIG || {};
+      const stage = context.stage || 'main_only';
+      const mainCore = context.mainCore || null;
+      const offFaction = context.offFaction || null;
+      const skillTreeLevels = context.skillTreeLevels || {};
+      const offFactionEntryIds = context.offFactionEntryIds || new Set();
+      const currentLevel = skillTreeLevels[option.id] || 0;
+      const maxLevel = getMaxLevel(option.id);
+      const isRepeatableTalent = maxLevel > 1;
+      const treeId = getTreeIdForSkill(option.id) || null;
+      const baseWeight = Math.max(0.01, Number(option.weight) || 1);
+
+      let weight = baseWeight;
+
+      if (treeId && mainCore && treeId === mainCore) {
+        weight *= Number(cfg.mainCoreWeightByStage?.[stage]) || 1;
       }
+
+      if (!offFaction && offFactionEntryIds.has(option.id)) {
+        weight *= Number(cfg.offFactionEntryWeight) || 1;
+      }
+
+      if (offFaction && treeId === offFaction) {
+        weight *= Number(cfg.ownedOffFactionWeight) || 1;
+      }
+
+      if (treeId === 'third') {
+        weight *= Number(cfg.thirdSpecWeight) || 1;
+      }
+
+      if (currentLevel > 0) {
+        if (isRepeatableTalent) {
+          weight *= Number(cfg.repeatableTalentWeight) || 1;
+          weight *= Math.pow(Number(cfg.repeatableTalentDecay) || 1, currentLevel);
+        } else {
+          weight *= Math.pow(Number(cfg.repeatLevelDecay) || 1, currentLevel);
+        }
+      }
+
+      const testing = cfg.testing || {};
+      if (testing.enabled) {
+        const favoredTree = testing.favoredTree || null;
+        const favoredIds = testing.favoredIds || {};
+        const isFavoredId = favoredIds[option.id] != null;
+
+        if (favoredTree && treeId === favoredTree) {
+          weight *= Number(testing.favoredTreeMultiplier) || 1;
+        }
+
+        if (!offFaction && favoredTree && offFactionEntryIds.has(option.id) && treeId === favoredTree) {
+          weight *= Number(testing.favoredOffFactionEntryMultiplier) || 1;
+        }
+
+        if (isFavoredId) {
+          weight *= Math.max(1, Number(favoredIds[option.id]) || 1);
+          if (isRepeatableTalent && testing.favoredRepeatableNoDecay && currentLevel > 0) {
+            weight /= Math.pow(Number(cfg.repeatableTalentDecay) || 1, currentLevel);
+          }
+        }
+      }
+
+      return Math.max(0.01, weight);
+    },
+
+    pickWeightedUpgrades(options, count, getWeight) {
+      const pool = [...options]
+        .map((option) => ({ option, weight: Math.max(0, Number(getWeight?.(option)) || 0) }))
+        .filter((entry) => entry.option && entry.weight > 0);
+
+      const result = [];
+
+      while (pool.length > 0 && result.length < count) {
+        const totalWeight = pool.reduce((sum, entry) => sum + entry.weight, 0);
+        if (totalWeight <= 0) break;
+
+        let roll = Math.random() * totalWeight;
+        let pickedIndex = pool.length - 1;
+
+        for (let index = 0; index < pool.length; index += 1) {
+          roll -= pool[index].weight;
+          if (roll <= 0) {
+            pickedIndex = index;
+            break;
+          }
+        }
+
+        const [picked] = pool.splice(pickedIndex, 1);
+        if (picked?.option) result.push(picked.option);
+      }
+
       return result;
     },
 
@@ -1793,7 +2205,7 @@ export function applyBuildClassMixin(GameScene) {
       this.ensureUnifiedRangeRing('_warlockRangeRing', 'warlock');
 
       // 术士：剧毒新星是“脚下施放”，这里提示的是毒圈影响半径
-      const baseRadius = Math.max(10, Math.round(this.player.warlockPoisonNovaRadiusBase || 96));
+      const baseRadius = Math.max(10, Math.round(this.player.warlockPoisonNovaRadius || this.player.warlockPoisonNovaRadiusBase || 96));
       const spreadStacks = Math.max(0, Math.floor(this.player.warlockPoisonSpreadStacks || 0));
       const radius = Math.round(baseRadius * (1 + 0.2 * spreadStacks));
       const r = Phaser.Math.Clamp(radius, 60, 360);
@@ -1848,8 +2260,11 @@ export function applyBuildClassMixin(GameScene) {
         const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, boss.x, boss.y);
         if (dist <= radius + 40) {
           if (!boss.isInvincible) {
-            boss.takeDamage(damage);
-            this.showDamageNumber(boss.x, boss.y - 50, damage);
+            // 圣骑脉冲属于非弹道直接伤害，也统一接入标准伤害链
+            const damageResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: damage, now: this.time?.now ?? 0, canCrit: false });
+            boss.takeDamage(damageResult.amount);
+            this.player?.onDealDamage?.(damageResult.amount);
+            this.showDamageNumber(boss.x, boss.y - 50, damageResult.amount);
           }
         }
       }
@@ -1966,11 +2381,9 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       if (boss && boss.isAlive && boss.debuffs) {
-        const weaknessActive = boss.debuffs.damageDownEnd && time < boss.debuffs.damageDownEnd;
         const smokeActive = boss.debuffs.smokeEnd && time < boss.debuffs.smokeEnd;
-        if (!weaknessActive && !smokeActive) {
+        if (!smokeActive) {
           boss.damageDealtMult = 1;
-          if (boss.debuffs.damageDownEnd && time > boss.debuffs.damageDownEnd) boss.debuffs.damageDownEnd = 0;
           if (boss.debuffs.smokeEnd && time > boss.debuffs.smokeEnd) boss.debuffs.smokeEnd = 0;
         } else {
           boss.damageDealtMult = Math.min(boss.damageDealtMult || 1, 0.85);
@@ -2027,13 +2440,12 @@ export function applyBuildClassMixin(GameScene) {
             const incPerStack = Math.max(1, Math.round(atk * 0.15 * damageMult));
             const poisonDamage = Math.max(1, Math.round(baseAt1 + (pz.stacks - 1) * incPerStack));
 
-            const critChance = Math.max(0, this.player?.critChance || 0);
-            const critMult = Math.max(1, this.player?.critMultiplier || 1);
-            const isCrit = critChance > 0 && Math.random() < critChance;
-            const finalDamage = isCrit ? Math.max(1, Math.round(poisonDamage * critMult)) : poisonDamage;
+            // 毒圈跳伤统一吃玩家增伤、暴击和目标当前承伤状态
+            const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: poisonDamage, now });
 
-            target.takeDamage(finalDamage);
-            this.showDamageNumber(target.x, target.y - 30, finalDamage, { color: '#66ff99', isCrit });
+            target.takeDamage(damageResult.amount);
+            this.player?.onDealDamage?.(damageResult.amount);
+            this.showDamageNumber(target.x, target.y - 30, damageResult.amount, { color: '#66ff99', isCrit: damageResult.isCrit });
           }
         } else {
           if (!inZone) {
@@ -2059,13 +2471,12 @@ export function applyBuildClassMixin(GameScene) {
         const stacks = Math.max(1, boss.debuffs.poisonStacks || 1);
         const poisonDamage = Math.round(this.warlockPoisonDps * 0.5 * stacks);
 
-        const critChance = Math.max(0, this.player?.critChance || 0);
-        const critMult = Math.max(1, this.player?.critMultiplier || 1);
-        const isCrit = critChance > 0 && Math.random() < critChance;
-        const finalDamage = isCrit ? Math.max(1, Math.round(poisonDamage * critMult)) : poisonDamage;
+        // Boss 中毒 DOT 统一走同一结算链，保证与毒圈体系一致
+        const damageResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: poisonDamage, now: time });
 
-        boss.takeDamage(finalDamage);
-        this.showDamageNumber(boss.x, boss.y - 30, finalDamage, { color: '#66ff99', isCrit });
+        boss.takeDamage(damageResult.amount);
+        this.player?.onDealDamage?.(damageResult.amount);
+        this.showDamageNumber(boss.x, boss.y - 30, damageResult.amount, { color: '#66ff99', isCrit: damageResult.isCrit });
       }
 
       if (boss && boss.debuffs.poisonEnd && time > boss.debuffs.poisonEnd) {

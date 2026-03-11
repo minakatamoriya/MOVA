@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../basicAttackMods';
 import { getBasicSkillColorScheme } from '../../visual/basicSkillColors';
+import { calculateResolvedDamage } from '../../../combat/damageModel';
 
 function getRangeCenter(player) {
   // 与全局“职业射程圈”一致：以玩家核心判定点为中心
@@ -324,35 +325,8 @@ function applyArcaneRayDirectDamage(scene, player, enemy, baseDamage, hitX, hitY
   if (now < nextAt) return;
   player._arcaneRayTickNext.set(tickKey, now + tickIntervalMs);
 
-  // 直伤兜底（尤其用于教程 Boss）：尽量复用 CollisionManager 中的通用增伤窗口
-  let dmg = Math.max(1, Math.round(baseDamage));
-  let damageMult = 1;
-  // 不屈：血怒
-  if (player?.bloodrageEnabled && player.maxHp > 0) {
-    const missing = 1 - (player.hp / player.maxHp);
-    const stacks = Math.max(0, Math.floor(missing / 0.1));
-    damageMult *= (1 + stacks * 0.03);
-  }
-  // 不屈：战吼
-  if ((player?.battlecryUntil || 0) > now) {
-    damageMult *= 1.15;
-  }
-  // 自然伙伴（熊系）：自然之怒
-  if ((player?.natureRageUntil || 0) > now) {
-    damageMult *= (player.natureRageMult || 1.1);
-  }
-  // 鹰系：猎手标记（目标身上的 debuff）
-  if (enemy?.debuffs?.huntMarkEnd && now < enemy.debuffs.huntMarkEnd) {
-    damageMult *= (enemy.debuffs.huntMarkMult || 1.1);
-  }
-  // 术士：吞噬（斩杀）
-  if (player?.warlockExecute && enemy?.maxHp > 0) {
-    const hpPct = enemy.currentHp / enemy.maxHp;
-    if (hpPct < 0.3) damageMult *= 2;
-  }
-
-  dmg = Math.max(1, Math.round(dmg * damageMult));
-  const dr = player.calculateDamage ? player.calculateDamage(dmg) : { amount: dmg, isCrit: false };
+  // 激光的逐 tick 直伤也走统一结算，避免和弹道/宠物/DOT 出现不同公式
+  const dr = calculateResolvedDamage({ attacker: player, target: enemy, baseDamage, now });
 
   enemy.takeDamage?.(dr.amount);
   player.onDealDamage?.(dr.amount);

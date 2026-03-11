@@ -90,9 +90,8 @@
 - 死斗（id=unyielding_duel）：生命值 <30% 时攻速 +25%
 
 ### 诅咒（offFaction=curse）
-- 腐蚀（id=curse_corrosion）：攻击 15% 概率施加剧毒 DoT（3 秒）
-- 虚弱（id=curse_weakness）：攻击 20% 概率使敌人伤害 -15%（3 秒）
-- 凋零（id=curse_wither）：持续伤害效果可叠加 2 层
+- 骷髅卫士（id=curse_skeleton_guard，maxLevel=3）：召唤近战骷髅卫士协同作战（1/2/3 级上限为 1/3/5）
+- 骷髅法师（id=curse_skeleton_mage，maxLevel=3）：召唤远程骷髅法师协同作战（1/2/3 级上限为 1/3/5）
 
 ### 守护（offFaction=guardian）
 - 坚盾（id=guardian_block）：5% 概率格挡，格挡减伤 50%

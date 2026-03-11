@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import BaseBoss from '../enemies/bosses/BaseBoss';
 import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
-import { getStageBalance } from '../data/balanceConfig';
+import { TUTORIAL_EXP_REWARDS, getStageBalance } from '../data/balanceConfig';
 
 /**
  * Boss 管理器
@@ -101,6 +101,7 @@ export default class BossManager {
       y: spawnPt.y,
       name: bossData.name,
       hp: Math.round(balance.boss.hp),
+      expReward: balance.boss.exp,
       size: bossSize,
       color: bossData.color,
       movePattern: resolvedMovePattern,
@@ -172,7 +173,8 @@ export default class BossManager {
       x: spawnPt.x,
       y: spawnPt.y,
       name: '教程目标',
-      hp: 30,
+      hp: 18,
+      expReward: TUTORIAL_EXP_REWARDS.boss,
       size: 36,
       color: 0x66ccff,
       movePattern: 'tracking',

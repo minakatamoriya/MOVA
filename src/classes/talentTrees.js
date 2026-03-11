@@ -127,11 +127,10 @@ export const TREE_DEFS = [
     id: 'curse',
     name: '术士-副',
     color: resolveClassColor('warlock'),
-    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，提供持续伤害与减益。' },
+    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，提供亡灵召唤强化。' },
     nodes: [
-      { id: 'curse_corrosion', name: '腐蚀', maxLevel: 1, desc: '攻击 15% 概率施加剧毒：每秒 5% 攻击力，持续 3 秒。' },
-      { id: 'curse_weakness', name: '虚弱', maxLevel: 1, desc: '攻击 20% 概率使敌人造成的伤害 -15%，持续 3 秒。' },
-      { id: 'curse_wither', name: '凋零', maxLevel: 1, desc: '持续伤害效果可叠加 2 层。' }
+      { id: 'curse_skeleton_guard', name: '骷髅卫士', maxLevel: 3, desc: '召唤骷髅卫士协同近战。等级 1/2/3 时上限为 1/3/5。' },
+      { id: 'curse_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '召唤骷髅法师跟随作战。等级 1/2/3 时上限为 1/3/5。' }
     ],
     ultimate: { id: 'curse_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -261,9 +260,8 @@ export const SKILL_TO_TREE = {
   unyielding_duel: 'unyielding',
 
   // 副职业通用：诅咒
-  curse_corrosion: 'curse',
-  curse_weakness: 'curse',
-  curse_wither: 'curse',
+  curse_skeleton_guard: 'curse',
+  curse_skeleton_mage: 'curse',
 
   // 副职业通用：守护
   guardian_block: 'guardian',

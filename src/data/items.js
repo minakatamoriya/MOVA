@@ -4,7 +4,7 @@ export const ITEM_DEFS = [
   { id: 'move_speed', name: 'Move Speed', desc: '提升移速', icon: '👟', price: 100, effects: { speedMult: 1.15 } },
   { id: 'shield', name: 'Shield', desc: '获得护盾', icon: '🛡️', price: 180, effects: { shieldCharges: 1 } },
   { id: 'crit', name: 'Crit', desc: '提升暴击率', icon: '🎯', price: 160, effects: { critChance: 0.1, critMultiplier: 0.5 } },
-  { id: 'range', name: 'Range', desc: '提升攻击范围', icon: '🏹', price: 110, effects: {} },
+  { id: 'range', name: 'Range', desc: '提升攻击范围', icon: '🏹', price: 110, effects: { rangeMult: 1.12 } },
   { id: 'lifesteal', name: 'Lifesteal', desc: '攻击吸血', icon: '🩸', price: 200, effects: { lifestealPercent: 0.05 } },
   { id: 'magnet', name: 'Magnet', desc: '吸附掉落物', icon: '🧲', price: 90, effects: { magnetRadius: 100 } },
 

@@ -13,6 +13,20 @@ export function shouldOfferSecondCore(levelUps, selectedTreesLength) {
   return levelUps === 2 && selectedTreesLength === 1;
 }
 
+export function getTalentOfferStage(levelUps) {
+  const stageLevel = Math.max(1, Number(levelUps) || 1);
+
+  if (stageLevel <= 1) {
+    return 'main_only';
+  }
+
+  if (stageLevel <= 4) {
+    return 'main_and_off';
+  }
+
+  return 'all';
+}
+
 export function getRemainingCoreOptions(coreOptions, chosenCoreKeys) {
   const chosen = new Set(chosenCoreKeys || []);
   return (coreOptions || []).filter(c => {

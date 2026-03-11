@@ -245,7 +245,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     if (this.isInvincible) return false;
-    const applied = Math.max(1, Math.round((damage || 0) * (this.damageTakenMult || 1)));
+    const applied = Math.max(1, Math.round(damage || 0));
     this.currentHp -= applied;
 
     this.updateHpBar();

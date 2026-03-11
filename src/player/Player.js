@@ -17,6 +17,12 @@ import {
 
 import { getOffCorePassive } from '../classes/attacks/basicAttackMods';
 import { getBaseColorForCoreKey, lerpColor } from '../classes/visual/basicSkillColors';
+import {
+  buildPlayerDerivedStats,
+  calculateResolvedDamage,
+  normalizeStatMods,
+  resolvePlayerIncomingDamage
+} from '../combat/damageModel';
 
 const PLAYER_ANIM_CONFIG = {
   sheetKey: 'player',
@@ -247,7 +253,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.druidStarfallRange = this.druidStarfallRangeBase;
 
     // 法师飞弹：用于范围圈对齐（飞弹本身已用 maxLifeMs 限制）
-    this.mageMissileRange = 280;
+    this.mageMissileRangeBase = 280;
+    this.mageMissileRange = this.mageMissileRangeBase;
 
     // 术士：剧毒新星半径（范围圈提示脚下 AoE）
     this.warlockPoisonNovaRadiusBase = 96;
@@ -278,10 +285,10 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerArrowBounce = 0;
 
     // 装备倍率缓存
-    this.equipmentMods = { damageMult: 1, fireRateMult: 1, speedMult: 1 };
+    this.equipmentMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1 };
 
     // 局内战利品（碎片等）倍率缓存：一次性，本局结束清空；不进入装备系统
-    this.runLootMods = { damageMult: 1, fireRateMult: 1, speedMult: 1 };
+    this.runLootMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1 };
 
     // 装备效果属性
     this.baseCritChance = 0.05;
@@ -950,8 +957,8 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     // 闪避（先于一切减伤结算；基础无 MISS，只有携带/升级提供）
-    const dodgeChanceTotal = Math.max(0, (this.dodgeChance || 0) + (this.equipmentDodgeChance || 0));
-    if (dodgeChanceTotal > 0 && Math.random() < dodgeChanceTotal) {
+    const resolved = resolvePlayerIncomingDamage(this, damage, this.scene?.time?.now ?? 0);
+    if (resolved.dodged) {
       this.lastDamageEvent = { dodged: true, blocked: false, shielded: false, tookDamage: 0 };
       if (this.scene?.showDamageNumber) {
         this.scene.showDamageNumber(this.x, this.y - 44, 'MISS', { color: '#ffffff', fontSize: 22 });
@@ -959,23 +966,8 @@ export default class Player extends Phaser.GameObjects.Container {
       return false;
     }
 
-    // 固定减伤
-    let finalDamage = Math.max(0, Math.round((damage || 0) - (this.flatDamageReduction || 0)));
-
-    // 自然伙伴：甲壳/树皮等（受击倍率）
-    finalDamage = Math.max(0, Math.round(finalDamage * (this.natureDamageTakenMult || 1)));
-
-    // 战士主职业持久：20% 减伤
-    if (this.warriorEndure && this.mainCoreKey === 'warrior') {
-      finalDamage = Math.max(0, Math.round(finalDamage * 0.8));
-    }
-
-    // 格挡：50% 减伤
-    let blocked = false;
-    if ((this.blockChance || 0) > 0 && Math.random() < this.blockChance) {
-      blocked = true;
-      finalDamage = Math.max(0, Math.round(finalDamage * 0.5));
-    }
+    let finalDamage = resolved.finalDamage;
+    const blocked = !!resolved.blocked;
 
     if (this.shieldCharges > 0) {
       console.log('[takeDamage] 护盾挡住了伤害');
@@ -1118,22 +1110,23 @@ export default class Player extends Phaser.GameObjects.Container {
    * 应用属性倍率（用于装备加成）
    */
   applyStatMultipliers(mods) {
-    const damageMult = mods.damageMult || 1;
-    const fireRateMult = mods.fireRateMult || 1;
-    const speedMult = mods.speedMult || 1;
+    // 先把外部传入的装备/道具修正规整化，再统一推导所有战斗属性
+    this.equipmentMods = normalizeStatMods(mods);
 
-    this.equipmentMods = { damageMult, fireRateMult, speedMult };
+    const derived = buildPlayerDerivedStats(this, {
+      equipmentMods: this.equipmentMods,
+      lootMods: this.runLootMods
+    });
 
-    const lootDamageMult = this.runLootMods?.damageMult || 1;
-    const lootFireRateMult = this.runLootMods?.fireRateMult || 1;
-    const lootSpeedMult = this.runLootMods?.speedMult || 1;
-
-    const extraDamageMult = (this.universalDamageMult || 1) * (this.natureDamageMult || 1);
-    const extraFireRateMult = (this.universalFireRateMult || 1) * (this.deathDuelFireRateMult || 1);
-
-    this.bulletDamage = Math.max(1, Math.round(this.baseBulletDamage * damageMult * lootDamageMult * extraDamageMult));
-    this.fireRate = Math.max(60, Math.round(this.baseFireRate * fireRateMult * lootFireRateMult * this.buildFireRateMult * (this.offFireRateMult || 1) * extraFireRateMult));
-    this.moveSpeed = Math.max(50, Math.round(this.baseMoveSpeed * speedMult * lootSpeedMult * (this.natureMoveSpeedMult || 1)));
+    // 这些字段会被武器发射、范围提示圈和 DOT 逻辑直接读取，因此统一在这里回写
+    this.bulletDamage = derived.bulletDamage;
+    this.fireRate = derived.fireRate;
+    this.moveSpeed = derived.moveSpeed;
+    this.archerArrowRange = derived.archerArrowRange;
+    this.moonfireRange = derived.moonfireRange;
+    this.druidStarfallRange = derived.druidStarfallRange;
+    this.mageMissileRange = derived.mageMissileRange;
+    this.warlockPoisonNovaRadius = derived.warlockPoisonNovaRadius;
 
     if (this.fireTimer) {
       this.fireTimer.delay = this.fireRate;
@@ -1155,12 +1148,14 @@ export default class Player extends Phaser.GameObjects.Container {
    * 应用装备效果
    */
   applyEquipmentEffects(effects) {
-    this.critChance = this.baseCritChance + (effects.critChance || 0);
-    this.critMultiplier = this.baseCritMultiplier + (effects.critMultiplier || 0);
-    this.lifestealPercent = effects.lifestealPercent || 0;
-    this.magnetRadius = this.baseMagnetRadius + (effects.magnetRadius || 0);
-    this.shieldCharges = effects.shieldCharges || 0;
-    this.equipmentDodgeChance = effects.dodgeChance || 0;
+    // 非派生型数值（暴击、吸血、护盾、闪避）仍然统一从规范化结果回写
+    const resolved = normalizeStatMods(effects);
+    this.critChance = this.baseCritChance + resolved.critChance;
+    this.critMultiplier = this.baseCritMultiplier + resolved.critMultiplier;
+    this.lifestealPercent = resolved.lifestealPercent;
+    this.magnetRadius = this.baseMagnetRadius + resolved.magnetRadius;
+    this.shieldCharges = resolved.shieldCharges;
+    this.equipmentDodgeChance = resolved.dodgeChance;
     this.updateShieldIndicator();
   }
 
@@ -1179,10 +1174,8 @@ export default class Player extends Phaser.GameObjects.Container {
 
   upgradeArcherRange() {
     this.archerArrowRangeLevel = Math.min(3, (this.archerArrowRangeLevel || 0) + 1);
-    const inc = [0, 10, 20, 30][this.archerArrowRangeLevel] || 0;
-    const base = Math.round(this.archerArrowRangeBase || 330);
-    // 半径硬上限：360（对应“索敌范围 <= 720px（直径）”）
-    this.archerArrowRange = Math.min(360, Math.round(base + inc));
+    // 射程不再直接写当前值，改为走统一派生，避免被后续装备/掉落重算覆盖
+    this.applyStatMultipliers(this.equipmentMods);
   }
 
   upgradeArcherRate() {
@@ -1319,9 +1312,13 @@ export default class Player extends Phaser.GameObjects.Container {
    * 计算暴击伤害
    */
   calculateDamage(baseDamage) {
-    const isCrit = Math.random() < this.critChance;
-    const amount = isCrit ? Math.round(baseDamage * this.critMultiplier) : baseDamage;
-    return { amount, isCrit };
+    // 兼容旧调用方：直接复用统一出伤公式，但不带目标承伤修正
+    return calculateResolvedDamage({
+      attacker: this,
+      baseDamage,
+      canCrit: true,
+      includeTargetModifiers: false
+    });
   }
 
   /**

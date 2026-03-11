@@ -3,6 +3,34 @@
 // - 主职业专精只在第一次选择的职业生效
 // - 副职业只提供通用被动，不提供第二套攻击形态
 
+// 升级天赋出现权重。
+// - 所有候选默认 weight=1，可在单项上单独覆盖。
+// - testing 用于测试期定向提高某个分支/某个技能的出现率，方便验证功能。
+export const TALENT_OFFER_WEIGHT_CONFIG = {
+  mainCoreWeightByStage: {
+    main_only: 5.0,
+    main_and_off: 2.6,
+    all: 1.5,
+  },
+  offFactionEntryWeight: 2.4,
+  ownedOffFactionWeight: 2.8,
+  thirdSpecWeight: 0.8,
+  repeatLevelDecay: 0.72,
+  repeatableTalentWeight: 1.35,
+  repeatableTalentDecay: 0.9,
+  testing: {
+    enabled: true,
+    favoredTree: 'curse',
+    favoredTreeMultiplier: 3.5,
+    favoredOffFactionEntryMultiplier: 4.0,
+    favoredIds: {
+      curse_skeleton_guard: 18,
+      curse_skeleton_mage: 10,
+    },
+    favoredRepeatableNoDecay: true,
+  }
+};
+
 // 主职业专精（只从 mainCore 抽取）
 export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
@@ -89,9 +117,8 @@ export const UNIVERSAL_POOLS = {
 
   // 🟣 术士·诅咒
   curse: [
-    { id: 'curse_corrosion', category: 'build', name: '腐蚀', desc: '攻击有 15% 概率施加剧毒：每秒造成 5% 攻击力伤害，持续 3 秒', icon: '术副' },
-    { id: 'curse_weakness', category: 'build', name: '虚弱', desc: '攻击有 20% 概率使敌人造成的伤害 -15%，持续 3 秒', icon: '术副' },
-    { id: 'curse_wither', category: 'build', name: '凋零', desc: '持续伤害效果可叠加 2 层', icon: '2X' }
+    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '骨卫', maxLevel: 3 },
+    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。等级 1/2/3 时上限 1/3/5', icon: '骨法', maxLevel: 3 }
   ],
 
   // 🛡️ 圣骑士·守护
@@ -116,8 +143,8 @@ export const OFF_FACTION_ENTRY_OPTIONS = [
   { id: 'ranger_precise', category: 'build', name: '精准', desc: '暴击率 +10%', icon: '猎副' },
   // 不屈 -> 血怒
   { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '战副' },
-  // 诅咒 -> 腐蚀
-  { id: 'curse_corrosion', category: 'build', name: '腐蚀', desc: '攻击有 15% 概率施加剧毒：每秒造成 5% 攻击力伤害，持续 3 秒', icon: '术副' },
+  // 诅咒 -> 骷髅卫士
+  { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '骨卫', maxLevel: 3 },
   // 守护 -> 坚盾
   { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '骑副' },
   // 自然伙伴：直接结契

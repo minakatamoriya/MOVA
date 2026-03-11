@@ -52,6 +52,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.maxHp = config.hp || 1000;
     this.currentHp = this.maxHp;
     this.isAlive = true;
+    this.expReward = (config.expReward != null)
+      ? Math.max(0, Math.floor(config.expReward))
+      : Math.floor(this.maxHp / 10);
     
     // 出场相关
     this.entryType = config.entryType || 'fade'; // fade, slide, teleport
@@ -1264,7 +1267,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       return false;
     }
     
-    const appliedDamage = Math.round(damage * (this.damageTakenMult || 1));
+    const appliedDamage = Math.max(1, Math.round(damage || 0));
     this.currentHp -= appliedDamage;
     this.updateHpBar();
     
@@ -1522,7 +1525,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.scene.events.emit('bossDefeated', {
       name: this.bossName,
       score: this.maxHp,
-      exp: Math.floor(this.maxHp / 10)
+      exp: this.expReward
     });
   }
 
