@@ -138,6 +138,16 @@ class GameScene extends Phaser.Scene {
     this._pathChoiceActive = false;    // 三选一 UI 是否激活
     this._pathChoiceObjects = [];      // 三选一 UI 对象
     this._pathDoorZones = [];          // 三选一碰撞区域
+
+    // 进图过场：半透明遮罩 + 居中文字，期间冻结局内逻辑
+    this._sceneIntroActive = false;
+    this._sceneIntroOverlay = null;
+    this._sceneIntroRestoreState = null;
+    this._sceneIntroHideTimer = null;
+
+    // 战斗行为暂停：用于升级演出/三选一路径时停止自动攻击与战斗推进
+    this._combatBehaviorPauseApplied = false;
+    this._combatBehaviorPauseRestore = null;
   }
 
   init() {
@@ -229,6 +239,9 @@ class GameScene extends Phaser.Scene {
     this._pathDoorZones = [];
     this._mapNameText = null;
     this._levelUpCinematicActive = false;
+    this._combatBehaviorPauseApplied = false;
+    this._combatBehaviorPauseRestore = null;
+    this.clearSceneEntryPresentation({ immediate: true, restoreControls: false });
 
     // 范围圈全局开关（可由 UI/调试统一控制）
     const v = this.registry?.get?.('showRangeIndicators');
@@ -237,6 +250,53 @@ class GameScene extends Phaser.Scene {
 
   isReactUiMode() {
     return this.registry?.get('uiMode') === 'react';
+  }
+
+  isCombatBehaviorPaused() {
+    return !!(this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive || this._sceneIntroActive || this._pathChoiceActive);
+  }
+
+  syncCombatBehaviorPause() {
+    const player = this.player;
+    const shouldPause = this.isCombatBehaviorPaused();
+
+    if (shouldPause) {
+      if (this._combatBehaviorPauseApplied) return;
+
+      const preservedCanFire = (() => {
+        if (this._sceneIntroActive && this._sceneIntroRestoreState) {
+          return this._sceneIntroRestoreState.canFire !== false;
+        }
+        return player ? (player.canFire !== false) : false;
+      })();
+
+      this._combatBehaviorPauseApplied = true;
+      this._combatBehaviorPauseRestore = player ? {
+        canFire: preservedCanFire,
+        fireTimerPaused: !!player.fireTimer?.paused
+      } : null;
+
+      if (player) {
+        player.canFire = false;
+        if (player.fireTimer) player.fireTimer.paused = true;
+      }
+      return;
+    }
+
+    if (!this._combatBehaviorPauseApplied) return;
+    this._combatBehaviorPauseApplied = false;
+
+    if (player) {
+      const restore = this._combatBehaviorPauseRestore;
+      if (restore && Object.prototype.hasOwnProperty.call(restore, 'canFire')) {
+        player.canFire = restore.canFire;
+      }
+      if (player.fireTimer) {
+        player.fireTimer.paused = !!(restore?.fireTimerPaused);
+      }
+    }
+
+    this._combatBehaviorPauseRestore = null;
   }
 
   getUiSnapshot() {
@@ -535,6 +595,479 @@ class GameScene extends Phaser.Scene {
     }
   }
 
+  showSceneEntryPresentation(mapInfo, opts = {}) {
+    if (!this.add || !this.cameras?.main) return;
+
+    this.clearSceneEntryPresentation({ immediate: true, restoreControls: false });
+
+    const cam = this.cameras.main;
+    const centerX = cam.centerX;
+    const centerY = cam.centerY;
+    const mapName = String(mapInfo?.name || '未知区域');
+    const subtitle = String(mapInfo?.subtitle || '');
+    const durationMs = Math.max(1200, Math.floor(Number(opts.durationMs) || 2400));
+    const overlayDepth = 2600;
+    const titleFontSize = mapName.length >= 8 ? '48px' : '62px';
+    const subtitleFontSize = '18px';
+    const createOrnament = (y, width, opts = {}) => {
+      const g = this.add.graphics();
+      const accent = opts.accent ?? 0xe7dcc2;
+      const glowColor = opts.glow ?? 0x8edbff;
+      const half = Math.floor(width * 0.5);
+      const innerGap = Math.floor(opts.innerGap ?? 56);
+      const innerWing = Math.floor(opts.innerWing ?? 34);
+      const outerWing = Math.floor(opts.outerWing ?? 108);
+      const tipInset = Math.floor(opts.tipInset ?? 16);
+
+      g.setPosition(0, y);
+      g.lineStyle(2, accent, 0.82);
+      g.beginPath();
+      g.moveTo(-half, 0);
+      g.lineTo(-outerWing, 0);
+      g.moveTo(outerWing, 0);
+      g.lineTo(half, 0);
+      g.strokePath();
+
+      g.lineStyle(2, accent, 0.62);
+      g.beginPath();
+      g.moveTo(-outerWing, 0);
+      g.lineTo(-innerGap - innerWing, 0);
+      g.lineTo(-innerGap - Math.floor(innerWing * 0.38), -10);
+      g.lineTo(-innerGap, 0);
+      g.lineTo(-innerGap - Math.floor(innerWing * 0.38), 10);
+      g.lineTo(-innerGap - innerWing, 0);
+      g.moveTo(outerWing, 0);
+      g.lineTo(innerGap + innerWing, 0);
+      g.lineTo(innerGap + Math.floor(innerWing * 0.38), -10);
+      g.lineTo(innerGap, 0);
+      g.lineTo(innerGap + Math.floor(innerWing * 0.38), 10);
+      g.lineTo(innerGap + innerWing, 0);
+      g.strokePath();
+
+      g.lineStyle(1.5, glowColor, 0.32);
+      g.beginPath();
+      g.moveTo(-outerWing + 22, -8);
+      g.lineTo(-outerWing + 10, 0);
+      g.lineTo(-outerWing + 22, 8);
+      g.moveTo(outerWing - 22, -8);
+      g.lineTo(outerWing - 10, 0);
+      g.lineTo(outerWing - 22, 8);
+      g.strokePath();
+
+      g.fillStyle(accent, 0.95);
+      g.fillPoints([
+        { x: 0, y: -6 },
+        { x: 8, y: 0 },
+        { x: 0, y: 6 },
+        { x: -8, y: 0 }
+      ], true, true);
+
+      g.fillStyle(glowColor, 0.28);
+      g.fillPoints([
+        { x: -innerGap, y: -4 },
+        { x: -innerGap + 5, y: 0 },
+        { x: -innerGap, y: 4 },
+        { x: -innerGap - 5, y: 0 }
+      ], true, true);
+      g.fillPoints([
+        { x: innerGap, y: -4 },
+        { x: innerGap + 5, y: 0 },
+        { x: innerGap, y: 4 },
+        { x: innerGap - 5, y: 0 }
+      ], true, true);
+
+      g.fillStyle(accent, 0.55);
+      g.fillCircle(-half + tipInset, 0, 2.6);
+      g.fillCircle(half - tipInset, 0, 2.6);
+
+      g.setAlpha(0);
+      g.setScale(0.84, 1);
+      return g;
+    };
+
+    this._sceneIntroActive = true;
+
+    if (this.player) {
+      const preservedCanFire = this._combatBehaviorPauseApplied
+        ? (this._combatBehaviorPauseRestore?.canFire !== false)
+        : (this.player.canFire !== false);
+      this._sceneIntroRestoreState = {
+        canMove: this.player.canMove !== false,
+        canFire: preservedCanFire
+      };
+      this.player.canMove = false;
+      this.player.canFire = false;
+      this.player.clearAnalogMove?.();
+    } else {
+      this._sceneIntroRestoreState = null;
+    }
+
+    const dim = this.add.rectangle(centerX, centerY, cam.width, cam.height, 0x000000, 0.8)
+      .setScrollFactor(0)
+      .setDepth(overlayDepth);
+
+    const container = this.add.container(centerX, centerY)
+      .setScrollFactor(0)
+      .setDepth(overlayDepth + 2)
+      .setAlpha(1)
+      .setScale(1);
+
+    const glow = this.add.ellipse(0, 6, Math.min(cam.width * 0.76, 860), 250, 0x5cc8ff, 0.08)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const halo = this.add.ellipse(0, 6, Math.min(cam.width * 0.86, 980), 320)
+      .setStrokeStyle(2, 0xe8f7ff, 0.16)
+      .setFillStyle(0x000000, 0);
+
+    const impactFlash = this.add.rectangle(0, -12, Math.min(cam.width * 0.42, 420), 5, 0xf7fbff, 0)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const whiteFlash = this.add.rectangle(0, 0, cam.width, cam.height, 0xffffff, 0)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const impactRing = this.add.ellipse(0, -12, 90, 90)
+      .setStrokeStyle(3, 0xf7fbff, 0)
+      .setFillStyle(0x000000, 0);
+    const burstStreaks = [-56, -34, -12, 12, 34, 56].map((offset, index) => {
+      const streak = this.add.rectangle(0, -12 + offset, 0, 3 + (index % 2), 0xdff7ff, 0);
+      streak.setAngle(index % 2 === 0 ? -24 : 24);
+      streak.setBlendMode(Phaser.BlendModes.ADD);
+      return streak;
+    });
+    const sparkDots = [
+      { x: -92, y: -44, r: 4 },
+      { x: -66, y: 20, r: 3 },
+      { x: 72, y: -28, r: 4 },
+      { x: 108, y: 18, r: 3 },
+      { x: -18, y: -86, r: 3 },
+      { x: 24, y: 76, r: 3 }
+    ].map((point) => {
+      const dot = this.add.circle(point.x * 0.35, point.y * 0.35 - 12, point.r, 0xf7fbff, 0);
+      dot.setBlendMode(Phaser.BlendModes.ADD);
+      return dot;
+    });
+
+    const enterText = this.add.text(-Math.floor(cam.width * 0.62), -62, '进入', {
+      fontSize: '44px',
+      fontStyle: 'bold',
+      color: '#f4efe2',
+      stroke: '#000000',
+      strokeThickness: 6,
+      shadow: { offsetX: 0, offsetY: 2, color: '#000000', blur: 8, fill: true }
+    }).setOrigin(0.5).setAlpha(0.96).setAngle(-4);
+
+    const nameText = this.add.text(Math.floor(cam.width * 0.66), 34, mapName, {
+      fontSize: titleFontSize,
+      fontStyle: 'bold',
+      color: '#ffffff',
+      stroke: '#102033',
+      strokeThickness: 8,
+      align: 'center',
+      shadow: { offsetX: 0, offsetY: 4, color: '#041019', blur: 12, fill: true }
+    }).setOrigin(0.5).setAlpha(0.98).setAngle(3);
+
+    const lineTop = createOrnament(-106, 320, {
+      accent: 0xf1e4c5,
+      glow: 0xb9e8ff,
+      innerGap: 64,
+      innerWing: 36,
+      outerWing: 118,
+      tipInset: 18
+    });
+    const lineBottom = createOrnament(92, Math.min(Math.max(nameText.width + 170, 360), 600), {
+      accent: 0xcfd8e6,
+      glow: 0x8edbff,
+      innerGap: 76,
+      innerWing: 44,
+      outerWing: 154,
+      tipInset: 20
+    });
+
+    const subText = subtitle
+      ? this.add.text(0, 126, subtitle, {
+        fontSize: subtitleFontSize,
+        color: '#d5eefe',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center'
+      }).setOrigin(0.5).setAlpha(0)
+      : null;
+
+    const accentLeft = this.add.triangle(-220, -12, 0, 0, 26, 14, 0, 28, 0xa5ecff, 0.46)
+      .setAngle(180)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const accentRight = this.add.triangle(220, -12, 0, 0, 26, 14, 0, 28, 0xa5ecff, 0.46)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const pieces = [glow, halo, whiteFlash, lineTop, lineBottom, impactFlash, impactRing, ...burstStreaks, ...sparkDots, accentLeft, accentRight, enterText, nameText];
+    if (subText) pieces.push(subText);
+    container.add(pieces);
+
+    this._sceneIntroOverlay = {
+      dim,
+      container,
+      halo,
+      glow,
+      whiteFlash,
+      lineTop,
+      lineBottom,
+      impactFlash,
+      impactRing,
+      burstStreaks,
+      sparkDots,
+      accentLeft,
+      accentRight,
+      enterText,
+      nameText,
+      subText
+    };
+
+    this.tweens.add({
+      targets: whiteFlash,
+      alpha: { from: 0, to: 0.55 },
+      duration: 80,
+      delay: 250,
+      yoyo: true,
+      ease: 'Quad.Out'
+    });
+
+    this.tweens.add({
+      targets: enterText,
+      x: 0,
+      angle: 0,
+      duration: 420,
+      ease: 'Cubic.Out'
+    });
+
+    this.tweens.add({
+      targets: nameText,
+      x: 0,
+      angle: 0,
+      duration: 460,
+      ease: 'Cubic.Out'
+    });
+
+    this.tweens.add({
+      targets: lineTop,
+      alpha: 1,
+      scaleX: 1,
+      duration: 240,
+      delay: 220,
+      ease: 'Quad.Out'
+    });
+
+    this.tweens.add({
+      targets: lineBottom,
+      alpha: 1,
+      scaleX: 1,
+      duration: 260,
+      delay: 250,
+      ease: 'Quad.Out'
+    });
+
+    this.tweens.add({
+      targets: impactFlash,
+      alpha: { from: 0, to: 0.95 },
+      scaleX: { from: 0.35, to: 1.15 },
+      duration: 140,
+      delay: 280,
+      yoyo: true,
+      ease: 'Quad.Out'
+    });
+
+    this.tweens.add({
+      targets: impactRing,
+      alpha: { from: 0.95, to: 0 },
+      scaleX: { from: 0.42, to: 2.1 },
+      scaleY: { from: 0.42, to: 1.5 },
+      duration: 320,
+      delay: 280,
+      ease: 'Cubic.Out'
+    });
+
+    burstStreaks.forEach((streak, index) => {
+      const dir = index < 3 ? -1 : 1;
+      const spread = 72 + (index % 3) * 26;
+      this.tweens.add({
+        targets: streak,
+        width: { from: 0, to: 110 + (index % 2) * 36 },
+        x: { from: 0, to: dir * spread },
+        alpha: { from: 0, to: 0.95 },
+        duration: 120,
+        delay: 295,
+        yoyo: true,
+        ease: 'Cubic.Out'
+      });
+    });
+
+    sparkDots.forEach((dot, index) => {
+      const baseX = Number(dot.x) || 0;
+      const baseY = Number(dot.y) || 0;
+      const dirX = baseX >= 0 ? 1 : -1;
+      const dirY = baseY >= 0 ? 1 : -1;
+      this.tweens.add({
+        targets: dot,
+        x: { from: baseX * 0.35, to: baseX + dirX * (12 + index * 2) },
+        y: { from: baseY * 0.35 - 12, to: baseY + dirY * (6 + index * 3) - 12 },
+        alpha: { from: 0, to: 0.95 },
+        scale: { from: 0.6, to: 1.35 },
+        duration: 220,
+        delay: 300,
+        yoyo: true,
+        ease: 'Quad.Out'
+      });
+    });
+
+    this.tweens.add({
+      targets: [enterText, nameText],
+      scaleX: { from: 1.1, to: 1 },
+      scaleY: { from: 0.9, to: 1 },
+      duration: 180,
+      delay: 300,
+      ease: 'Back.Out'
+    });
+
+    this.tweens.add({
+      targets: [halo, lineTop, lineBottom],
+      alpha: { from: 0.16, to: 0.86 },
+      duration: 1180,
+      delay: 360,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: glow,
+      scaleX: { from: 0.96, to: 1.04 },
+      scaleY: { from: 0.94, to: 1.1 },
+      alpha: { from: 0.05, to: 0.16 },
+      duration: 1050,
+      delay: 340,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: accentLeft,
+      x: { from: -248, to: -186 },
+      alpha: { from: 0.12, to: 0.56 },
+      duration: 900,
+      delay: 340,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: accentRight,
+      x: { from: 248, to: 186 },
+      alpha: { from: 0.12, to: 0.56 },
+      duration: 900,
+      delay: 340,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    this.tweens.add({
+      targets: nameText,
+      scale: { from: 1, to: 1.03 },
+      duration: 900,
+      delay: 380,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    if (subText) {
+      this.tweens.add({
+        targets: subText,
+        alpha: 1,
+        y: 116,
+        duration: 260,
+        delay: 460,
+        ease: 'Quad.Out'
+      });
+    }
+
+    const exitLeadMs = 420;
+    this._sceneIntroHideTimer = this.time.delayedCall(Math.max(320, durationMs - exitLeadMs), () => {
+      this.clearSceneEntryPresentation({ immediate: false, restoreControls: true });
+    });
+  }
+
+  clearSceneEntryPresentation(opts = {}) {
+    const immediate = !!opts.immediate;
+    const restoreControls = opts.restoreControls !== false;
+
+    if (this._sceneIntroHideTimer) {
+      this._sceneIntroHideTimer.remove(false);
+      this._sceneIntroHideTimer = null;
+    }
+
+    const overlay = this._sceneIntroOverlay;
+    if (!overlay) {
+      this._sceneIntroActive = false;
+      if (restoreControls) this.restoreSceneEntryPlayerControl();
+      return;
+    }
+
+    const finalize = () => {
+      Object.values(overlay).forEach((obj) => {
+        try { obj?.destroy?.(); } catch (_) { /* ignore */ }
+      });
+      this._sceneIntroOverlay = null;
+      this._sceneIntroActive = false;
+      if (restoreControls) this.restoreSceneEntryPlayerControl();
+    };
+
+    if (immediate || !this.tweens) {
+      finalize();
+      return;
+    }
+
+    this.tweens.killTweensOf(overlay.container);
+    this.tweens.killTweensOf(overlay.dim);
+    this.tweens.killTweensOf(overlay.halo);
+    this.tweens.killTweensOf(overlay.glow);
+    this.tweens.killTweensOf(overlay.whiteFlash);
+    this.tweens.killTweensOf(overlay.lineTop);
+    this.tweens.killTweensOf(overlay.lineBottom);
+    this.tweens.killTweensOf(overlay.impactFlash);
+    this.tweens.killTweensOf(overlay.impactRing);
+    if (Array.isArray(overlay.burstStreaks)) this.tweens.killTweensOf(overlay.burstStreaks);
+    if (Array.isArray(overlay.sparkDots)) this.tweens.killTweensOf(overlay.sparkDots);
+    this.tweens.killTweensOf(overlay.accentLeft);
+    this.tweens.killTweensOf(overlay.accentRight);
+    this.tweens.killTweensOf(overlay.enterText);
+    this.tweens.killTweensOf(overlay.nameText);
+    if (overlay.subText) this.tweens.killTweensOf(overlay.subText);
+
+    this.tweens.add({
+      targets: overlay.dim,
+      alpha: 0,
+      duration: 360,
+      ease: 'Quad.In'
+    });
+
+    this.tweens.add({
+      targets: overlay.container,
+      alpha: 0,
+      scale: 1.03,
+      duration: 420,
+      ease: 'Cubic.In',
+      onComplete: finalize
+    });
+  }
+
+  restoreSceneEntryPlayerControl() {
+    const restore = this._sceneIntroRestoreState;
+    this._sceneIntroRestoreState = null;
+    if (!restore || !this.player || this.player.isAlive === false) return;
+    this.player.canMove = restore.canMove;
+    this.player.canFire = restore.canFire;
+  }
+
   /**
    * 处理游戏分辨率变化（手机旋转导致宽度变化时触发）
    */
@@ -557,6 +1090,7 @@ class GameScene extends Phaser.Scene {
     // 重建 HUD 和小地图
     this.rebuildTopLeftHud?.();
     this.repositionMiniMap?.();
+    this.bossManager?.getCurrentBoss?.()?.layoutScreenHud?.();
 
     console.log(`📐 游戏尺寸变化: ${w}×${h}`);
   }
@@ -571,6 +1105,7 @@ class GameScene extends Phaser.Scene {
 
     // 清理三选一 UI
     this.cleanupPathChoiceObjects();
+    this.clearSceneEntryPresentation({ immediate: true, restoreControls: false });
 
     // 底图对象可能在场景关闭时被 Phaser 自动销毁，但引用仍在；这里显式置空避免复用失效对象
     if (this.mapBgImage) {
@@ -1156,11 +1691,13 @@ class GameScene extends Phaser.Scene {
    * 每帧更新
    */
   update(time, delta) {
+    this.syncCombatBehaviorPause();
+
     // 物品冷却等逻辑使用"可暂停时钟"：
     // - 打开查看菜单/升级/商店等暂停期间不推进
     // - 恢复后的第一帧跳过 delta，避免补算
     if (!Number.isFinite(this._gameplayNowMs)) this._gameplayNowMs = 0;
-    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive);
+    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive || this._sceneIntroActive);
     if (this._skipGameplayDeltaOnce) {
       this._skipGameplayDeltaOnce = false;
     } else if (!menuFrozen) {
@@ -1194,6 +1731,31 @@ class GameScene extends Phaser.Scene {
     // 玩家死亡：立即停止所有玩家攻击与机制（但不暂停 Scene 的 time/tweens，保证 GameOver 延迟跳转仍能发生）
     if (this.player && this.player.isAlive === false) {
       this.handlePlayerDeathOnce();
+      return;
+    }
+
+    // 三选一期间允许玩家移动去碰路径门，但冻结所有战斗推进与自动攻击。
+    if (this._pathChoiceActive) {
+      if (Array.isArray(this._pathDoorZones) && this._pathDoorZones.length > 0 && this.player) {
+        for (const entry of this._pathDoorZones) {
+          const z = entry.zone;
+          if (!z) continue;
+          const touched = entry.rift
+            ? isTouchingRiftPortal(this.player, entry.rift)
+            : (() => {
+              const dx = this.player.x - z.x;
+              const dy = this.player.y - z.y;
+              const hx = (z.width || 0) * 0.5;
+              const hy = (z.height || 0) * 0.5;
+              return (Math.abs(dx) <= hx && Math.abs(dy) <= hy);
+            })();
+
+          if (touched) {
+            this.selectPathChoice(entry.choice);
+            break;
+          }
+        }
+      }
       return;
     }
     
@@ -1383,27 +1945,6 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // 三选一路径门：玩家走入任一门触发选择
-    if (this._pathChoiceActive && Array.isArray(this._pathDoorZones) && this._pathDoorZones.length > 0 && this.player) {
-      for (const entry of this._pathDoorZones) {
-        const z = entry.zone;
-        if (!z) continue;
-        const touched = entry.rift
-          ? isTouchingRiftPortal(this.player, entry.rift)
-          : (() => {
-            const dx = this.player.x - z.x;
-            const dy = this.player.y - z.y;
-            const hx = (z.width || 0) * 0.5;
-            const hy = (z.height || 0) * 0.5;
-            return (Math.abs(dx) <= hx && Math.abs(dy) <= hy);
-          })();
-
-        if (touched) {
-          this.selectPathChoice(entry.choice);
-          break;
-        }
-      }
-    }
   }
 
   /**

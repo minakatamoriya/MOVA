@@ -161,6 +161,7 @@ export function firePaladinHammer(player) {
     aoe.pierce = true;
     aoe.maxHits = 99;
     aoe.hitCooldownMs = 9999;
+    aoe.damageNumberAtTarget = true;
 
     // 圣焰：复用碰撞层的 holyfire 落地逻辑
     if (player.paladinHolyfire) {

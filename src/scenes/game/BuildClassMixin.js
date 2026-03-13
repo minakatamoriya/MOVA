@@ -542,6 +542,7 @@ export function applyBuildClassMixin(GameScene) {
 
       this._levelUpActive = true;
       this.buildState.levelUps += 1;
+      this.player?.restoreFullHealth?.();
 
       const options = this.getLevelUpOptions();
 
@@ -600,6 +601,7 @@ export function applyBuildClassMixin(GameScene) {
       // 关键：演出开始前先清空输入，避免摇杆/按键残留导致恢复后持续移动。
       this.resetTouchJoystickInput?.();
       this.player?.clearAnalogMove?.();
+      this.player?.freezeMovementAnimation?.();
 
       if (this.physics?.world) this.physics.world.pause();
 

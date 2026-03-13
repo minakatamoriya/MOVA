@@ -199,8 +199,12 @@ export default class CollisionManager {
 
         // 命中特效与数字
         const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (damageResult.isCrit ? 0xff3333 : 0xffff00));
+        const damageAnchorX = bullet.damageNumberAtTarget ? enemy.x : hitX;
+        const damageAnchorY = bullet.damageNumberAtTarget
+          ? (enemy.y - Math.max(22, (enemy.radius || enemy.bossSize || 18) + 8))
+          : (hitY - 24);
         this.createHitEffect(hitX, hitY, hitColor);
-        this.showDamageNumber(hitX, hitY - 24, damageResult.amount, damageResult.isCrit ? '#ff3333' : '#ffee00');
+        this.showDamageNumber(damageAnchorX, damageAnchorY, damageResult.amount, damageResult.isCrit ? '#ff3333' : '#ffee00');
 
         // 爆破散射
         if (bullet.explode) {

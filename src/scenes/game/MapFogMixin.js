@@ -250,6 +250,8 @@ export function applyMapFogMixin(GameScene) {
       this.player.setPosition(spawn.x, spawn.y);
       cam.startFollow(this.player, true, 0.18, 0.18);
       cam.setFollowOffset(0, 0);
+      this.petManager?.resetPositionsAroundPlayer?.();
+      this.undeadSummonManager?.resetPositionsAroundPlayer?.();
 
       // 开发期调试网格覆盖层
       if (this.mapConfig.debugGrid) this.renderDebugGridOverlay();
@@ -273,6 +275,8 @@ export function applyMapFogMixin(GameScene) {
           sticky: true
         });
       }
+
+      this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
 
       console.log('[StartRoom] entered. weaponSelected=', this.weaponSelected);
     },
@@ -357,6 +361,8 @@ export function applyMapFogMixin(GameScene) {
       this.time.delayedCall(80, () => {
         this.spawnLevel1IntroWave();
       });
+
+      this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
     },
 
     getBossSpawnPoint() {
@@ -434,6 +440,8 @@ export function applyMapFogMixin(GameScene) {
         this.player.setPosition(spawn.x, spawn.y);
         cam.startFollow(this.player, true, 0.12, 0.12);
         cam.setFollowOffset(0, 0);
+        this.petManager?.resetPositionsAroundPlayer?.();
+        this.undeadSummonManager?.resetPositionsAroundPlayer?.();
       }
 
       const suppressBossSpawn = !!opts.suppressBossSpawn;

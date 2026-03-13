@@ -164,6 +164,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // 移动属性
     this.baseMoveSpeed = 250;
     this.moveSpeed = this.baseMoveSpeed; // 移动速度
+    this.canMove = true;
     this.hitboxRadius = 8; // 核心判定半径（小型圆形）
     this.visualRadius = 15; // 视觉大小
 
@@ -652,9 +653,16 @@ export default class Player extends Phaser.GameObjects.Container {
    */
   update(time, delta) {
     if (!this.isAlive) return;
+
+    const combatPaused = !!this.scene?.isCombatBehaviorPaused?.();
     
     // 更新移动
     this.updateMovement(delta);
+
+    if (combatPaused) {
+      this.constrainToGameArea();
+      return;
+    }
 
     // 法师主普攻：奥术射线（持续连线光束）
     if (this.weaponType === 'laser') {
@@ -672,6 +680,13 @@ export default class Player extends Phaser.GameObjects.Container {
    * 更新移动
    */
   updateMovement(delta) {
+    if (this.canMove === false) {
+      this.updateMovementVisuals(0, 0);
+      this.updateBaseAnimation(0, 0);
+      this.updateArcaneCircle(delta, false);
+      return;
+    }
+
     let velocityX = 0;
     let velocityY = 0;
 
@@ -873,6 +888,16 @@ export default class Player extends Phaser.GameObjects.Container {
     }
     this.actionLock = 'hurt';
     this.playBaseAnimation('hurt', this.lastDirection);
+  }
+
+  freezeMovementAnimation() {
+    if (!this.sprite) return;
+
+    this.clearAnalogMove?.();
+    this.actionLock = null;
+    this.animState = 'idle';
+    this.updateMovementVisuals(0, 0);
+    this.playBaseAnimation('idle', this.lastDirection);
   }
 
   setAttackCallback(callback) {
@@ -1083,8 +1108,16 @@ export default class Player extends Phaser.GameObjects.Container {
    */
   heal(amount) {
     this.hp = Math.min(this.hp + amount, this.maxHp);
+    this.updateDeathDuelState();
     this.scene.events.emit('updatePlayerInfo');
     console.log(`玩家恢复 ${amount} 点生命值，当前 HP: ${this.hp}/${this.maxHp}`);
+  }
+
+  restoreFullHealth() {
+    this.hp = this.maxHp;
+    this.updateDeathDuelState();
+    this.scene.events.emit('updatePlayerInfo');
+    console.log(`玩家生命值已恢复至满状态，当前 HP: ${this.hp}/${this.maxHp}`);
   }
 
   /**

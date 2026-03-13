@@ -57,14 +57,17 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this._aggroStartAt = this.aggroActive ? (this.scene?.time?.now ?? 0) : 0;
 
     this.debuffs = {};
+    this.showStatusUi = this.isElite;
 
     this.expReward = config.expReward !== undefined
       ? Math.max(0, Math.floor(config.expReward))
       : (this.isElite ? 120 : 100);
 
     this.createVisuals(config.color);
-    this.createHpBar();
-    this.createDebuffUi();
+    if (this.showStatusUi) {
+      this.createHpBar();
+      this.createDebuffUi();
+    }
     this.updateHpBar();
 
     // Boss 入场无敌期：小怪不可被攻击，也不允许攻击
@@ -105,6 +108,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   createHpBar() {
+    if (!this.showStatusUi) return;
     const barW = Math.max(42, Math.round(this.radius * 3.2));
     const barH = 6;
     const y = -this.radius - 16;
@@ -120,6 +124,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   createDebuffUi() {
+    if (!this.showStatusUi) return;
     if (this._debuffUi) return;
     const y = -this.radius - 28;
     const container = this.scene.add.container(0, y);
@@ -131,6 +136,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   setDebuffStacks(key, stacks, opts = {}) {
+    if (!this.showStatusUi) return;
     if (!key) return;
     if (!this._debuffUi) this.createDebuffUi();
 
@@ -212,6 +218,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   updateHpBar() {
+    if (!this.showStatusUi) return;
     if (!this.hpBarBg || !this.hpBarFill) return;
     const max = Math.max(1, this.maxHp || 1);
     const cur = Math.max(0, this.currentHp || 0);

@@ -241,6 +241,36 @@ export default class UndeadSummonManager {
     return unit;
   }
 
+  resetPositionsAroundPlayer() {
+    if (!this.player) return;
+
+    const guardList = this.units.get(SUMMON_TYPES.guard) || [];
+    for (let i = 0; i < guardList.length; i++) {
+      const unit = guardList[i];
+      if (!unit?.active) continue;
+      const angle = guardList.length > 0 ? (Math.PI * 2 * i) / Math.max(1, guardList.length) : 0;
+      unit.anchorAngle = angle;
+      unit.setPosition(
+        this.player.x + Math.cos(angle) * 34,
+        this.player.y + 24 + Math.sin(angle) * 16
+      );
+      unit.rotation = 0;
+    }
+
+    const mageList = this.units.get(SUMMON_TYPES.mage) || [];
+    for (let i = 0; i < mageList.length; i++) {
+      const unit = mageList[i];
+      if (!unit?.active) continue;
+      const angle = mageList.length > 0 ? (Math.PI * 2 * i) / Math.max(1, mageList.length) : 0;
+      unit.orbitPhase = angle;
+      unit.setPosition(
+        this.player.x + Math.cos(angle) * 52,
+        this.player.y - 42 + Math.sin(angle) * 18
+      );
+      unit.rotation = 0;
+    }
+  }
+
   update(time, delta) {
     if (!this.player || this.player.isAlive === false) return;
 

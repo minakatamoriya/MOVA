@@ -93,6 +93,7 @@ export function applyLevelProgressionMixin(GameScene) {
       }
 
       this.levelBossTriggered = false;
+      this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
     },
 
     getMaxExpForLevel(level) {
@@ -511,6 +512,7 @@ export function applyLevelProgressionMixin(GameScene) {
       if (this._pathChoiceActive) return;
       this._pathChoiceActive = true;
       this.cleanupPathChoiceObjects();
+      try { this.bulletManager?.destroyAllBullets?.(); } catch (_) { /* ignore */ }
 
       const { choices: rawChoices } = getLayerChoices(
         this.currentStage,

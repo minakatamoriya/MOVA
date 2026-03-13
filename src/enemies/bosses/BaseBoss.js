@@ -108,6 +108,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 陷阱/落点等“延迟危险”清理跟踪（用于 Boss 死亡瞬间清空未来机制）
     this._hazardTimers = [];
     this._hazardObjects = [];
+
+    // 屏幕顶部 Boss HUD（固定屏幕坐标）
+    this._bossHud = null;
+    this._bossHudBarWidth = 0;
+    this._bossHudRevealed = false;
     
     // 创建视觉元素
     this.createVisuals();
@@ -328,23 +333,206 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     }).setOrigin(0.5);
     this.add(this.nameText);
     
-    // 血条背景
-    this.hpBarBg = this.scene.add.rectangle(0, -this.bossSize - 20, 150, 10, 0x333333);
-    this.add(this.hpBarBg);
-    
-    // 血条
-    this.hpBar = this.scene.add.rectangle(-75, -this.bossSize - 20, 150, 10, 0x00ff00);
-    this.hpBar.setOrigin(0, 0.5);
-    this.add(this.hpBar);
-    
     // 无敌状态指示器
     this.invincibleIndicator = this.scene.add.circle(0, 0, this.bossSize + 10);
     this.invincibleIndicator.setStrokeStyle(2, 0xffff00, 0.5);
     this.invincibleIndicator.setVisible(!!this.isInvincible);
     this.add(this.invincibleIndicator);
 
-    // Debuff 图标行（显示在 Boss“头像/本体”上方；支持未来多个图标并排）
+    this.createScreenHud();
+
+    // Debuff 图标行改为屏幕顶部 HUD 区域
     this.createDebuffUi();
+  }
+
+  createScreenHud() {
+    if (this._bossHud || !this.scene?.add) return;
+
+    const depthBase = 930;
+    const titleText = this.scene.add.text(0, 0, this.bossName, {
+      fontSize: '22px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffd39a',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4,
+      align: 'center'
+    }).setOrigin(0.5, 0);
+    titleText.setScrollFactor(0);
+    titleText.setDepth(depthBase);
+
+    const hpBarBg = this.scene.add.rectangle(0, 0, 150, 22, 0x0b0b18, 0.72).setOrigin(0.5, 0.5);
+    hpBarBg.setStrokeStyle(1, 0xffffff, 0.12);
+    hpBarBg.setScrollFactor(0);
+    hpBarBg.setDepth(depthBase);
+
+    const hpBar = this.scene.add.rectangle(0, 0, 146, 16, 0x00ff00, 1).setOrigin(0, 0.5);
+    hpBar.setScrollFactor(0);
+    hpBar.setDepth(depthBase + 1);
+
+    const affixContainer = this.scene.add.container(0, 0);
+    affixContainer.setScrollFactor(0);
+    affixContainer.setDepth(depthBase);
+    affixContainer.setVisible(false);
+
+    const debuffContainer = this.scene.add.container(0, 0);
+    debuffContainer.setScrollFactor(0);
+    debuffContainer.setDepth(depthBase);
+
+    this._bossHud = {
+      titleText,
+      hpBarBg,
+      hpBar,
+      affixContainer,
+      affixEntries: new Map(),
+      debuffContainer,
+      debuffEntries: new Map()
+    };
+
+    this.hpBarBg = hpBarBg;
+    this.hpBar = hpBar;
+    this.layoutScreenHud();
+    this.updateHpBar();
+    this.setHudVisible(false, { forceAll: true });
+  }
+
+  getTopHudBottom() {
+    const scene = this.scene;
+    const hudObjects = [
+      scene?.hpHeartText,
+      scene?.hpBarBg,
+      scene?.hpBarText,
+      scene?.expIconText,
+      scene?.expBarBg,
+      scene?.expBarText
+    ].filter(Boolean);
+
+    let bottom = 0;
+    for (let i = 0; i < hudObjects.length; i++) {
+      const obj = hudObjects[i];
+      if (!obj || obj.visible === false) continue;
+
+      let candidate = 0;
+      if (typeof obj.getBounds === 'function') {
+        const bounds = obj.getBounds();
+        candidate = Number(bounds?.bottom || 0);
+      } else {
+        const y = Number(obj.y || 0);
+        const h = Number(obj.displayHeight || obj.height || 0);
+        const originY = Number(obj.originY || 0);
+        candidate = y + h * (1 - originY);
+      }
+      if (candidate > bottom) bottom = candidate;
+    }
+
+    return Math.max(18, Math.ceil(bottom));
+  }
+
+  layoutScreenHud() {
+    const hud = this._bossHud;
+    const cam = this.scene?.cameras?.main;
+    if (!hud || !cam) return;
+
+    const centerX = Math.round(cam.width * 0.5);
+    const topHudBottom = this.getTopHudBottom();
+    const titleY = Math.max(20, topHudBottom + 18);
+    const barY = titleY + 42;
+    const affixY = barY + 30;
+    const debuffY = affixY + 26;
+    const horizontalPadding = Phaser.Math.Clamp(Math.round(cam.width * 0.025), 20, 32);
+    const barWidth = Math.max(320, Math.round(cam.width - horizontalPadding * 2));
+
+    this._bossHudBarWidth = barWidth - 4;
+
+    hud.titleText.setPosition(centerX, titleY);
+    hud.hpBarBg.setPosition(centerX, barY);
+    if (typeof hud.hpBarBg.setSize === 'function') {
+      hud.hpBarBg.setSize(barWidth, 22);
+    } else {
+      hud.hpBarBg.width = barWidth;
+      hud.hpBarBg.height = 22;
+    }
+    hud.hpBar.setPosition(Math.round(centerX - (barWidth * 0.5) + 2), barY);
+    hud.affixContainer.setPosition(centerX, affixY);
+    hud.debuffContainer.setPosition(centerX, debuffY);
+
+    this._layoutAffixUi();
+    this._layoutDebuffUi();
+    this.updateHpBar();
+  }
+
+  createAffixUi() {
+    if (!this._bossHud) this.createScreenHud();
+    return this._bossHud?.affixContainer || null;
+  }
+
+  setAffixLabels(labels = []) {
+    if (!this._bossHud) this.createScreenHud();
+    const hud = this._bossHud;
+    if (!hud) return;
+
+    const list = Array.isArray(labels)
+      ? labels.filter(Boolean).map((label) => String(label).trim()).filter(Boolean)
+      : [];
+
+    for (const [, entry] of hud.affixEntries) {
+      entry.container.setVisible(false);
+    }
+
+    if (list.length <= 0) {
+      hud.affixContainer.setVisible(false);
+      this._layoutAffixUi();
+      return;
+    }
+
+    hud.affixContainer.setVisible(true);
+
+    list.forEach((label, idx) => {
+      let entry = hud.affixEntries.get(idx);
+      if (!entry) {
+        const c = this.scene.add.container(0, 0);
+        const bg = this.scene.add.rectangle(0, 0, 92, 18, 0x000000, 0.32);
+        bg.setStrokeStyle(1, 0xffd27a, 0.24);
+
+        const text = this.scene.add.text(0, 0, label, {
+          fontSize: '11px',
+          fontFamily: 'Arial, sans-serif',
+          color: '#ffd27a',
+          fontStyle: 'bold'
+        }).setOrigin(0.5, 0.5);
+
+        c.add([bg, text]);
+        hud.affixContainer.add(c);
+        entry = { container: c, text, bg };
+        hud.affixEntries.set(idx, entry);
+      }
+
+      entry.text.setText(label);
+      entry.container.setVisible(true);
+    });
+
+    this._layoutAffixUi();
+  }
+
+  _layoutAffixUi() {
+    const hud = this._bossHud;
+    if (!hud?.affixEntries) return;
+
+    const visibleEntries = [...hud.affixEntries.values()].filter((entry) => entry?.container?.visible);
+    if (visibleEntries.length <= 0) {
+      hud.affixContainer.setVisible(false);
+      return;
+    }
+
+    hud.affixContainer.setVisible(true);
+    const spacing = 100;
+    const total = Math.max(0, visibleEntries.length - 1) * spacing;
+    const x0 = -Math.floor(total / 2);
+
+    visibleEntries.forEach((entry, idx) => {
+      entry.container.x = x0 + idx * spacing;
+      entry.container.y = 0;
+    });
   }
 
   setAggroRadius(r) {
@@ -365,13 +553,12 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   }
 
   createDebuffUi() {
+    if (!this._bossHud) this.createScreenHud();
     if (this._debuffUi) return;
-    const y = -this.bossSize - 38;
-    const container = this.scene.add.container(0, y);
-    this.add(container);
+    const container = this._bossHud?.debuffContainer || this.scene.add.container(0, 0);
     this._debuffUi = {
       container,
-      entries: new Map()
+      entries: this._bossHud?.debuffEntries || new Map()
     };
   }
 
@@ -454,6 +641,10 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       e.container.x = x0 + idx * spacing;
       e.container.y = 0;
     });
+
+    if (this._bossHud?.debuffContainer) {
+      this._bossHud.debuffContainer.setVisible(visibleKeys.length > 0);
+    }
   }
 
   /**
@@ -573,6 +764,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
     // 预警触发：Boss 从“待机”进入“开战”时，头顶出现感叹号
     if (this.combatActive) {
+      this._bossHudRevealed = true;
+      this.layoutScreenHud();
+      this.setHudVisible(true);
       this.showAlertIcon(1200);
     }
 
@@ -1403,8 +1597,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
    * 更新血条
    */
   updateHpBar() {
+    if (!this.hpBar || !this._bossHud) return;
     const hpPercent = Math.max(0, this.currentHp / this.maxHp);
-    this.hpBar.width = 150 * hpPercent;
+    this.hpBar.width = Math.max(2, Math.round(this._bossHudBarWidth * hpPercent));
     
     // 根据血量改变颜色
     if (hpPercent > 0.6) {
@@ -1425,6 +1620,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.isAlive = false;
     // 进入死亡流程时，立刻阻止任何后续机制继续生成
     this.isDestroyed = true;
+    this.setHudVisible(false);
 
     // 清空 Boss 弹幕与未来陷阱：避免“Boss 已死但弹幕/落点还在打人”
     try { this.scene?.bulletManager?.clearBossBullets?.(); } catch (_) { /* ignore */ }
@@ -1529,6 +1725,46 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     });
   }
 
+  setHudVisible(visible, options = {}) {
+    const hud = this._bossHud;
+    if (!hud) return;
+    const forceAll = !!options.forceAll;
+    const baseVisible = !!visible && this._bossHudRevealed;
+
+    hud.titleText?.setVisible(baseVisible);
+    hud.hpBarBg?.setVisible(baseVisible);
+    hud.hpBar?.setVisible(baseVisible);
+
+    const hasAffix = [...(hud.affixEntries?.values?.() || [])].some((entry) => entry?.container?.visible);
+    const hasDebuff = [...(hud.debuffEntries?.values?.() || [])].some((entry) => entry?.container?.visible);
+
+    hud.affixContainer?.setVisible(baseVisible && hasAffix);
+    hud.debuffContainer?.setVisible(baseVisible && hasDebuff);
+
+    if (forceAll && !baseVisible) {
+      hud.affixContainer?.setVisible(false);
+      hud.debuffContainer?.setVisible(false);
+    }
+  }
+
+  destroyScreenHud() {
+    const hud = this._bossHud;
+    if (!hud) return;
+
+    [
+      hud.titleText,
+      hud.hpBarBg,
+      hud.hpBar,
+      hud.affixContainer,
+      hud.debuffContainer
+    ].forEach((obj) => {
+      if (obj && obj.destroy) obj.destroy();
+    });
+
+    this._bossHud = null;
+    this._debuffUi = null;
+  }
+
   /**
    * 清理
    */
@@ -1538,6 +1774,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     try { this.clearHazards(); } catch (_) { /* ignore */ }
     if (this.attackTimer) this.attackTimer.remove();
     if (this.moveTimer) this.moveTimer.remove();
+    this.destroyScreenHud();
     super.destroy();
   }
 }

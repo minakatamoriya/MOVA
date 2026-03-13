@@ -259,6 +259,33 @@ export default class PetManager {
     return pet;
   }
 
+  resetPositionsAroundPlayer() {
+    if (!this.player) return;
+
+    const bear = this.active.get(PET_TYPES.bear);
+    if (bear?.active) {
+      bear.setPosition(this.player.x - 18, this.player.y + 26);
+      bear.rotation = 0;
+    }
+
+    const hawk = this.active.get(PET_TYPES.hawk);
+    if (hawk?.active) {
+      const angle = Number.isFinite(hawk.orbitPhase) ? hawk.orbitPhase : 0;
+      hawk.setPosition(
+        this.player.x + Math.cos(angle) * (hawk.orbitRadius || 46),
+        this.player.y - 72 + Math.sin(angle) * ((hawk.orbitRadius || 46) * 0.45)
+      );
+      hawk.rotation = 0;
+    }
+
+    const treant = this.active.get(PET_TYPES.treant);
+    if (treant?.active) {
+      treant.setPosition(this.player.x + 22, this.player.y + 26);
+      treant.rotation = 0;
+      treant.panicUntil = 0;
+    }
+  }
+
   onPetDamaged(pet, damage) {
     if (!pet || !pet.active) return;
 
