@@ -2,6 +2,145 @@ import Phaser from 'phaser';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../basicAttackMods';
 import { getBasicSkillColorScheme } from '../../visual/basicSkillColors';
 
+const PALADIN_HAMMER_CONFIG = Object.freeze({
+  baseFireRate: 1160,
+  baseAcquireRange: 220,
+  pierceAcquireRangeMult: 1.12,
+  baseImpactRadius: 72,
+  pierceImpactRadiusMult: 1.24,
+  baseDamageMult: 0.78,
+  pierceDamageMult: 0.96,
+  windupMs: 180,
+  windupMinMs: 100,
+  windupMaxMs: 280,
+  markerLeadMs: 70,
+  markerLeadMinMs: 40,
+  markerLeadMaxMs: 110,
+  trailWindow: 0.26,
+  trailSteps: 18
+});
+
+export function getPaladinHammerAcquireRange(player) {
+  return player?.paladinPierce
+    ? Math.round(PALADIN_HAMMER_CONFIG.baseAcquireRange * PALADIN_HAMMER_CONFIG.pierceAcquireRangeMult)
+    : PALADIN_HAMMER_CONFIG.baseAcquireRange;
+}
+
+export function getPaladinHammerImpactRadius(player) {
+  return player?.paladinPierce
+    ? Math.round(PALADIN_HAMMER_CONFIG.baseImpactRadius * PALADIN_HAMMER_CONFIG.pierceImpactRadiusMult)
+    : PALADIN_HAMMER_CONFIG.baseImpactRadius;
+}
+
+function getPaladinHammerDamageMultiplier(player) {
+  return player?.paladinPierce
+    ? PALADIN_HAMMER_CONFIG.pierceDamageMult
+    : PALADIN_HAMMER_CONFIG.baseDamageMult;
+}
+
+function getPaladinHammerTiming(player) {
+  const fireRate = Number.isFinite(player?.fireRate) && player.fireRate > 0
+    ? player.fireRate
+    : PALADIN_HAMMER_CONFIG.baseFireRate;
+  const ratio = fireRate / PALADIN_HAMMER_CONFIG.baseFireRate;
+  return {
+    windupMs: Phaser.Math.Clamp(
+      Math.round(PALADIN_HAMMER_CONFIG.windupMs * ratio),
+      PALADIN_HAMMER_CONFIG.windupMinMs,
+      PALADIN_HAMMER_CONFIG.windupMaxMs
+    ),
+    markerLeadMs: Phaser.Math.Clamp(
+      Math.round(PALADIN_HAMMER_CONFIG.markerLeadMs * ratio),
+      PALADIN_HAMMER_CONFIG.markerLeadMinMs,
+      PALADIN_HAMMER_CONFIG.markerLeadMaxMs
+    )
+  };
+}
+
+function getQuadraticPoint(t, start, control, end) {
+  const inv = 1 - t;
+  return {
+    x: (inv * inv * start.x) + (2 * inv * t * control.x) + (t * t * end.x),
+    y: (inv * inv * start.y) + (2 * inv * t * control.y) + (t * t * end.y)
+  };
+}
+
+function drawQuadraticSegment(graphics, start, control, end, fromT, toT, width, color, alpha, steps) {
+  if (!graphics || toT <= fromT) return;
+  graphics.lineStyle(width, color, alpha);
+  graphics.beginPath();
+  const first = getQuadraticPoint(fromT, start, control, end);
+  graphics.moveTo(first.x, first.y);
+  for (let i = 1; i <= steps; i++) {
+    const t = fromT + ((toT - fromT) * (i / steps));
+    const p = getQuadraticPoint(t, start, control, end);
+    graphics.lineTo(p.x, p.y);
+  }
+  graphics.strokePath();
+}
+
+function spawnHammerSweep(scene, start, control, end, scheme, windupMs) {
+  const sweep = scene.add.graphics();
+  const coreGlow = scene.add.circle(start.x, start.y, 12, 0xffffff, 0.20);
+  const coreSpark = scene.add.circle(start.x, start.y, 6, scheme.coreBright || scheme.coreColor, 0.95);
+  sweep.setDepth(9);
+  sweep.setBlendMode(Phaser.BlendModes.ADD);
+  coreGlow.setDepth(10);
+  coreGlow.setBlendMode(Phaser.BlendModes.ADD);
+  coreSpark.setDepth(11);
+  coreSpark.setBlendMode(Phaser.BlendModes.ADD);
+
+  scene.tweens.addCounter({
+    from: 0,
+    to: 1,
+    duration: windupMs,
+    ease: 'Cubic.Out',
+    onUpdate: (tween) => {
+      if (!sweep.active) return;
+      const progress = tween.getValue();
+      const tail = Math.max(0, progress - PALADIN_HAMMER_CONFIG.trailWindow);
+      const tip = getQuadraticPoint(progress, start, control, end);
+      sweep.clear();
+      drawQuadraticSegment(sweep, start, control, end, tail, progress, 24, scheme.accentColor || scheme.coreColor, 0.14, PALADIN_HAMMER_CONFIG.trailSteps);
+      drawQuadraticSegment(sweep, start, control, end, tail, progress, 14, scheme.coreBright || scheme.coreColor, 0.92, PALADIN_HAMMER_CONFIG.trailSteps);
+      drawQuadraticSegment(sweep, start, control, end, Math.max(tail, progress - 0.13), progress, 7, 0xffffff, 0.75, 10);
+      coreGlow.setPosition(tip.x, tip.y);
+      coreGlow.setScale(1 + progress * 0.55);
+      coreGlow.setAlpha(0.16 + progress * 0.12);
+      coreSpark.setPosition(tip.x, tip.y);
+      coreSpark.setScale(0.9 + progress * 0.35);
+      coreSpark.setAlpha(0.9);
+    },
+    onComplete: () => {
+      if (sweep && sweep.active) sweep.destroy();
+      if (coreGlow && coreGlow.active) coreGlow.destroy();
+      if (coreSpark && coreSpark.active) coreSpark.destroy();
+    }
+  });
+}
+
+function spawnImpactMarker(scene, x, y, radius, scheme, markerLeadMs) {
+  const flash = scene.add.circle(x, y, Math.max(14, Math.round(radius * 0.24)), scheme.coreBright || scheme.coreColor, 0.14);
+  flash.setDepth(8);
+  flash.setBlendMode(Phaser.BlendModes.ADD);
+
+  const ring = scene.add.circle(x, y, Math.max(20, Math.round(radius * 0.4)), scheme.coreColor, 0.05);
+  ring.setStrokeStyle(3, scheme.coreBright || scheme.coreColor, 0.9);
+  ring.setDepth(8);
+
+  scene.tweens.add({
+    targets: [flash, ring],
+    alpha: 0,
+    scale: 1.18,
+    duration: markerLeadMs,
+    ease: 'Sine.Out',
+    onComplete: () => {
+      if (flash && flash.active) flash.destroy();
+      if (ring && ring.active) ring.destroy();
+    }
+  });
+}
+
 export function firePaladinHammer(player) {
   if (!player?.scene) return false;
 
@@ -39,22 +178,36 @@ export function firePaladinHammer(player) {
   }
 
   // 只有在一定索敌范围内才出手
-  const baseAcquireRange = 260;
-  const acquireRange = player.paladinPierce ? Math.round(baseAcquireRange * 1.06) : baseAcquireRange;
+  const acquireRange = getPaladinHammerAcquireRange(player);
   const distToTarget = Phaser.Math.Distance.Between(px, py, target.x, target.y);
   if (distToTarget > acquireRange) return false;
 
-  // 当前版本先简化：一个“金色大圆圈” + 伤害
-  const baseRadius = 160;
-  const radius = player.paladinPierce ? Math.round(baseRadius * 1.12) : baseRadius;
+  const radius = getPaladinHammerImpactRadius(player);
+  const damageMultiplier = getPaladinHammerDamageMultiplier(player);
+  const timing = getPaladinHammerTiming(player);
 
-  // 敌人进入索敌范围才出手：落点以目标位置为准（类似星落的“点名落地 AoE”）
   const impactX = target.x;
   const impactY = target.y;
 
-  const now = scene.time?.now ?? 0;
-
   const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
+
+  const angle = Phaser.Math.Angle.Between(px, py, impactX, impactY);
+  const distance = Math.max(40, Phaser.Math.Distance.Between(px, py, impactX, impactY));
+  const backOffset = Math.min(74, Math.max(48, distance * 0.32));
+  const startDiagonalOffset = Math.min(52, Math.max(24, distance * 0.18));
+  const controlDistance = Math.max(44, distance * 0.52);
+  const lateral = Math.min(64, Math.max(22, distance * 0.24));
+  const lateralSign = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+  const perpendicular = angle + (Math.PI / 2);
+  const start = {
+    x: px - (Math.cos(angle) * backOffset) + (Math.cos(perpendicular) * startDiagonalOffset * lateralSign),
+    y: py - (Math.sin(angle) * backOffset) + (Math.sin(perpendicular) * startDiagonalOffset * lateralSign)
+  };
+  const control = {
+    x: px + (Math.cos(angle) * controlDistance) + (Math.cos(perpendicular) * lateral * lateralSign),
+    y: py + (Math.sin(angle) * controlDistance) + (Math.sin(perpendicular) * lateral * lateralSign)
+  };
+  const end = { x: impactX, y: impactY };
 
   const spawnImpact = (x, y, dmgMult = 1) => {
     if (!scene?.bulletManager?.createPlayerBullet) return;
@@ -71,31 +224,62 @@ export function firePaladinHammer(player) {
     shockOuter.setStrokeStyle(2, 0xffffff, 0.22);
     shockOuter.setDepth(6);
 
-    // 碎光粒子（少量、短命）
-    const sparks = [];
-    const sparkCount = 10;
+    // 碎光粒子 + 短促冲击碎片
+    const sparkCount = 18;
     for (let i = 0; i < sparkCount; i++) {
-      const a = (Math.PI * 2 * i) / sparkCount + Phaser.Math.FloatBetween(-0.18, 0.18);
-      const r0 = Phaser.Math.Between(6, 16);
-      const p = scene.add.circle(
+      const a = (Math.PI * 2 * i) / sparkCount + Phaser.Math.FloatBetween(-0.12, 0.12);
+      const r0 = Phaser.Math.Between(4, 14);
+      const burst = scene.add.circle(
         x + Math.cos(a) * r0,
         y + Math.sin(a) * r0,
-        Phaser.Math.Between(2, 3),
+        Phaser.Math.Between(2, 4),
         Phaser.Math.RND.pick([scheme.coreBright || scheme.coreColor, scheme.accentColor || scheme.coreColor, 0xffffff]),
+        0.95
+      );
+      burst.setDepth(9);
+      burst.setBlendMode(Phaser.BlendModes.ADD);
+
+      scene.tweens.add({
+        targets: burst,
+        alpha: 0,
+        scale: 0.15,
+        x: burst.x + Math.cos(a) * Phaser.Math.Between(22, 52),
+        y: burst.y + Math.sin(a) * Phaser.Math.Between(22, 52),
+        duration: Phaser.Math.Between(220, 340),
+        ease: 'Cubic.Out',
+        onComplete: () => {
+          if (burst && burst.active) burst.destroy();
+        }
+      });
+    }
+
+    const shardCount = 8;
+    for (let i = 0; i < shardCount; i++) {
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const shard = scene.add.rectangle(
+        x + Math.cos(a) * Phaser.Math.Between(6, 14),
+        y + Math.sin(a) * Phaser.Math.Between(6, 14),
+        Phaser.Math.Between(10, 16),
+        Phaser.Math.Between(2, 4),
+        scheme.coreBright || scheme.coreColor,
         0.9
       );
-      p.setDepth(9);
-      sparks.push(p);
+      shard.setDepth(9);
+      shard.setAngle(Phaser.Math.RadToDeg(a));
+      shard.setBlendMode(Phaser.BlendModes.ADD);
+
       scene.tweens.add({
-        targets: p,
+        targets: shard,
         alpha: 0,
-        scale: 0.2,
-        x: p.x + Math.cos(a) * Phaser.Math.Between(14, 28),
-        y: p.y + Math.sin(a) * Phaser.Math.Between(14, 28),
-        duration: Phaser.Math.Between(180, 260),
-        ease: 'Sine.Out',
+        scaleX: 0.2,
+        scaleY: 0.2,
+        angle: shard.angle + Phaser.Math.Between(-50, 50),
+        x: shard.x + Math.cos(a) * Phaser.Math.Between(28, 60),
+        y: shard.y + Math.sin(a) * Phaser.Math.Between(28, 60),
+        duration: Phaser.Math.Between(180, 300),
+        ease: 'Quart.Out',
         onComplete: () => {
-          if (p && p.active) p.destroy();
+          if (shard && shard.active) shard.destroy();
         }
       });
     }
@@ -140,7 +324,7 @@ export function firePaladinHammer(player) {
       {
         radius,
         speed: 0,
-        damage: Math.max(1, Math.round(player.bulletDamage * 0.92 * dmgMult)),
+        damage: Math.max(1, Math.round(player.bulletDamage * damageMultiplier * dmgMult)),
         hasGlow: false,
         hasTrail: false,
         glowRadius: 0,
@@ -176,8 +360,16 @@ export function firePaladinHammer(player) {
     player.bullets.push(aoe);
   };
 
-  // 立即结算（当前版本先只要“大金圈+伤害”）
-  spawnImpact(impactX, impactY, 1);
+  spawnHammerSweep(scene, start, control, end, scheme, timing.windupMs);
+
+  scene.time.delayedCall(timing.windupMs, () => {
+    if (!scene?.sys?.isActive?.()) return;
+    spawnImpactMarker(scene, impactX, impactY, radius, scheme, timing.markerLeadMs);
+    scene.time.delayedCall(timing.markerLeadMs, () => {
+      if (!scene?.sys?.isActive?.()) return;
+      spawnImpact(impactX, impactY, 1);
+    });
+  });
 
   return true;
 }

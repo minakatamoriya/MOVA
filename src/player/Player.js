@@ -660,8 +660,17 @@ export default class Player extends Phaser.GameObjects.Container {
     this.updateMovement(delta);
 
     if (combatPaused) {
+      if (this.scene?._pathChoiceActive && this.weaponType === 'warlock_poisonnova') {
+        fireWarlockPoisonNova(this);
+      }
       this.constrainToGameArea();
       return;
+    }
+
+    if (this.weaponType === 'warlock_poisonnova' && this._warlockPoisonNovaForceRefresh) {
+      this._warlockPoisonNovaForceRefresh = false;
+      this.playAttackAnimation();
+      fireWarlockPoisonNova(this);
     }
 
     // 法师主普攻：奥术射线（持续连线光束）
@@ -975,6 +984,11 @@ export default class Player extends Phaser.GameObjects.Container {
    */
   takeDamage(damage) {
     console.log('[takeDamage] 受伤检查 - isAlive:', this.isAlive, 'isInvincible:', this.isInvincible);
+
+    if (this.scene?.isCombatBehaviorPaused?.()) {
+      console.log('[takeDamage] 被跳过 - 战斗行为已暂停');
+      return false;
+    }
     
     if (!this.isAlive || this.isInvincible) {
       console.log('[takeDamage] 被跳过 - 无敌或已死亡');
@@ -1268,7 +1282,7 @@ export default class Player extends Phaser.GameObjects.Container {
     } else if (coreKey === 'paladin') {
       // 圣骑主普攻：重锤砸地（近身 AoE，不空挥）
       this.weaponType = 'paladin_hammer';
-      this.baseFireRate = 980;
+      this.baseFireRate = 1160;
     } else if (coreKey === 'scatter') {
       // 猎人
       this.enableScatterBuild();

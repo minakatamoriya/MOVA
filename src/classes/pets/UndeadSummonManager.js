@@ -88,6 +88,10 @@ export default class UndeadSummonManager {
   }
 
   getAllEnemies() {
+    if (this.scene?.exitDoorActive || this.scene?._pathChoiceActive) {
+      return [];
+    }
+
     const enemies = [];
     const boss = this.scene?.bossManager?.getCurrentBoss?.();
     if (boss && boss.isAlive) enemies.push(boss);
@@ -271,6 +275,18 @@ export default class UndeadSummonManager {
     }
   }
 
+  onBossDefeated() {
+    this.resetPositionsAroundPlayer();
+
+    for (const list of this.units.values()) {
+      for (let i = 0; i < list.length; i++) {
+        const unit = list[i];
+        if (!unit?.active) continue;
+        unit.lastAttackAt = 0;
+      }
+    }
+  }
+
   update(time, delta) {
     if (!this.player || this.player.isAlive === false) return;
 
@@ -400,10 +416,6 @@ export default class UndeadSummonManager {
       bullet.hitCooldownMs = 120;
       this.player.bullets.push(bullet);
     }
-
-    const line = this.scene.add.line(0, 0, unit.x, unit.y, target.x, target.y, 0x8df5ff, 0.32);
-    line.setLineWidth(1, 1);
-    this.scene.tweens.add({ targets: line, alpha: 0, duration: 140, onComplete: () => line.destroy() });
   }
 
   clearUnits() {

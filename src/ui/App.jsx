@@ -15,6 +15,8 @@ export default function App() {
 
   const fogEnabled = useUiStore((s) => s.fogEnabled);
   const setFogEnabled = useUiStore((s) => s.setFogEnabled);
+  const showEnemyOverlays = useUiStore((s) => s.showEnemyOverlays);
+  const setShowEnemyOverlays = useUiStore((s) => s.setShowEnemyOverlays);
 
   const viewOpen = useUiStore((s) => s.viewOpen);
   const setViewOpen = useUiStore((s) => s.setViewOpen);
@@ -88,6 +90,7 @@ export default function App() {
     const onSettingsChanged = (settings) => {
       setShowDamage(settings?.showDamage !== false);
       setFogEnabled(settings?.fogEnabled === true);
+      setShowEnemyOverlays(settings?.showEnemyOverlays === true);
     };
     uiBus.on('phaser:settingsChanged', onSettingsChanged);
     // 拉取一次当前设置（main.js 也会初始推送，但这里确保不漏）
@@ -95,7 +98,7 @@ export default function App() {
     return () => {
       uiBus.off('phaser:settingsChanged', onSettingsChanged);
     };
-  }, [setShowDamage, setFogEnabled]);
+  }, [setShowDamage, setFogEnabled, setShowEnemyOverlays]);
 
   useEffect(() => {
     if (!viewOpen) return;
@@ -859,6 +862,34 @@ export default function App() {
                     const v = !!e.target.checked;
                     setFogEnabled(v);
                     uiBus.emit('ui:settings:setFogEnabled', v);
+                  }}
+                  style={{ width: 20, height: 20 }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 12,
+                  border: '2px solid rgba(42,42,58,1)',
+                  background: 'rgba(11, 11, 24, 0.62)'
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 20 }}>显示敌人头顶状态</div>
+                  <div style={{ opacity: 0.75, fontSize: 16, marginTop: 4 }}>关闭时不显示小怪和精英头顶的血条与 debuff</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showEnemyOverlays}
+                  onChange={(e) => {
+                    const v = !!e.target.checked;
+                    setShowEnemyOverlays(v);
+                    uiBus.emit('ui:settings:setShowEnemyOverlays', v);
                   }}
                   style={{ width: 20, height: 20 }}
                 />

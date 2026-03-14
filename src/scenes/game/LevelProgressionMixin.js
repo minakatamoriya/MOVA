@@ -364,6 +364,13 @@ export function applyLevelProgressionMixin(GameScene) {
 
       try { this.bulletManager?.clearBossBullets?.(); } catch (_) { /* ignore */ }
 
+      if (this.player?.fireTimer) {
+        this.player.fireTimer.paused = false;
+      }
+      if (this.player?.weaponType !== 'warrior_melee') {
+        this.player.canFire = true;
+      }
+
       this.currentStage = (this.currentStage || 0) + 1;
 
       const flow = STAGE_FLOW.find(s => s.layer === this.currentStage);
@@ -773,6 +780,8 @@ export function applyLevelProgressionMixin(GameScene) {
           isElite: false,
           aggroOnSeen: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
+          aggroRadius: 420,
+          shootRange: (def.moveType === 'shooter') ? 190 : undefined,
           shootCdMs: (def.moveType === 'shooter') ? balance.minions.projectiles.cdMs : undefined,
           shootBulletCount: (def.moveType === 'shooter') ? balance.minions.projectiles.count : undefined,
           shootBulletSpread: (def.moveType === 'shooter') ? balance.minions.projectiles.spread : undefined,
@@ -808,6 +817,8 @@ export function applyLevelProgressionMixin(GameScene) {
           isElite: true,
           aggroOnSeen: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
+          aggroRadius: 460,
+          shootRange: (def.moveType === 'shooter') ? 230 : undefined,
           shootCdMs: (def.moveType === 'shooter') ? balance.elites.projectiles.cdMs : undefined,
           shootBulletCount: (def.moveType === 'shooter') ? balance.elites.projectiles.count : undefined,
           shootBulletSpread: (def.moveType === 'shooter') ? balance.elites.projectiles.spread : undefined,

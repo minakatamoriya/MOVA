@@ -14,6 +14,9 @@ export const useUiStore = create((set) => ({
   fogEnabled: false,
   setFogEnabled: (v) => set({ fogEnabled: !!v }),
 
+  showEnemyOverlays: false,
+  setShowEnemyOverlays: (v) => set({ showEnemyOverlays: !!v }),
+
   viewOpen: false,
   activeTab: 'classes',
   setViewOpen: (open) => set({ viewOpen: !!open }),

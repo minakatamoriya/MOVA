@@ -1736,6 +1736,28 @@ class GameScene extends Phaser.Scene {
 
     // 三选一期间允许玩家移动去碰路径门，但冻结所有战斗推进与自动攻击。
     if (this._pathChoiceActive) {
+      // 路径选择期间仍需维持非战斗跟随更新：
+      // - 掉落可正常吸附/拾取
+      // - 术士毒圈继续扩张/消散
+      // - 召唤物继续跟随玩家回位
+      // - 各职业攻击范围圈持续跟随玩家
+      if (this.bulletManager) {
+        this.bulletManager.update(delta);
+      }
+      if (this.petManager) {
+        this.petManager.update(time, delta);
+      }
+      if (this.undeadSummonManager) {
+        this.undeadSummonManager.update(time, delta);
+      }
+      this.updateDrops(delta);
+      this.updateWarriorRangeRing?.(time);
+      this.updatePaladinTargetingRing(time);
+      this.updateArcherRangeRing(time);
+      this.updateMageRangeRing?.(time);
+      this.updateDruidRangeRing?.(time);
+      this.updateWarlockRangeRing?.(time);
+
       if (Array.isArray(this._pathDoorZones) && this._pathDoorZones.length > 0 && this.player) {
         for (const entry of this._pathDoorZones) {
           const z = entry.zone;
@@ -1824,6 +1846,7 @@ class GameScene extends Phaser.Scene {
     this.updateMelee(time);
     this.updatePaladinPulse(time);
     this.updateWarlockDebuff(time, delta);
+    this.updateWarriorRangeRing?.(time);
     this.updatePaladinTargetingRing(time);
     this.updateArcherRangeRing(time);
     this.updateMageRangeRing?.(time);

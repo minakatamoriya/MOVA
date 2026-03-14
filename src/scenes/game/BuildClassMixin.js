@@ -19,6 +19,7 @@ import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
 import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill } from '../../classes/talentTrees';
 import { calculateResolvedDamage } from '../../combat/damageModel';
+import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 
 /**
  * 职业构建 / 升级 / 近战 / 法师 / 圣骑 / 术士 / 德鲁伊宠物 相关方法
@@ -336,28 +337,36 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'warlock_spread':
           this.player.warlockPoisonSpreadStacks = Math.min(3, (this.player.warlockPoisonSpreadStacks || 0) + 1);
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_corrode':
           this.player.warlockPoisonCorrodeStacks = Math.min(3, (this.player.warlockPoisonCorrodeStacks || 0) + 1);
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_toxicity':
           this.player.warlockPoisonToxicityStacks = Math.min(3, (this.player.warlockPoisonToxicityStacks || 0) + 1);
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_malady':
           this.player.warlockPoisonDiseaseStacks = Math.min(3, (this.player.warlockPoisonDiseaseStacks || 0) + 1);
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_autoseek':
           this.player.warlockPoisonAutoSeek = true;
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_contagion':
           this.player.warlockPoisonContagion = true;
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_smoke':
           this.player.warlockPoisonSmoke = true;
           this.warlockEnabled = true;
+          this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_plague':
           this.player.warlockPoisonPlague = true;
+          this.refreshWarlockPoisonNovaState();
           break;
 
         case 'arcane_swift':
@@ -864,6 +873,7 @@ export function applyBuildClassMixin(GameScene) {
         this._levelUpPresentationTimer = null;
         this.clearLevelUpPresentation();
         this._levelUpCinematicActive = false;
+        this.player?.restoreFullHealth?.();
 
         if (this.anims) this.anims.pauseAll();
         if (this.time) this.time.paused = true;
@@ -1304,6 +1314,34 @@ export function applyBuildClassMixin(GameScene) {
       this.meleeLifesteal = Math.min(0.18, (this.meleeLifesteal || 0) + 0.03);
     },
 
+    updateWarriorRangeRing(time) {
+      if (!this.player || this.player.isAlive === false) {
+        if (this._warriorTargetRing) this._warriorTargetRing.setVisible(false);
+        return;
+      }
+
+      if (!this.meleeEnabled || !this.isRangeIndicatorEnabled()) {
+        if (this._warriorTargetRing) this._warriorTargetRing.setVisible(false);
+        return;
+      }
+
+      this.ensureUnifiedRangeRing('_warriorTargetRing', 'warrior');
+
+      const range = this.meleeRange || 150;
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+
+      const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
+      const r = this.player.warriorSpin
+        ? Phaser.Math.Clamp(range, 90, 420)
+        : Phaser.Math.Clamp(halfMoonR, 46, 220);
+
+      this._warriorTargetRing.setRadius(r);
+      this._warriorTargetRing.setPosition(px, py);
+      this._warriorTargetRing.setVisible(true);
+    },
+
     updateMelee(time) {
       if (!this.meleeEnabled || !this.player || this.player.isAlive === false) return;
 
@@ -1322,22 +1360,7 @@ export function applyBuildClassMixin(GameScene) {
       const acquireRange = Math.max(220, range * 1.6);
       const target = this.getNearestEnemy(acquireRange);
 
-      if (this._warriorTargetRing) {
-        if (!this.isRangeIndicatorEnabled()) {
-          this._warriorTargetRing.setVisible(false);
-        } else {
-          // 战士“索敌/攻击范围框”：对齐半月斩（非旋风）实际命中半径
-          // - 半月斩命中半径在 spawnWarriorMeleeHit() 内为 (meleeRange * 0.60) 并 clamp 到 46..140
-          // - 旋风斩（360°）则以 meleeRange 为准
-          const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
-          const r = this.player.warriorSpin
-            ? Phaser.Math.Clamp(range, 90, 420)
-            : Phaser.Math.Clamp(halfMoonR, 46, 220);
-          this._warriorTargetRing.setRadius(r);
-          this._warriorTargetRing.setPosition(px, py);
-          this._warriorTargetRing.setVisible(true);
-        }
-      }
+      this.updateWarriorRangeRing(time);
 
       // 若正在挥砍中，即使目标被消灭/暂时丢失，也要把本次挥动完整播放完。
       if (!target || !target.isAlive) {
@@ -2061,8 +2084,7 @@ export function applyBuildClassMixin(GameScene) {
       // 初始更短：保证“战士 < 圣骑 < 法师 < 德鲁伊 < 猎人”
       // 圣骑锤击：索敌范围内才出手，范围圈显示“索敌半径”
       // 具体落点/伤害在 firePaladinHammer() 内处理
-      const baseAcquireRange = 260;
-      const acquireRange = this.player.paladinPierce ? Math.round(baseAcquireRange * 1.06) : baseAcquireRange;
+      const acquireRange = getPaladinHammerAcquireRange(this.player);
 
       const r = Phaser.Math.Clamp(acquireRange, 120, 520);
       this._paladinTargetRing.setRadius(r);
@@ -2288,6 +2310,33 @@ export function applyBuildClassMixin(GameScene) {
       this.warlockEnabled = true;
       this.warlockDebuffEnabled = true;
       if (this.player) this.player.canFire = true;
+    },
+
+    refreshWarlockPoisonNovaState(options = {}) {
+      if (!this.player) return;
+
+      const clearExistingZones = options.clearExistingZones !== false;
+      const respawnImmediately = options.respawnImmediately !== false;
+
+      this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
+
+      if (clearExistingZones && this.bulletManager?.getPlayerBullets && this.bulletManager?.destroyBullet) {
+        const poisonZones = this.bulletManager.getPlayerBullets()
+          .filter((bullet) => bullet && bullet.active && !bullet.markedForRemoval && bullet.isPoisonZone);
+
+        for (let i = 0; i < poisonZones.length; i++) {
+          this.bulletManager.destroyBullet(poisonZones[i], true);
+        }
+
+        if (Array.isArray(this.player.bullets)) {
+          this.player.bullets = this.player.bullets.filter(
+            (bullet) => bullet && bullet.active && !bullet.markedForRemoval && !bullet.isPoisonZone
+          );
+        }
+      }
+
+      this.player._warlockPoisonNovaLastAt = 0;
+      this.player._warlockPoisonNovaForceRefresh = !!respawnImmediately;
     },
 
     upgradeWarlockPoison() {

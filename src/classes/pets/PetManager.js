@@ -111,6 +111,8 @@ export default class PetManager {
   }
 
   getCurrentTarget() {
+    if (this.scene?.exitDoorActive || this.scene?._pathChoiceActive) return null;
+
     const boss = this.scene?.bossManager?.getCurrentBoss?.();
     const now = this.scene.time?.now ?? 0;
 
@@ -129,7 +131,7 @@ export default class PetManager {
       return (dx * dx + dy * dy) <= (acquireRange * acquireRange);
     };
 
-    if (this.focusTarget && now < (this.focusUntil || 0) && this.focusTarget.active) {
+    if (this.focusTarget && now < (this.focusUntil || 0) && this.focusTarget.active && this.focusTarget.isAlive !== false) {
       if (isWithinDruidAcquireRange(this.focusTarget)) return this.focusTarget;
       return null;
     }

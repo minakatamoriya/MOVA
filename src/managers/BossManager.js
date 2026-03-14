@@ -84,9 +84,9 @@ export default class BossManager {
               boss.castCrescentSlashAtPlayer({
                 range: meleeRange,
                 arcDeg: 150,
-                windupMs: 260,
-                slashMs: 220,
-                lingerMs: 240,
+                windupMs: 560,
+                slashMs: 680,
+                lingerMs: 420,
                 color: 0xffffff,
                 damage: 10
               });
@@ -155,9 +155,9 @@ export default class BossManager {
             boss.castCrescentSlashAtPlayer?.({
               range: meleeRange,
               arcDeg: 150,
-              windupMs: 260,
-              slashMs: 220,
-              lingerMs: 240,
+              windupMs: 560,
+              slashMs: 680,
+              lingerMs: 420,
               color: 0xffffff,
               damage: 6
             });
@@ -222,7 +222,8 @@ export default class BossManager {
     if (this.scene._isTutorialBoss) {
       this.scene._isTutorialBoss = false;
       this.currentBoss = null;
-      this.destroyMinions();
+      this.scene.petManager?.resetPositionsAroundPlayer?.();
+      this.scene.undeadSummonManager?.onBossDefeated?.();
       this.scene.events.emit('tutorialBossDefeated', data);
       return;
     }
@@ -250,7 +251,8 @@ export default class BossManager {
     }
 
     this.currentBoss = null;
-    this.destroyMinions();
+    this.scene.petManager?.resetPositionsAroundPlayer?.();
+    this.scene.undeadSummonManager?.onBossDefeated?.();
 
     // 新关卡流程：击败 Boss -> 打开出口门（由场景负责）
     if (this.scene && typeof this.scene.onBossDefeatedOpenExitDoor === 'function') {
@@ -269,33 +271,7 @@ export default class BossManager {
   // ══════════════════════════════════════════════════════════════
 
   showBossWarning(bossName) {
-    const centerX = this.scene.cameras.main.centerX;
-    const centerY = this.scene.cameras.main.centerY;
-
-    const warningText = this.scene.add.text(centerX, centerY,
-      `⚠️ WARNING ⚠️\n${bossName} 降临！`,
-      {
-        fontSize: '48px',
-        color: '#ff0000',
-        fontStyle: 'bold',
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 6
-      }
-    ).setOrigin(0.5).setAlpha(0);
-
-    this.scene.tweens.add({
-      targets: warningText,
-      alpha: 1,
-      scale: { from: 0.5, to: 1.2 },
-      duration: 500,
-      ease: 'Back.easeOut',
-      yoyo: true,
-      hold: 1000,
-      onComplete: () => { warningText.destroy(); }
-    });
-
-    this.scene.cameras.main.shake(500, 0.01);
+    return bossName;
   }
 
   updateBossInfo() {

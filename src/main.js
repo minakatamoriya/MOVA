@@ -278,10 +278,16 @@ if (!game.registry.has('fogEnabled')) {
   game.registry.set('fogEnabled', false);
 }
 
+// 设置：是否显示敌人头顶血条与 debuff（默认关闭，保持画面干净）
+if (!game.registry.has('showEnemyOverlays')) {
+  game.registry.set('showEnemyOverlays', false);
+}
+
 const emitSettings = () => {
   uiBus.emit('phaser:settingsChanged', {
     showDamage: game.registry.get('showDamage') !== false,
-    fogEnabled: game.registry.get('fogEnabled') === true
+    fogEnabled: game.registry.get('fogEnabled') === true,
+    showEnemyOverlays: game.registry.get('showEnemyOverlays') === true
   });
 };
 
@@ -296,6 +302,11 @@ uiBus.on('ui:settings:setShowDamage', (v) => {
 
 uiBus.on('ui:settings:setFogEnabled', (v) => {
   game.registry.set('fogEnabled', !!v);
+  emitSettings();
+});
+
+uiBus.on('ui:settings:setShowEnemyOverlays', (v) => {
+  game.registry.set('showEnemyOverlays', !!v);
   emitSettings();
 });
 

@@ -66,7 +66,7 @@ export const TREE_DEFS = [
     color: resolveClassColor('paladin'),
     core: { id: 'paladin_core', name: '初始：圣骑', maxLevel: 1, desc: '护盾脉冲清弹并反击。' },
     nodes: [
-      { id: 'paladin_pierce', name: '重锤', maxLevel: 1, desc: '锤击范围略微扩大，落点更靠前。' },
+      { id: 'paladin_pierce', name: '重锤', maxLevel: 1, desc: '锤击范围与伤害提高。' },
       { id: 'paladin_holyfire', name: '圣焰', maxLevel: 1, desc: '锤击命中后留下圣焰持续伤害。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
       { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' }

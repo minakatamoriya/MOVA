@@ -39,6 +39,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.shootBulletSpread = (config.shootBulletSpread != null) ? Number(config.shootBulletSpread) : 0.22;
     this.shootBulletSpeed = (config.shootBulletSpeed != null) ? Math.max(60, Math.floor(config.shootBulletSpeed)) : 180;
     this.shootBulletDamage = (config.shootBulletDamage != null) ? Math.max(1, Math.floor(config.shootBulletDamage)) : 10;
+    this.aggroRadius = (config.aggroRadius != null)
+      ? Math.max(80, Math.round(config.aggroRadius))
+      : 420;
+    this.shootRange = (config.shootRange != null)
+      ? Math.max(60, Math.round(config.shootRange))
+      : (this.isElite ? 230 : 190);
 
     // 受击反馈（可扩展接口）：被击中后立即触发某种“反应”（远程反击/冲锋/防御法阵等）
     this.hitReactionCdMs = (config.hitReactionCdMs != null)
@@ -57,17 +63,14 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this._aggroStartAt = this.aggroActive ? (this.scene?.time?.now ?? 0) : 0;
 
     this.debuffs = {};
-    this.showStatusUi = this.isElite;
+    this.showStatusUi = false;
 
     this.expReward = config.expReward !== undefined
       ? Math.max(0, Math.floor(config.expReward))
       : (this.isElite ? 120 : 100);
 
     this.createVisuals(config.color);
-    if (this.showStatusUi) {
-      this.createHpBar();
-      this.createDebuffUi();
-    }
+    this.syncOverheadUiVisibility();
     this.updateHpBar();
 
     // Boss 入场无敌期：小怪不可被攻击，也不允许攻击
@@ -93,22 +96,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.body.setStrokeStyle(2, 0xffffff, 0.85);
     this.add(this.body);
 
-    // 名称标签（显示在圆形下方）
-    const nameColor = this.isElite ? '#ffdd55' : '#ffffff';
-    const fontSize = this.isElite ? '13px' : '12px';
-    this.nameLabel = this.scene.add.text(0, this.radius + 8, this.minionName, {
-      fontSize,
-      fontFamily: 'Arial, sans-serif',
-      color: nameColor,
-      stroke: '#000000',
-      strokeThickness: 3,
-      align: 'center',
-    }).setOrigin(0.5, 0);
-    this.add(this.nameLabel);
   }
 
   createHpBar() {
-    if (!this.showStatusUi) return;
+    if (this.hpBarBg || this.hpBarFill) return;
     const barW = Math.max(42, Math.round(this.radius * 3.2));
     const barH = 6;
     const y = -this.radius - 16;
@@ -124,7 +115,6 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   createDebuffUi() {
-    if (!this.showStatusUi) return;
     if (this._debuffUi) return;
     const y = -this.radius - 28;
     const container = this.scene.add.container(0, y);
@@ -230,6 +220,26 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.hpBarFill.fillColor = color;
   }
 
+  shouldShowOverheadUi() {
+    return this.scene?.registry?.get?.('showEnemyOverlays') === true;
+  }
+
+  syncOverheadUiVisibility() {
+    const shouldShow = this.shouldShowOverheadUi();
+    if (this.showStatusUi === shouldShow) return;
+
+    this.showStatusUi = shouldShow;
+    if (shouldShow) {
+      this.createHpBar();
+      this.createDebuffUi();
+      this.updateHpBar();
+    }
+
+    if (this.hpBarBg) this.hpBarBg.setVisible(shouldShow);
+    if (this.hpBarFill) this.hpBarFill.setVisible(shouldShow);
+    if (this._debuffUi?.container) this._debuffUi.container.setVisible(shouldShow);
+  }
+
   takeDamage(damage, context = {}) {
     if (!this.isAlive) return false;
 
@@ -320,6 +330,14 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   die(reason = 'unknown') {
     if (!this.isAlive) return;
     this.isAlive = false;
+    this.isInvincible = true;
+
+    try { this.scene?.tweens?.killTweensOf?.(this); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this.body); } catch (_) { /* ignore */ }
+
+    if (this.hpBarBg) this.hpBarBg.setVisible(false);
+    if (this.hpBarFill) this.hpBarFill.setVisible(false);
+    if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
 
     if (reason === 'killed') {
       const now = (this.scene?.time?.now ?? 0);
@@ -347,7 +365,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       duration: 220,
       ease: 'Cubic.In',
       onComplete: () => {
-        if (this.active) this.destroy();
+        if (!this.active) return;
+        try { this.removeAll(true); } catch (_) { /* ignore */ }
+        this.destroy();
       }
     });
   }
@@ -355,13 +375,18 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   update(time, delta, player) {
     if (!this.isAlive) return;
 
+    this.syncOverheadUiVisibility();
+
     // 血条同步（跟随衰减/恢复等未来扩展）
     this.updateHpBar();
 
-    // 若绑定 Boss 且 Boss 已死：跟着消失
+    // 若绑定 Boss 且 Boss 已死：脱离 Boss，作为普通留场单位继续存在
     if (this.followBoss && (!this.followBoss.isAlive || this.followBoss.isDestroyed)) {
-      this.die('despawn');
-      return;
+      this.followBoss = null;
+      this.aggroActive = true;
+      this._aggroStartAt = (this.scene?.time?.now ?? time ?? 0);
+      this.isInvincible = false;
+      if (!this.visible) this.setVisible(true);
     }
 
     // Boss 无敌期：小怪不可被攻击，也不允许攻击（不射击/不接触伤害）
@@ -385,7 +410,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const view = cam?.worldView;
       const inView = (view && Phaser.Geom.Rectangle.Contains(view, this.x, this.y));
       const inRange = (player && player.isAlive)
-        ? (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= 420)
+        ? (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= this.aggroRadius)
         : false;
       if (inView || inRange) {
         this.aggroActive = true;
@@ -467,10 +492,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const dy = player.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
 
-      // 保持一定距离：远程单位别贴脸
-      const preferDist = 220;
-      if (dist > preferDist) {
-        const step = Math.min(dist - preferDist, (this.moveSpeed * speedMult) * dt);
+      // 远程单位：进入预警范围后，先走到“可攻击距离”再开始攻击
+      const attackRange = Math.max(60, this.shootRange || 190);
+      if (dist > attackRange) {
+        const step = Math.min(dist - attackRange, (this.moveSpeed * speedMult) * dt);
         this.x += (dx / dist) * step;
         this.y += (dy / dist) * step;
       }
@@ -524,6 +549,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
   tryShoot(time, player) {
     if (!player || !player.isAlive) return;
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+    if (dist > Math.max(60, this.shootRange || 190)) return;
     const now = time || (this.scene.time?.now ?? 0);
     if (this._lastShotAt && now - this._lastShotAt < this.shootCdMs) return;
     this._lastShotAt = now;

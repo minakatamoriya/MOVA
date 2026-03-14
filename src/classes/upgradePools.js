@@ -71,7 +71,7 @@ export const UPGRADE_POOLS = {
 
   // 🛡️ 圣骑士·矛
   paladin: [
-    { id: 'paladin_pierce', category: 'build', name: '重锤', desc: '锤击范围略微扩大，落点更靠前', icon: '骑主' },
+    { id: 'paladin_pierce', category: 'build', name: '重锤', desc: '锤击范围与伤害提高', icon: '骑主' },
     { id: 'paladin_holyfire', category: 'build', name: '圣焰', desc: '锤击命中后在地上留下圣焰，造成持续伤害', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
     { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' }
