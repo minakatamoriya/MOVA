@@ -348,6 +348,41 @@ export function applyDropsInventoryMixin(GameScene) {
       return -1;
     },
 
+    hasOwnedOrEquippedItem(itemId) {
+      if (!itemId) return false;
+      if (this.hasEquippedItem(itemId) >= 0) return true;
+      const owned = Array.isArray(this.registry?.get?.('ownedItems')) ? this.registry.get('ownedItems') : [];
+      return owned.includes(itemId);
+    },
+
+    hasEquippedConsumable(itemId) {
+      if (!itemId) return false;
+      return this.hasEquippedItem(itemId) >= 0;
+    },
+
+    useAutoHealConsumable(itemId, opts = {}) {
+      if (!this.player || !this.player.isAlive) return false;
+      if (!this.hasEquippedConsumable(itemId)) return false;
+
+      const def = getItemById(itemId);
+      const cfg = def?.consumable;
+      if (!cfg || cfg.mode !== 'autoHeal') return false;
+
+      const now = Number.isFinite(opts.nowMs) ? Number(opts.nowMs) : Number(this._gameplayNowMs || 0);
+      const cd = Math.max(0, Number(cfg.cooldownMs || 0));
+      const until = Math.max(0, Number(this.player.itemCooldowns?.[itemId] || 0));
+      if (cd > 0 && now < until) return false;
+
+      const healAmount = Math.max(1, Math.round((this.player.maxHp || 1) * (cfg.healPct || 0)));
+      if (!this.player.itemCooldowns) this.player.itemCooldowns = Object.create(null);
+      this.player.itemCooldowns[itemId] = now + cd;
+      if (!this._itemCooldownReadyNotified) this._itemCooldownReadyNotified = Object.create(null);
+      this._itemCooldownReadyNotified[itemId] = false;
+      this.player.heal(healAmount);
+      this.toast?.show?.({ icon: def?.icon || '🧪', text: `使用了 ${def?.name || '消耗品'}` });
+      return true;
+    },
+
     consumeEquippedItem(itemId) {
       const idx = this.hasEquippedItem(itemId);
       if (idx < 0) return false;
@@ -403,29 +438,22 @@ export function applyDropsInventoryMixin(GameScene) {
 
       const now = Number.isFinite(time) ? time : Number(this._gameplayNowMs || 0);
       const hpPct = (this.player.maxHp > 0) ? (this.player.hp / this.player.maxHp) : 1;
-      if (hpPct >= 0.3) return;
       if (this.player.hp >= this.player.maxHp) return;
 
       const tryAutoHeal = (itemId) => {
-        const slot = this.hasEquippedItem(itemId);
-        if (slot < 0) return false;
+        if (!this.hasEquippedConsumable(itemId)) return false;
 
         const def = getItemById(itemId);
         const cfg = def?.consumable;
         if (!cfg || cfg.mode !== 'autoHeal') return false;
+        const thresholdPct = Math.max(0, Number(cfg.thresholdPct || 0));
+        if (hpPct > thresholdPct) return false;
 
-        const cd = Math.max(0, cfg.cooldownMs || 0);
-        const until = Math.max(0, Number(this.player.itemCooldowns?.[itemId] || 0));
-        if (cd > 0 && now < until) return false;
+        if (this.cooldownSkills?.[itemId]) {
+          return this.triggerCooldownSkill(itemId, { nowMs: now });
+        }
 
-        const healAmount = Math.max(1, Math.round((this.player.maxHp || 1) * (cfg.healPct || 0)));
-        if (!this.player.itemCooldowns) this.player.itemCooldowns = Object.create(null);
-        this.player.itemCooldowns[itemId] = now + cd;
-        if (!this._itemCooldownReadyNotified) this._itemCooldownReadyNotified = Object.create(null);
-        this._itemCooldownReadyNotified[itemId] = false;
-        this.player.heal(healAmount);
-        this.toast?.show?.({ icon: def?.icon || '🧪', text: `使用了 ${def?.name || '消耗品'}` });
-        return true;
+        return this.useAutoHealConsumable(itemId, { nowMs: now });
       };
 
       if (tryAutoHeal('potion_small')) return;
@@ -442,8 +470,8 @@ export function applyDropsInventoryMixin(GameScene) {
 
       Object.keys(cds).forEach((itemId) => {
         if (!itemId) return;
-        const slot = this.hasEquippedItem(itemId);
-        if (slot < 0) return;
+        if (this.cooldownSkills?.[itemId]) return;
+        if (!this.hasEquippedConsumable(itemId)) return;
 
         const until = Math.max(0, Number(cds[itemId] || 0));
         if (!until) return;

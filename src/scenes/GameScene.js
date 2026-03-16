@@ -9,7 +9,51 @@ import PetManager from '../classes/pets/PetManager';
 import UndeadSummonManager from '../classes/pets/UndeadSummonManager';
 import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
+import CooldownHud from '../ui/CooldownHud';
 import { START_ROOM } from '../data/mapPool';
+
+const EMERGENCY_COOLDOWN_DEFS = {
+  paladin: {
+    talentId: 'paladin_divine_shelter',
+    skillId: 'paladin_divine_shelter',
+    label: '神圣庇护',
+    iconText: '护',
+    accentColor: 0xfbbf24,
+    durationMs: 3000,
+    cooldownMs: 30000,
+    values: [0, 0.4, 0.6, 0.8],
+    describe(value) {
+      return `生命低于30%时自动触发：获得${Math.round(value * 100)}%减伤，持续3秒。冷却30秒。`;
+    }
+  },
+  scatter: {
+    talentId: 'archer_nimble_evade',
+    skillId: 'archer_nimble_evade',
+    label: '灵巧回避',
+    iconText: '避',
+    accentColor: 0x34d399,
+    durationMs: 3000,
+    cooldownMs: 30000,
+    values: [0, 0.4, 0.6, 0.8],
+    describe(value) {
+      return `生命低于30%时自动触发：闪避率 +${Math.round(value * 100)}%，持续3秒。冷却30秒。`;
+    }
+  },
+  warrior: {
+    talentId: 'warrior_blood_conversion',
+    skillId: 'warrior_blood_conversion',
+    label: '吸血',
+    iconText: '血',
+    accentColor: 0xf87171,
+    cooldownMs: 30000,
+    values: [0, 0.4, 0.7, 1.0],
+    durationByLevel: [0, 5000, 10000, 15000],
+    describe(value, durationMs) {
+      const seconds = Math.max(0, Math.round((Number(durationMs) || 0) / 1000));
+      return `生命低于30%时自动触发：攻击伤害转化为${Math.round(value * 100)}%吸血，持续${seconds}秒。冷却30秒。`;
+    }
+  }
+};
 
 function getPlayerTouchRadius(player) {
   if (!player) return 0;
@@ -39,6 +83,10 @@ function isTouchingRiftPortal(player, rift) {
   const expandN = (playerR + touchPadPx) / minR;
 
   return d <= (1 + expandN);
+}
+
+function clampTalentLevel(level) {
+  return Math.max(0, Math.min(3, Math.round(Number(level) || 0)));
 }
 
 // ── Mixins ───────────────────────────────────────────────
@@ -126,6 +174,10 @@ class GameScene extends Phaser.Scene {
 
     // 统一开关：攻击范围提示圈（默认开启）
     this.showRangeIndicators = true;
+
+    // 通用 CD 技能槽：用于后续各职业主动技能的统一注册与管理
+    this.cooldownSkills = Object.create(null);
+    this.cooldownHud = null;
 
     // ── 地图分支系统 ──
     this.currentMapInfo = null;        // 当前地图 { id, name, subtitle, line }
@@ -347,7 +399,8 @@ class GameScene extends Phaser.Scene {
       globalCoins: this.globalCoins || 0,
       player,
       gameplayNowMs: Number(this._gameplayNowMs || 0),
-      itemCooldowns
+      itemCooldowns,
+      cooldownSkills: this.getCooldownSkillSnapshot()
     };
   }
 
@@ -369,7 +422,7 @@ class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#0a0a1a');
 
     // 固定分辨率 1280×720 + FIT 缩放，所有设备体验完全一致
-    this.bottomPanelHeight = 0;
+    this.bottomPanelHeight = 120;
     this.gameArea = {
       x: 50,
       y: 50,
@@ -380,6 +433,8 @@ class GameScene extends Phaser.Scene {
 
     // 左上角血条 HUD
     this.createTopLeftHud();
+    this.createMinimalBottomHud();
+    this.setupCooldownSystem();
 
     // 系统提示 UI（Phaser 内 HUD 层）
     // 需求：提示框放到屏幕顶部（血条下方一定距离处）
@@ -481,6 +536,13 @@ class GameScene extends Phaser.Scene {
         console.log('[DebugGrid] blocked idx list:', JSON.stringify(arr));
       };
       this._debugGridPrintKey.on('down', this._debugGridPrintHandler);
+
+      this._debugLevelUpKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.U);
+      this._debugLevelUpHandler = () => {
+        this.grantTestLevelUp?.();
+      };
+      this._debugLevelUpKey.on('down', this._debugLevelUpHandler);
+
     }
 
     // 监听屏幕尺寸变化（手机旋转等），重新计算游戏区域和 HUD 布局
@@ -1089,6 +1151,7 @@ class GameScene extends Phaser.Scene {
 
     // 重建 HUD 和小地图
     this.rebuildTopLeftHud?.();
+    this.rebuildBottomHud?.();
     this.repositionMiniMap?.();
     this.bossManager?.getCurrentBoss?.()?.layoutScreenHud?.();
 
@@ -1181,11 +1244,342 @@ class GameScene extends Phaser.Scene {
     if (this._debugGridPrintKey && this._debugGridPrintHandler) {
       try { this._debugGridPrintKey.off('down', this._debugGridPrintHandler); } catch (_) { /* ignore */ }
     }
+    if (this._debugLevelUpKey && this._debugLevelUpHandler) {
+      try { this._debugLevelUpKey.off('down', this._debugLevelUpHandler); } catch (_) { /* ignore */ }
+    }
     this._debugGridKey = null;
     this._debugGridKeyHandler = null;
     this._debugGridPrintKey = null;
     this._debugGridPrintHandler = null;
+    this._debugLevelUpKey = null;
+    this._debugLevelUpHandler = null;
     this.clearDebugGridOverlay?.();
+
+    if (this.cooldownHud) {
+      try { this.cooldownHud.destroy(); } catch (_) { /* ignore */ }
+      this.cooldownHud = null;
+    }
+    this.cooldownSkills = Object.create(null);
+  }
+
+  setupCooldownSystem() {
+    if (this.cooldownHud) {
+      try { this.cooldownHud.destroy(); } catch (_) { /* ignore */ }
+    }
+
+    this.cooldownSkills = Object.create(null);
+    this.cooldownHud = new CooldownHud(this, {
+      depth: 2450,
+      slotSize: 74,
+      gap: 14,
+      rightPadding: 18,
+      bottomPadding: 8,
+      labelGap: 8,
+      longPressMs: 420
+    });
+  }
+
+  registerCooldownSkill(config = {}) {
+    const id = String(config.id || '').trim();
+    if (!id) return null;
+    if (!this.cooldownSkills || typeof this.cooldownSkills !== 'object') {
+      this.cooldownSkills = Object.create(null);
+    }
+
+    const existing = this.cooldownSkills[id] || {};
+    const skill = {
+      id,
+      label: String(config.label || existing.label || id),
+      description: String(config.description || existing.description || ''),
+      iconText: String(config.iconText || existing.iconText || '✦'),
+      cooldownMs: Math.max(0, Number(config.cooldownMs ?? existing.cooldownMs ?? 0)),
+      cooldownStartMs: Math.max(0, Number(existing.cooldownStartMs || 0)),
+      cooldownUntilMs: Math.max(0, Number(existing.cooldownUntilMs || 0)),
+      accentColor: Number.isFinite(Number(config.accentColor))
+        ? Number(config.accentColor)
+        : (existing.accentColor || 0x7dd3fc),
+      visible: config.visible !== false,
+      visibleWhen: typeof config.visibleWhen === 'function' ? config.visibleWhen : (existing.visibleWhen || null),
+      shouldAutoTrigger: typeof config.shouldAutoTrigger === 'function' ? config.shouldAutoTrigger : (existing.shouldAutoTrigger || null),
+      onTrigger: typeof config.onTrigger === 'function' ? config.onTrigger : (existing.onTrigger || null),
+      onReady: typeof config.onReady === 'function' ? config.onReady : (existing.onReady || null),
+      readyNotified: !!existing.readyNotified
+    };
+
+    this.cooldownSkills[id] = skill;
+    this.cooldownHud?.registerSlot({
+      id,
+      label: skill.label,
+      description: skill.description,
+      iconText: skill.iconText,
+      cooldownMs: skill.cooldownMs,
+      accentColor: skill.accentColor,
+      visible: skill.visible
+    });
+    this.cooldownHud?.syncSlot(id, {
+      label: skill.label,
+      description: skill.description,
+      iconText: skill.iconText,
+      startMs: skill.cooldownStartMs,
+      endMs: skill.cooldownUntilMs,
+      cooldownMs: skill.cooldownMs,
+      accentColor: skill.accentColor,
+      visible: skill.visible
+    });
+    return skill;
+  }
+
+  getCooldownSkillSnapshot() {
+    const now = Number(this._gameplayNowMs || 0);
+    const entries = this.cooldownSkills && typeof this.cooldownSkills === 'object'
+      ? Object.values(this.cooldownSkills)
+      : [];
+
+    return entries.map((skill) => ({
+      id: skill.id,
+      label: skill.label,
+      description: skill.description,
+      iconText: skill.iconText,
+      cooldownMs: Number(skill.cooldownMs || 0),
+      cooldownStartMs: Number(skill.cooldownStartMs || 0),
+      cooldownUntilMs: Number(skill.cooldownUntilMs || 0),
+      remainingMs: Math.max(0, Number(skill.cooldownUntilMs || 0) - now)
+    }));
+  }
+
+  triggerCooldownSkill(id, opts = {}) {
+    const skill = this.cooldownSkills?.[id];
+    if (!skill) return false;
+    if (skill.visible === false) return false;
+
+    const now = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Number(this._gameplayNowMs || 0);
+    const remainingMs = Math.max(0, Number(skill.cooldownUntilMs || 0) - now);
+    if (remainingMs > 0) return false;
+
+    try {
+      skill.onTrigger?.(skill, this);
+    } catch (error) {
+      console.error('[CooldownSkill] trigger failed:', id, error);
+      return false;
+    }
+
+    skill.cooldownStartMs = now;
+    skill.cooldownUntilMs = now + Math.max(0, Number(skill.cooldownMs || 0));
+    skill.readyNotified = false;
+    this.cooldownHud?.syncSlot(id, {
+      startMs: skill.cooldownStartMs,
+      endMs: skill.cooldownUntilMs,
+      cooldownMs: skill.cooldownMs
+    });
+    return true;
+  }
+
+  updateCooldownSkills(nowMs, opts = {}) {
+    const now = Number.isFinite(nowMs) ? nowMs : Number(this._gameplayNowMs || 0);
+    const allowAutoTrigger = opts.allowAutoTrigger !== false;
+    this.cooldownHud?.update(now);
+
+    const entries = this.cooldownSkills && typeof this.cooldownSkills === 'object'
+      ? Object.values(this.cooldownSkills)
+      : [];
+
+    entries.forEach((skill) => {
+      if (typeof skill.visibleWhen === 'function') {
+        try {
+          skill.visible = !!skill.visibleWhen(skill, this, now);
+        } catch (error) {
+          console.error('[CooldownSkill] visible check failed:', skill.id, error);
+        }
+      }
+
+      this.cooldownHud?.syncSlot(skill.id, {
+        label: skill.label,
+        description: skill.description,
+        iconText: skill.iconText,
+        visible: skill.visible !== false,
+        cooldownMs: skill.cooldownMs,
+        startMs: skill.cooldownStartMs,
+        endMs: skill.cooldownUntilMs,
+        accentColor: skill.accentColor
+      });
+
+      if (skill.visible === false) return;
+
+      const until = Math.max(0, Number(skill.cooldownUntilMs || 0));
+      if (!until || now < until) return;
+      if (skill.readyNotified) return;
+      skill.readyNotified = true;
+      try {
+        skill.onReady?.(skill, this);
+      } catch (error) {
+        console.error('[CooldownSkill] ready callback failed:', skill.id, error);
+      }
+    });
+
+    if (!allowAutoTrigger) return;
+    if (this.isCombatBehaviorPaused?.()) return;
+
+    entries.forEach((skill) => {
+      if (skill.visible === false) return;
+      if (typeof skill.shouldAutoTrigger !== 'function') return;
+      if (Math.max(0, Number(skill.cooldownUntilMs || 0)) > now) return;
+      let shouldTrigger = false;
+      try {
+        shouldTrigger = !!skill.shouldAutoTrigger(skill, this, now);
+      } catch (error) {
+        console.error('[CooldownSkill] auto trigger check failed:', skill.id, error);
+      }
+      if (shouldTrigger) {
+        this.triggerCooldownSkill(skill.id, { nowMs: now });
+      }
+    });
+  }
+
+  hasCooldownItem(itemId) {
+    if (!itemId) return false;
+    return (this.hasEquippedItem?.(itemId) ?? -1) >= 0;
+  }
+
+  getSkillLevel(skillId) {
+    if (!skillId) return 0;
+    const skillTreeLevels = this.registry?.get?.('skillTreeLevels') || {};
+    return clampTalentLevel(skillTreeLevels[skillId] || 0);
+  }
+
+  getEmergencyCooldownTalentState(coreKey) {
+    const def = coreKey ? EMERGENCY_COOLDOWN_DEFS[coreKey] : null;
+    if (!def) return null;
+    const level = this.getSkillLevel(def.talentId);
+    const value = def.values[clampTalentLevel(level)] || 0;
+    const durationMs = Array.isArray(def.durationByLevel)
+      ? Number(def.durationByLevel[clampTalentLevel(level)] || 0)
+      : Number(def.durationMs || 0);
+    return {
+      ...def,
+      level,
+      value,
+      durationMs,
+      description: def.describe(value, durationMs)
+    };
+  }
+
+  installPassiveCooldownSkills() {
+    const potionSmall = getItemById('potion_small');
+
+    ['paladin', 'scatter', 'warrior'].forEach((coreKey) => {
+      const state = this.getEmergencyCooldownTalentState(coreKey);
+      if (!state) return;
+
+      this.registerCooldownSkill({
+        id: state.skillId,
+        label: state.label,
+        description: state.description,
+        iconText: state.iconText,
+        cooldownMs: state.cooldownMs,
+        accentColor: state.accentColor,
+        visible: state.level > 0 && (this.player?.mainCoreKey === coreKey),
+        visibleWhen: () => {
+          const next = this.getEmergencyCooldownTalentState(coreKey);
+          return !!next && next.level > 0 && this.player?.mainCoreKey === coreKey;
+        },
+        shouldAutoTrigger: () => {
+          const next = this.getEmergencyCooldownTalentState(coreKey);
+          if (!next || next.level <= 0 || !this.player || !this.player.isAlive) return false;
+          const hpPct = this.player.maxHp > 0 ? (this.player.hp / this.player.maxHp) : 1;
+          return hpPct <= 0.3;
+        },
+        onTrigger: () => {
+          const next = this.getEmergencyCooldownTalentState(coreKey);
+          if (!next || !this.player) return;
+          const now = Number(this._gameplayNowMs || 0);
+          if (coreKey === 'paladin') {
+            this.player.emergencyMitigationMult = Math.max(0, 1 - next.value);
+            this.player.emergencyMitigationUntil = now + next.durationMs;
+          } else if (coreKey === 'scatter') {
+            this.player.emergencyDodgeBonus = next.value;
+            this.player.emergencyDodgeUntil = now + next.durationMs;
+          } else if (coreKey === 'warrior') {
+            this.player.emergencyLifestealPercent = next.value;
+            this.player.emergencyLifestealUntil = now + next.durationMs;
+          }
+          this.toast?.show?.({ icon: next.iconText, text: `${next.label} 触发` }, { durationMs: 1000 });
+        },
+        onReady: () => {
+          const next = this.getEmergencyCooldownTalentState(coreKey);
+          if (!next) return;
+          this.toast?.show?.({ icon: next.iconText, text: `${next.label} 冷却完成` }, { durationMs: 1200 });
+        }
+      });
+    });
+
+    this.registerCooldownSkill({
+      id: 'potion_small',
+      label: potionSmall?.name || '血瓶',
+      description: potionSmall?.desc || '生命低于50%自动使用，回复30%生命。',
+      iconText: potionSmall?.icon || '🧪',
+      cooldownMs: Math.max(0, Number(potionSmall?.consumable?.cooldownMs || 10000)),
+      accentColor: 0xef4444,
+      visible: this.hasCooldownItem('potion_small'),
+      visibleWhen: () => this.hasCooldownItem('potion_small'),
+      shouldAutoTrigger: () => {
+        if (!this.player || !this.player.isAlive) return false;
+        if (!this.hasCooldownItem('potion_small')) return false;
+        if (this.player.hp >= this.player.maxHp) return false;
+        const threshold = Number(potionSmall?.consumable?.thresholdPct || 0.5);
+        const hpPct = this.player.maxHp > 0 ? (this.player.hp / this.player.maxHp) : 1;
+        return hpPct <= threshold;
+      },
+      onTrigger: () => {
+        this.useAutoHealConsumable('potion_small', { syncCooldownSkill: false });
+      },
+      onReady: () => {
+        this.toast?.show?.({ icon: potionSmall?.icon || '🧪', text: `${potionSmall?.name || '血瓶'} 冷却完成` }, { durationMs: 1200 });
+      }
+    });
+  }
+
+  playTestCooldownSkillEffect() {
+    if (!this.player || !this.player.active) return;
+
+    const x = this.player.x;
+    const y = this.player.y;
+    const flash = this.add.circle(x, y, 20, 0xffffff, 0.68).setDepth(38);
+    const ring = this.add.circle(x, y, 28, 0x22c55e, 0.18).setDepth(37);
+    ring.setStrokeStyle(5, 0x86efac, 0.95);
+
+    this.tweens.add({
+      targets: flash,
+      scale: 2.4,
+      alpha: 0,
+      duration: 220,
+      ease: 'Cubic.Out',
+      onComplete: () => flash.destroy()
+    });
+
+    this.tweens.add({
+      targets: ring,
+      scale: 3.8,
+      alpha: 0,
+      duration: 480,
+      ease: 'Quart.Out',
+      onComplete: () => ring.destroy()
+    });
+
+    for (let i = 0; i < 12; i += 1) {
+      const angle = Phaser.Math.FloatBetween(0, Phaser.Math.PI2);
+      const distance = Phaser.Math.Between(28, 88);
+      const particle = this.add.circle(x, y, Phaser.Math.Between(2, 4), 0x86efac, 0.92).setDepth(38);
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.4,
+        duration: Phaser.Math.Between(280, 520),
+        ease: 'Cubic.Out',
+        onComplete: () => particle.destroy()
+      });
+    }
   }
 
   /**
@@ -1312,6 +1706,7 @@ class GameScene extends Phaser.Scene {
     const spawnX = this.gameArea.x + this.gameArea.width / 2;
     const spawnY = this.gameArea.y + this.gameArea.height - 100;
     this.player = new Player(this, spawnX, spawnY);
+    this.installPassiveCooldownSkills();
 
     // 移动端隐藏摇杆（不影响键盘 WASD）
     this.setupTouchJoystick();
@@ -1532,6 +1927,10 @@ class GameScene extends Phaser.Scene {
       if (!pointer) return;
       if (!this.player) return;
 
+      if (this.cooldownHud?.containsPoint?.(pointer.x, pointer.y)) {
+        return;
+      }
+
       // 避免抢 HUD/UI（按钮/卡片等 setInteractive 的物体会出现在 currentlyOver）
       // 但不阻止“世界物体”的点击（例如地面掉落物），避免摇杆经常无法启动
       if (Array.isArray(currentlyOver) && currentlyOver.length > 0) {
@@ -1705,6 +2104,8 @@ class GameScene extends Phaser.Scene {
       if (d > 0) this._gameplayNowMs += d;
     }
 
+    this.updateCooldownSkills(this._gameplayNowMs, { allowAutoTrigger: false });
+
     // 查看菜单打开/关闭动画中：冻结战斗更新，只允许菜单交互
     // 但允许菜单 UI 做轻量动画（例如双职业彩虹边框）。
     if (menuFrozen) {
@@ -1804,6 +2205,9 @@ class GameScene extends Phaser.Scene {
 
     // 自动消耗品（装备后触发）：血瓶/大血瓶
     this.updateAutoConsumables(this._gameplayNowMs);
+
+    // 在受伤/碰撞/自动消耗品结算之后再次检查被动 CD，避免跨阈值后一帧才触发。
+    this.updateCooldownSkills(this._gameplayNowMs, { allowAutoTrigger: true });
 
     // CD 转好提示（右下角 Toast）
     this.checkEquippedItemCooldownReadyToasts(this._gameplayNowMs);

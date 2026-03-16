@@ -10,6 +10,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.isMinion = true;
     this.isEnemy = true;
     this.isElite = !!config.isElite;
+    this._destroying = false;
 
     this.minionType = config.type || 'chaser'; // chaser | shooter
     this.minionName = config.name || (this.minionType === 'shooter' ? '随从·炮手' : '随从·追猎');
@@ -366,10 +367,37 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       ease: 'Cubic.In',
       onComplete: () => {
         if (!this.active) return;
-        try { this.removeAll(true); } catch (_) { /* ignore */ }
         this.destroy();
       }
     });
+  }
+
+  cleanupVisuals() {
+    try { this.scene?.tweens?.killTweensOf?.(this); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this.body); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this.sprite); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this.hpBarBg); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this.hpBarFill); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._debuffUi?.container); } catch (_) { /* ignore */ }
+
+    if (this.hpBarBg) this.hpBarBg.setVisible(false);
+    if (this.hpBarFill) this.hpBarFill.setVisible(false);
+    if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
+
+    try { this.removeAll(true); } catch (_) { /* ignore */ }
+
+    this.sprite = null;
+    this.body = null;
+    this.hpBarBg = null;
+    this.hpBarFill = null;
+    this._debuffUi = null;
+  }
+
+  destroy(fromScene) {
+    if (this._destroying) return;
+    this._destroying = true;
+    this.cleanupVisuals();
+    super.destroy(fromScene);
   }
 
   update(time, delta, player) {

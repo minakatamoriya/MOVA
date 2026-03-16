@@ -19,7 +19,7 @@ export const TALENT_OFFER_WEIGHT_CONFIG = {
   repeatableTalentWeight: 1.35,
   repeatableTalentDecay: 0.9,
   testing: {
-    enabled: true,
+    enabled: false,
     favoredTree: 'curse',
     favoredTreeMultiplier: 3.5,
     favoredOffFactionEntryMultiplier: 4.0,
@@ -38,6 +38,7 @@ export const UPGRADE_POOLS = {
     { id: 'archer_rapidfire', category: 'build', name: '连射', desc: '每次攻击后，10% 概率免费再射一轮', icon: '猎主' },
     { id: 'archer_pierce', category: 'build', name: '穿透', desc: '箭矢命中后不消失，最多可额外穿透 1 次', icon: '猎主' },
     { id: 'archer_arrowrain', category: 'build', name: '箭雨', desc: '每 5 秒，下一次攻击变为箭雨，覆盖更大范围，伤害翻倍', icon: '猎主' },
+    { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒', icon: '猎主', maxLevel: 3 },
 
     // 基础技能数值升级（可叠加 3 级）
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+1/+2/+3）', icon: '距', maxLevel: 3 },
@@ -58,7 +59,8 @@ export const UPGRADE_POOLS = {
     { id: 'warrior_spin', category: 'build', name: '回旋', desc: '挥砍变为 360° 回旋斩，造成范围伤害', icon: '战主' },
     { id: 'warrior_swordqi', category: 'build', name: '剑气', desc: '挥砍时额外发射一道月牙剑气（保留近战判定）', icon: '战主' },
     { id: 'warrior_endure', category: 'build', name: '持久', desc: '战士近战形态获得 20% 伤害减免', icon: '战主' },
-    { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩有效范围提升（可叠加）', icon: '战主' }
+    { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩有效范围提升（可叠加）', icon: '战主' },
+    { id: 'warrior_blood_conversion', category: 'build', name: '吸血', desc: '生命低于30%时自动触发：攻击伤害转化为40%/70%/100%吸血，持续5/10/15秒，冷却30秒', icon: '战主', maxLevel: 3 }
   ],
 
   // 🔵 法师·激光
@@ -74,7 +76,8 @@ export const UPGRADE_POOLS = {
     { id: 'paladin_pierce', category: 'build', name: '重锤', desc: '锤击范围与伤害提高', icon: '骑主' },
     { id: 'paladin_holyfire', category: 'build', name: '圣焰', desc: '锤击命中后在地上留下圣焰，造成持续伤害', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
-    { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' }
+    { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' },
+    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续3秒，冷却30秒', icon: '骑主', maxLevel: 3 }
   ],
 
   // 🟣 术士·暗影箭
@@ -117,8 +120,8 @@ export const UNIVERSAL_POOLS = {
 
   // 🟣 术士·诅咒
   curse: [
-    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '骨卫', maxLevel: 3 },
-    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。等级 1/2/3 时上限 1/3/5', icon: '骨法', maxLevel: 3 }
+    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 },
+    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 }
   ],
 
   // 🛡️ 圣骑士·守护
@@ -144,7 +147,7 @@ export const OFF_FACTION_ENTRY_OPTIONS = [
   // 不屈 -> 血怒
   { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '战副' },
   // 诅咒 -> 骷髅卫士
-  { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '骨卫', maxLevel: 3 },
+  { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 },
   // 守护 -> 坚盾
   { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '骑副' },
   // 自然伙伴：直接结契

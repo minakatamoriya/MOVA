@@ -216,68 +216,31 @@ export function applyHudMixin(GameScene) {
     },
 
     createMinimalBottomHud() {
-      const dividerY = this.bottomHudTopY || (this.gameArea.y + this.gameArea.height);
+      const oldElements = [
+        this.bottomHudBg,
+        this.bottomDivider,
+        this.bottomHudViewBtn,
+        this.bottomHudExitBtn,
+        this.bottomHudHpBarBg,
+        this.bottomHudHpBarFill,
+        this.bottomHudHpBarText
+      ];
+      oldElements.forEach((el) => {
+        if (el?.destroy) el.destroy();
+      });
 
-      this.bottomHudBg = this.add.rectangle(0, dividerY, this.cameras.main.width, this.bottomPanelHeight, 0x0b0b18, 0.92)
-        .setOrigin(0, 0);
-      this.bottomHudBg.setScrollFactor(0);
-      this.bottomHudBg.setDepth(900);
+      this.bottomHudBg = null;
+      this.bottomDivider = null;
+      this.bottomHudViewBtn = null;
+      this.bottomHudExitBtn = null;
+      this.bottomHudHpBarBg = null;
+      this.bottomHudHpBarFill = null;
+      this.bottomHudHpBarText = null;
+    },
 
-      this.bottomDivider = this.add.graphics();
-      this.bottomDivider.lineStyle(2, 0x2a2a3a, 1);
-      this.bottomDivider.beginPath();
-      this.bottomDivider.moveTo(0, dividerY);
-      this.bottomDivider.lineTo(this.cameras.main.width, dividerY);
-      this.bottomDivider.strokePath();
-      this.bottomDivider.setScrollFactor(0);
-      this.bottomDivider.setDepth(901);
-
-      const hpRowY = dividerY + 28;
-      const btnRowY = dividerY + 78;
-
-      if (!this.isReactUiMode()) {
-        const viewBtn = this.createButton(84, btnRowY, '查看', () => {
-          if (this.viewMenuOpen) this.closeViewMenu();
-          else this.openViewMenu();
-        }, 96, 30, '13px');
-        viewBtn.setDepth(910);
-
-        const exitBtn = this.createButton(this.cameras.main.width - 84, btnRowY, '退出', () => {
-          console.log('返回主菜单');
-          this.scene.start('MenuScene');
-        }, 96, 30, '13px');
-        exitBtn.setDepth(910);
-      }
-
-      const barMarginX = 240;
-      const barX = Math.floor(barMarginX / 2);
-      const barY = hpRowY;
-      const barWidth = this.cameras.main.width - barMarginX;
-      const barHeight = 14;
-
-      this.hpBarWidth = barWidth - 4;
-      this.hpBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x0b0b18, 0.95)
-        .setOrigin(0, 0.5);
-      this.hpBarBg.setStrokeStyle(1, 0x2a2a3a);
-      this.hpBarBg.setScrollFactor(0);
-      this.hpBarBg.setDepth(920);
-
-      this.hpBarFill = this.add.rectangle(barX + 2, barY, this.hpBarWidth, barHeight - 4, 0x00ff5a, 1)
-        .setOrigin(0, 0.5);
-      this.hpBarFill.setScrollFactor(0);
-      this.hpBarFill.setDepth(921);
-
-      this.hpBarText = this.add.text(barX + barWidth + 10, barY, '100/100', {
-        fontSize: '14px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      }).setOrigin(0, 0.5);
-      this.hpBarText.setScrollFactor(0);
-      this.hpBarText.setDepth(922);
-
-      if (!this.isReactUiMode()) {
-        this.createViewMenu();
-      }
+    rebuildBottomHud() {
+      this.createMinimalBottomHud();
+      this.cooldownHud?.layout?.();
     },
 
     createTopLeftHud() {

@@ -237,6 +237,14 @@ export default class Player extends Phaser.GameObjects.Container {
     this.deathDuelEnabled = false;
     this.deathDuelFireRateMult = 1;
 
+    // 主职业保命 CD：低血临时状态
+    this.emergencyMitigationUntil = 0;
+    this.emergencyMitigationMult = 1;
+    this.emergencyDodgeUntil = 0;
+    this.emergencyDodgeBonus = 0;
+    this.emergencyLifestealUntil = 0;
+    this.emergencyLifestealPercent = 0;
+
     // 德鲁伊（月火术）
     this.moonfireDamageMult = 0.35;
     this.moonfireSpeedMult = 0.6; // 比常规更慢
@@ -996,7 +1004,8 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     // 闪避（先于一切减伤结算；基础无 MISS，只有携带/升级提供）
-    const resolved = resolvePlayerIncomingDamage(this, damage, this.scene?.time?.now ?? 0);
+    const gameplayNow = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0;
+    const resolved = resolvePlayerIncomingDamage(this, damage, gameplayNow);
     if (resolved.dodged) {
       this.lastDamageEvent = { dodged: true, blocked: false, shielded: false, tookDamage: 0 };
       if (this.scene?.showDamageNumber) {
@@ -1036,6 +1045,11 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 不屈：死斗（低血加速）
     this.updateDeathDuelState();
+
+    // 被动 CD 技能需要在掉血结算当下立即检查，避免跨阈值后一帧才触发。
+    if (typeof this.scene?.updateCooldownSkills === 'function') {
+      this.scene.updateCooldownSkills(this.scene._gameplayNowMs, { allowAutoTrigger: true });
+    }
     
     console.log(`[takeDamage] 玩家受到 ${finalDamage} 点伤害，剩余 HP: ${this.hp}/${this.maxHp}`);
     
@@ -1372,8 +1386,13 @@ export default class Player extends Phaser.GameObjects.Container {
    * 造成伤害后的吸血
    */
   onDealDamage(amount) {
-    if (this.lifestealPercent <= 0) return;
-    const healAmount = Math.floor(amount * this.lifestealPercent);
+    const gameplayNow = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0;
+    const emergencyLifesteal = (this.emergencyLifestealUntil || 0) > gameplayNow
+      ? (this.emergencyLifestealPercent || 0)
+      : 0;
+    const lifestealPercent = Math.max(0, (this.lifestealPercent || 0) + emergencyLifesteal);
+    if (lifestealPercent <= 0) return;
+    const healAmount = Math.floor(amount * lifestealPercent);
     if (healAmount > 0) {
       this.heal(healAmount);
     }

@@ -18,12 +18,12 @@ export const ITEM_DEFS = [
   {
     id: 'potion_small',
     name: '血瓶',
-    desc: '生命低于30%自动使用，回复30%生命（20秒冷却）',
+    desc: '生命低于50%自动使用，回复30%生命（10秒冷却）',
     icon: '🧪',
     price: 0,
     kind: 'consumable',
     effects: {},
-    consumable: { mode: 'autoHeal', thresholdPct: 0.3, healPct: 0.3, cooldownMs: 20000 }
+    consumable: { mode: 'autoHeal', thresholdPct: 0.5, healPct: 0.3, cooldownMs: 10000 }
   },
   {
     id: 'potion_big',

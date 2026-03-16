@@ -422,6 +422,8 @@ export function applyBuildClassMixin(GameScene) {
           break;
       }
 
+      this.installPassiveCooldownSkills?.();
+
       // (tutorialAwaitingFirstCore 机制已移除 —— 核心在起始房间选武器时确定)
     },
 

@@ -202,7 +202,7 @@ export default class BossManager {
       return;
     }
     this.minions.forEach((m) => {
-      if (m && m.active && m.destroy) m.destroy();
+      if (m?.destroy) m.destroy();
     });
     this.minions = [];
   }

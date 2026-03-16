@@ -196,6 +196,7 @@ export default class CollisionManager {
           isCrit: damageResult.isCrit,
           fromPlayer: true
         });
+        this.player.onDealDamage(damageResult.amount);
 
         // 命中特效与数字
         const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (damageResult.isCrit ? 0xff3333 : 0xffff00));

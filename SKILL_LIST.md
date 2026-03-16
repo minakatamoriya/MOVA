@@ -36,6 +36,7 @@
 - 连射（id=archer_rapidfire）：每次攻击后 10% 概率免费再射一轮
 - 穿透（id=archer_pierce）：箭矢最多额外穿透 1 次
 - 箭雨（id=archer_arrowrain）：每 5 秒下一次攻击变为箭雨，覆盖更大范围，伤害翻倍
+- 灵巧回避（id=archer_nimble_evade，maxLevel=3）：生命低于30%时自动触发，闪避率 +40%/+60%/+80%，持续3秒，冷却30秒
 - 射程（id=archer_range，maxLevel=3）：基础射击射程提升
 - 射速（id=archer_rate，maxLevel=3）：基础射击攻速提升
 - 攻击力（id=archer_damage，maxLevel=3）：基础射击伤害提升
@@ -51,6 +52,7 @@
 - 剑气（id=warrior_swordqi）：挥砍额外发射月牙剑气（保留近战判定）
 - 持久（id=warrior_endure）：近战形态获得 20% 伤害减免
 - 月牙扩展（id=warrior_range）：月牙斩有效范围提升（可叠加）
+- 吸血（id=warrior_blood_conversion，maxLevel=3）：生命低于30%时自动触发，攻击伤害转化为40%/70%/100%吸血，持续5/10/15秒，冷却30秒
 
 ### 法师·激光（coreKey=mage）
 - 折射（id=mage_refract）：激光命中目标后，从该目标分裂 2 道短射线到附近敌人（伤害 -50%）
@@ -62,6 +64,7 @@
 - 圣焰（id=paladin_holyfire）：锤击命中后留下圣焰持续伤害
 - 连锤（id=paladin_triple）：每 5 秒下一次锤击额外追加 2 次余震
 - 制裁（id=paladin_stun，maxLevel=3）：锤击眩晕概率 10%/20%/30%
+- 神圣庇护（id=paladin_divine_shelter，maxLevel=3）：生命低于30%时自动触发，获得40%/60%/80%减伤，持续3秒，冷却30秒
 
 ### 术士（coreKey=warlock）
 - 毒性浓度（id=warlock_toxicity，maxLevel=3）：剧毒 debuff 最大层数 +1

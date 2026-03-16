@@ -13,6 +13,7 @@ export const TREE_DEFS = [
       { id: 'archer_rapidfire', name: '连射', maxLevel: 1, desc: '每次攻击后，10% 概率免费再射一轮。' },
       { id: 'archer_pierce', name: '穿透', maxLevel: 1, desc: '箭矢命中后不消失，最多额外穿透 1 次。' },
       { id: 'archer_arrowrain', name: '箭雨', maxLevel: 1, desc: '每 5 秒，下一次攻击变为箭雨，覆盖更大范围，伤害翻倍。' },
+      { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 3, desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒。' },
 
       // 基础技能数值升级（3 级）
       { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+1/+2/+3）。' },
@@ -43,7 +44,8 @@ export const TREE_DEFS = [
       { id: 'warrior_spin', name: '回旋', maxLevel: 1, desc: '挥砍变为 360° 回旋斩，造成范围伤害。' },
       { id: 'warrior_swordqi', name: '剑气', maxLevel: 1, desc: '挥砍时额外发射一道月牙剑气，近战判定仍保留。' },
       { id: 'warrior_endure', name: '持久', maxLevel: 1, desc: '战士近战形态获得 20% 伤害减免。' },
-      { id: 'warrior_range', name: '月牙扩展', maxLevel: 4, desc: '月牙斩有效范围提升（可叠加）。' }
+      { id: 'warrior_range', name: '月牙扩展', maxLevel: 4, desc: '月牙斩有效范围提升（可叠加）。' },
+      { id: 'warrior_blood_conversion', name: '吸血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为40%/70%/100%吸血，持续5/10/15秒，冷却30秒。' }
     ],
     ultimate: { id: 'warrior_ultimate', name: '终极：剑刃风暴', maxLevel: 1, desc: '挥砍形成连斩冲击。' }
   },
@@ -69,7 +71,8 @@ export const TREE_DEFS = [
       { id: 'paladin_pierce', name: '重锤', maxLevel: 1, desc: '锤击范围与伤害提高。' },
       { id: 'paladin_holyfire', name: '圣焰', maxLevel: 1, desc: '锤击命中后留下圣焰持续伤害。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
-      { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' }
+      { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' },
+      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 3, desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续3秒，冷却30秒。' }
     ],
     ultimate: { id: 'paladin_ultimate', name: '终极：神圣裁决', maxLevel: 1, desc: '脉冲强化为审判领域。' }
   },
@@ -190,6 +193,7 @@ export const SKILL_TO_TREE = {
   archer_rapidfire: 'archer',
   archer_pierce: 'archer',
   archer_arrowrain: 'archer',
+  archer_nimble_evade: 'archer',
   archer_range: 'archer',
   archer_rate: 'archer',
   archer_damage: 'archer',
@@ -209,6 +213,7 @@ export const SKILL_TO_TREE = {
   warrior_swordqi: 'warrior',
   warrior_endure: 'warrior',
   warrior_range: 'warrior',
+  warrior_blood_conversion: 'warrior',
   warrior_ultimate: 'warrior',
 
   mage_core: 'mage',
@@ -222,6 +227,7 @@ export const SKILL_TO_TREE = {
   paladin_holyfire: 'paladin',
   paladin_triple: 'paladin',
   paladin_stun: 'paladin',
+  paladin_divine_shelter: 'paladin',
   paladin_ultimate: 'paladin',
 
   warlock_core: 'warlock',

@@ -204,7 +204,14 @@ export function calculateResolvedDamage(options = {}) {
 
 export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
   // 玩家承伤顺序：闪避 -> 固定减伤 -> 受击倍率 -> 职业减伤 -> 格挡
-  const dodgeChance = clampChance(toNumber(defender?.dodgeChance, 0) + toNumber(defender?.equipmentDodgeChance, 0));
+  const emergencyDodgeBonus = toNumber(defender?.emergencyDodgeUntil, 0) > now
+    ? toNumber(defender?.emergencyDodgeBonus, 0)
+    : 0;
+  const dodgeChance = clampChance(
+    toNumber(defender?.dodgeChance, 0)
+      + toNumber(defender?.equipmentDodgeChance, 0)
+      + emergencyDodgeBonus
+  );
   const dodged = dodgeChance > 0 && Math.random() < dodgeChance;
 
   if (dodged) {
@@ -217,6 +224,10 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
 
   let finalDamage = Math.max(0, Math.round(toNumber(incomingDamage, 0) - toNumber(defender?.flatDamageReduction, 0)));
   finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.natureDamageTakenMult, 1)));
+
+  if (toNumber(defender?.emergencyMitigationUntil, 0) > now) {
+    finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.emergencyMitigationMult, 1)));
+  }
 
   if (defender?.warriorEndure && defender?.mainCoreKey === 'warrior') {
     finalDamage = Math.max(0, Math.round(finalDamage * 0.8));

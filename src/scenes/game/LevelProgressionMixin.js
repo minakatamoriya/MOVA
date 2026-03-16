@@ -127,6 +127,17 @@ export function applyLevelProgressionMixin(GameScene) {
       this.startNextPendingLevelUp();
     },
 
+    grantTestLevelUp() {
+      if (!this.playerData) return false;
+      const neededExp = Math.max(1, Math.ceil((this.playerData.maxExp || 0) - (this.playerData.exp || 0)));
+      this.addExp(neededExp, { source: 'debug_levelup' });
+      console.log('[DebugLevelUp] granted one level via U key', {
+        level: this.playerData.level,
+        pending: Array.isArray(this._pendingLevelUpLevels) ? this._pendingLevelUpLevels.length : 0
+      });
+      return true;
+    },
+
     startNextPendingLevelUp() {
       if (this._levelUpActive) return;
       if (!Array.isArray(this._pendingLevelUpLevels) || this._pendingLevelUpLevels.length === 0) return;
