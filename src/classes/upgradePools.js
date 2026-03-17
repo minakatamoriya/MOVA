@@ -160,8 +160,8 @@ export const OFF_FACTION_ENTRY_OPTIONS = [
 // - dual：主/副不同主题（例如 法师主 + 自然伙伴副 => 法师+德鲁伊双职业）
 
 export const THIRD_SPEC_PREP_OPTIONS = {
-  depth: { id: 'third_depth_prep', category: 'build', name: '本职业深度专精', desc: '解锁深度专精天赋', icon: '专精' },
-  dual: { id: 'third_dual_prep', category: 'build', name: '双职业专精', desc: '解锁双职业天赋', icon: '双职' }
+  depth: { id: 'third_depth_prep', category: 'build', name: '本职业深度专精天赋', desc: '解锁深度专精天赋', icon: '专精' },
+  dual: { id: 'third_dual_prep', category: 'build', name: '双职业天赋', desc: '解锁双职业天赋', icon: '双职' }
 };
 
 // 深度专精池：按主职业主题拆分
