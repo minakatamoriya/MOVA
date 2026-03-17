@@ -673,7 +673,9 @@ export default class CollisionManager {
             handledByPet = true;
 
             // 统一使用 10 点作为 Boss 子弹基础伤害（与玩家一致）
-            const dmg = Math.max(0, Math.round(10 * bossDamageMult));
+            const rawDmg = Math.max(0, Math.round(10 * bossDamageMult));
+            const dmgMult = Math.max(0.1, Number(pet.damageTakenMult || 1));
+            const dmg = Math.max(1, Math.round(rawDmg * dmgMult));
             pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
 
             if (pet.isUndeadSummon) {

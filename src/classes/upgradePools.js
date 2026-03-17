@@ -35,23 +35,19 @@ export const TALENT_OFFER_WEIGHT_CONFIG = {
 export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
   scatter: [
-    { id: 'archer_rapidfire', category: 'build', name: '连射', desc: '每次攻击后，10% 概率免费再射一轮', icon: '猎主' },
-    { id: 'archer_pierce', category: 'build', name: '穿透', desc: '箭矢命中后不消失，最多可额外穿透 1 次', icon: '猎主' },
-    { id: 'archer_arrowrain', category: 'build', name: '箭雨', desc: '每 5 秒，下一次攻击变为箭雨，覆盖更大范围，伤害翻倍', icon: '猎主' },
+    { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+12%/+24%/+36%）', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_scatter', category: 'build', name: '散射', desc: '基础射击初始为1列；升级后变为3列→5列→7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
     { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒', icon: '猎主', maxLevel: 3 },
-
-    // 基础技能数值升级（可叠加 3 级）
-    { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+1/+2/+3）', icon: '距', maxLevel: 3 },
-    { id: 'archer_rate', category: 'build', name: '射速', desc: '基础射击攻速提升（+1/+2/+3）', icon: '速', maxLevel: 3 },
-    { id: 'archer_damage', category: 'build', name: '攻击力', desc: '基础射击伤害提升（+1/+2/+3）', icon: '力', maxLevel: 3 },
-    { id: 'archer_scatter', category: 'build', name: '散射', desc: '基础射击散射升级：1列→3列→5列', icon: '散', maxLevel: 3 }
+    { id: 'archer_evade_mastery', category: 'build', name: '残影步调', desc: '强化灵巧回避：持续时间提高至5/8/10秒', icon: '猎主', maxLevel: 3, requiredSkillId: 'archer_nimble_evade' },
   ],
 
   // 🌿 德鲁伊·星落（主职业输出）
   drone: [
     { id: 'druid_meteor_shower', category: 'build', name: '流星雨', desc: '星落数量 +2，但单次伤害略微降低', icon: '德主' },
     { id: 'druid_meteor', category: 'build', name: '陨石', desc: '每 10 秒，下一次星落变为巨型陨石：范围更大，伤害更高', icon: '德主' },
-    { id: 'druid_starfire', category: 'build', name: '星火', desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）', icon: '德主' }
+    { id: 'druid_starfire', category: 'build', name: '星火', desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）', icon: '德主' },
+    { id: 'druid_nourish', category: 'build', name: '自然滋养', desc: '生命低于30%时自动触发：在15/10/5秒内缓慢回复30%生命，冷却30秒', icon: '德主', maxLevel: 3 },
+    { id: 'druid_nourish_growth', category: 'build', name: '丰饶脉动', desc: '强化自然滋养：总回复量额外提高50%/80%/100%', icon: '德主', maxLevel: 3, requiredSkillId: 'druid_nourish' }
   ],
 
   // 🟠 战士·旋风斩（此项目内为“近战挥砍/半月波”）
@@ -60,7 +56,8 @@ export const UPGRADE_POOLS = {
     { id: 'warrior_swordqi', category: 'build', name: '剑气', desc: '挥砍时额外发射一道月牙剑气（保留近战判定）', icon: '战主' },
     { id: 'warrior_endure', category: 'build', name: '持久', desc: '战士近战形态获得 20% 伤害减免', icon: '战主' },
     { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩有效范围提升（可叠加）', icon: '战主' },
-    { id: 'warrior_blood_conversion', category: 'build', name: '吸血', desc: '生命低于30%时自动触发：攻击伤害转化为40%/70%/100%吸血，持续5/10/15秒，冷却30秒', icon: '战主', maxLevel: 3 }
+    { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
   ],
 
   // 🔵 法师·激光
@@ -68,7 +65,8 @@ export const UPGRADE_POOLS = {
     { id: 'mage_refract', category: 'build', name: '折射', desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%', icon: '法主' },
     { id: 'mage_arcane_perception', category: 'build', name: '奥术感知', desc: '奥术射线索敌范围提升（可叠加）', icon: '法主' },
     { id: 'mage_energy_focus', category: 'build', name: '能量汇集', desc: '奥术射线伤害 +10%，并随层数变粗更亮（可叠加）', icon: '法主' },
-    
+    { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: '生命低于30%时自动触发：冻结周围敌人 3/5/10 秒，冷却30秒', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frost_domain', category: 'build', name: '极寒疆域', desc: '强化冰霜新星：冻结范围扩大至300/380/480', icon: '法主', maxLevel: 3, requiredSkillId: 'mage_frost_nova' }
   ],
 
   // 🛡️ 圣骑士·矛
@@ -77,14 +75,17 @@ export const UPGRADE_POOLS = {
     { id: 'paladin_holyfire', category: 'build', name: '圣焰', desc: '锤击命中后在地上留下圣焰，造成持续伤害', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
     { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' },
-    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续3秒，冷却30秒', icon: '骑主', maxLevel: 3 }
+    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒', icon: '骑主', maxLevel: 3 },
+    { id: 'paladin_shelter_extension', category: 'build', name: '圣佑绵延', desc: '强化神圣庇护：持续时间提高至8/10/12秒', icon: '骑主', maxLevel: 3, requiredSkillId: 'paladin_divine_shelter' }
   ],
 
   // 🟣 术士·暗影箭
   warlock: [
     { id: 'warlock_toxicity', category: 'build', name: '毒性浓度', desc: '剧毒 debuff 最大层数 +1（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
     { id: 'warlock_corrode', category: 'build', name: '腐蚀', desc: '毒圈持续时间 +1 秒（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围 +20%（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 }
+    { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围 +20%（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_infernal', category: 'build', name: '炼狱魔火', desc: '生命低于30%时自动触发：消耗15%生命召唤地狱火 10 秒，冷却30秒。等级提升会强化地狱火生命、攻击与每击回血', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_infernal_contract', category: 'build', name: '灰烬契约', desc: '强化炼狱魔火：生命消耗降低至10%/5%/0%', icon: '术主', maxLevel: 3, requiredSkillId: 'warlock_infernal' }
   ]
 };
 

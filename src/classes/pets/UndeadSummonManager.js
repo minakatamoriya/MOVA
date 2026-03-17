@@ -17,6 +17,7 @@ export default class UndeadSummonManager {
   constructor(scene) {
     this.scene = scene;
     this.player = null;
+    this.infernals = [];
     this.units = new Map([
       [SUMMON_TYPES.guard, []],
       [SUMMON_TYPES.mage, []]
@@ -149,6 +150,16 @@ export default class UndeadSummonManager {
         result.push(unit);
       }
     }
+
+    const infernals = this.infernals || [];
+    for (let i = 0; i < infernals.length; i++) {
+      const unit = infernals[i];
+      if (!unit || !unit.active) continue;
+      if ((unit.currentHp || 0) <= 0) continue;
+      if ((unit.hitRadius || 0) <= 0) continue;
+      result.push(unit);
+    }
+
     return result;
   }
 
@@ -165,6 +176,12 @@ export default class UndeadSummonManager {
 
   onSummonKilled(unit) {
     if (!unit) return;
+    if (unit.summonType === 'infernal') {
+      this.infernals = (this.infernals || []).filter((entry) => entry !== unit && entry?.active);
+      this.destroyUnit(unit);
+      return;
+    }
+
     const type = unit.summonType;
     const list = this.units.get(type) || [];
     const next = list.filter((entry) => entry !== unit && entry?.active);
@@ -245,6 +262,84 @@ export default class UndeadSummonManager {
     return unit;
   }
 
+  summonInfernal(options = {}) {
+    if (!this.player) return null;
+
+    const level = Phaser.Math.Clamp(Math.round(Number(options.level) || 1), 1, 3);
+    const durationMs = Math.max(1000, Math.round(Number(options.durationMs) || 10000));
+    const healPerHit = Math.max(1, Math.round(Number(options.healPerHit) || [0, 8, 14, 22][level] || 10));
+    const hpScale = Math.max(0.1, Number(options.hpScale) || ([0, 0.85, 1.10, 1.45][level] || 1));
+    const damageMult = Math.max(0.1, Number(options.damageMult) || ([0, 1.10, 1.45, 1.85][level] || 1));
+
+    (this.infernals || []).forEach((unit) => this.destroyUnit(unit));
+    this.infernals = [];
+
+    const unit = this.createInfernal({ level, durationMs, healPerHit, hpScale, damageMult });
+    if (!unit) return null;
+
+    this.infernals.push(unit);
+    return unit;
+  }
+
+  createInfernal(config = {}) {
+    const level = Phaser.Math.Clamp(Math.round(Number(config.level) || 1), 1, 3);
+    const durationMs = Math.max(1000, Math.round(Number(config.durationMs) || 10000));
+    const healPerHit = Math.max(1, Math.round(Number(config.healPerHit) || 10));
+    const hpScale = Math.max(0.1, Number(config.hpScale) || 1);
+    const damageMult = Math.max(0.1, Number(config.damageMult) || 1);
+    const x = this.player.x + 10;
+    const y = this.player.y + 30;
+
+    const shadow = this.scene.add.ellipse(0, 18, 42, 18, 0x11210f, 0.30);
+    const legs = this.scene.add.rectangle(0, 18, 20, 16, 0x245e27, 0.95);
+    const body = this.scene.add.circle(0, 0, 22, 0x3bb54a, 0.97);
+    body.setStrokeStyle(3, 0x173f1a, 1);
+    const shoulders = this.scene.add.rectangle(0, -4, 38, 18, 0x46c35b, 0.95);
+    shoulders.setStrokeStyle(2, 0x173f1a, 1);
+    const head = this.scene.add.circle(0, -24, 14, 0x64d76e, 0.98);
+    head.setStrokeStyle(2, 0x173f1a, 1);
+    const jaw = this.scene.add.rectangle(0, -12, 18, 8, 0x9cff9c, 0.88);
+    const hornLeft = this.scene.add.triangle(-10, -34, 0, 12, -8, -10, 10, 8, 0xb8ff9b, 0.95);
+    const hornRight = this.scene.add.triangle(10, -34, 0, 12, -10, 8, 8, -10, 0xb8ff9b, 0.95);
+    const eyeLeft = this.scene.add.circle(-5, -25, 2.5, 0xe8ffb8, 1);
+    const eyeRight = this.scene.add.circle(5, -25, 2.5, 0xe8ffb8, 1);
+    const armLeft = this.scene.add.rectangle(-22, 2, 12, 24, 0x2f8f3a, 0.95);
+    const armRight = this.scene.add.rectangle(22, 2, 12, 24, 0x2f8f3a, 0.95);
+
+    const unit = this.scene.add.container(x, y, [shadow, legs, armLeft, armRight, body, shoulders, head, jaw, hornLeft, hornRight, eyeLeft, eyeRight]);
+    unit.setDepth(8);
+    unit.summonType = 'infernal';
+    unit.isUndeadSummon = true;
+    unit.isInfernal = true;
+    unit.infernalLevel = level;
+    unit.hitRadius = 22;
+    unit.maxHp = Math.max(180, Math.round((this.player.maxHp || 100) * hpScale + (this.player.bulletDamage || 1) * (12 + level * 8)));
+    unit.currentHp = unit.maxHp;
+    unit.moveSpeed = 250;
+    unit.attackRange = 28;
+    unit.attackCooldownMs = 760;
+    unit.damageMult = damageMult;
+    unit.damageTakenMult = 0.55;
+    unit.anchorAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    unit.anchorRadius = 56;
+    unit.lastAttackAt = 0;
+    unit.healOnHit = healPerHit;
+    unit.expireAt = (this.scene.time?.now ?? 0) + durationMs;
+
+    const pulse = this.scene.add.circle(x, y, 30, 0x7dff7a, 0.22).setDepth(7);
+    pulse.setStrokeStyle(4, 0xd9ff9a, 0.95);
+    this.scene.tweens.add({
+      targets: pulse,
+      scale: 1.9,
+      alpha: 0,
+      duration: 300,
+      ease: 'Cubic.Out',
+      onComplete: () => pulse.destroy()
+    });
+
+    return unit;
+  }
+
   resetPositionsAroundPlayer() {
     if (!this.player) return;
 
@@ -285,6 +380,13 @@ export default class UndeadSummonManager {
         unit.lastAttackAt = 0;
       }
     }
+
+    const infernals = this.infernals || [];
+    for (let i = 0; i < infernals.length; i++) {
+      const unit = infernals[i];
+      if (!unit?.active) continue;
+      unit.lastAttackAt = 0;
+    }
   }
 
   update(time, delta) {
@@ -302,6 +404,11 @@ export default class UndeadSummonManager {
 
     for (let i = 0; i < mageList.length; i++) {
       this.updateMage(mageList[i], i, mageList.length, time, delta, acquireRange);
+    }
+
+    this.infernals = (this.infernals || []).filter((unit) => unit && unit.active && (unit.currentHp || 0) > 0);
+    for (let i = 0; i < this.infernals.length; i++) {
+      this.updateInfernal(this.infernals[i], time, delta, acquireRange);
     }
   }
 
@@ -418,6 +525,63 @@ export default class UndeadSummonManager {
     }
   }
 
+  updateInfernal(unit, time, delta, acquireRange) {
+    if (!unit || !unit.active) return;
+
+    if ((unit.expireAt || 0) <= time) {
+      this.onSummonKilled(unit);
+      return;
+    }
+
+    const target = this.getNearestEnemy(unit.x, unit.y, acquireRange);
+    const anchorAngle = (unit.anchorAngle || 0) + time * 0.0009;
+    const anchorX = this.player.x + Math.cos(anchorAngle) * (unit.anchorRadius || 56);
+    const anchorY = this.player.y + 24 + Math.sin(anchorAngle) * 22;
+
+    let desiredX = anchorX;
+    let desiredY = anchorY;
+    if (target) {
+      const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
+      const angle = Phaser.Math.Angle.Between(target.x, target.y, this.player.x, this.player.y);
+      desiredX = target.x + Math.cos(angle) * (enemyRadius + unit.hitRadius + 20);
+      desiredY = target.y + Math.sin(angle) * (enemyRadius + unit.hitRadius + 20);
+    }
+
+    const dx = desiredX - unit.x;
+    const dy = desiredY - unit.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const step = unit.moveSpeed * (delta / 1000);
+    unit.x += (dx / dist) * Math.min(step, dist);
+    unit.y += (dy / dist) * Math.min(step, dist);
+
+    if (!target || !target.isAlive) return;
+
+    const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
+    const tx = target.x - unit.x;
+    const ty = target.y - unit.y;
+    const tdist = Math.hypot(tx, ty) || 1;
+    unit.rotation = Phaser.Math.Angle.Between(unit.x, unit.y, target.x, target.y) * 0.08;
+
+    if (tdist <= enemyRadius + unit.hitRadius + unit.attackRange && time - unit.lastAttackAt >= unit.attackCooldownMs) {
+      unit.lastAttackAt = time;
+      const baseDamage = Math.max(1, Math.round((this.player.bulletDamage || 1) * unit.damageMult + 6));
+      const result = calculateResolvedDamage({ attacker: this.player, target, baseDamage, now: time });
+      target.takeDamage(result.amount, { attacker: this.player, source: 'infernal', suppressHitReaction: false });
+      this.player.onDealDamage?.(result.amount);
+
+      const healAmount = Math.max(1, Math.round(unit.healOnHit || 0));
+      const restored = this.player.heal?.(healAmount) || 0;
+      if (restored > 0) {
+        this.scene.showDamageNumber(this.player.x, this.player.y - 56, `+${restored}`, { color: '#86efac', fontSize: 20, whisper: true });
+      }
+
+      this.scene.showDamageNumber(target.x, target.y - 32, result.amount, { color: '#7dff7a', whisper: true, fontSize: 22, isCrit: result.isCrit });
+      const slash = this.scene.add.line(0, 0, unit.x, unit.y, target.x, target.y, 0x7dff7a, 0.65);
+      slash.setLineWidth(4, 1);
+      this.scene.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+    }
+  }
+
   clearUnits() {
     for (const type of Object.values(SUMMON_TYPES)) {
       const list = this.units.get(type) || [];
@@ -425,6 +589,9 @@ export default class UndeadSummonManager {
       this.units.set(type, []);
       this.respawnAt.set(type, 0);
     }
+
+    (this.infernals || []).forEach((unit) => this.destroyUnit(unit));
+    this.infernals = [];
   }
 
   destroyUnit(unit) {

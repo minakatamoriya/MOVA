@@ -54,6 +54,11 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     this.followBoss = config.followBoss || null;
     this.followOffset = config.followOffset || { x: 120, y: 40 };
+    this.stunUntil = 0;
+    this.freezeUntil = 0;
+    this._freezeClearTimer = null;
+    this._freezeAura = null;
+    this._freezeCrystal = null;
 
     // 第一关首波：进入视野后才开始追玩家
     this.aggroOnSeen = !!config.aggroOnSeen;
@@ -328,10 +333,94 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
   }
 
+  isStunned() {
+    const now = this.scene?.time?.now ?? 0;
+    return (this.stunUntil || 0) > now;
+  }
+
+  ensureFreezeVisuals() {
+    if (!this.scene?.add) return;
+    if (this._freezeAura?.active && this._freezeCrystal?.active) return;
+
+    this._freezeAura = this.scene.add.circle(0, 0, this.radius + 8, 0x8fdcff, 0.12);
+    this._freezeAura.setStrokeStyle(2, 0xe0f7ff, 0.85);
+    this._freezeAura.setVisible(false);
+    this.add(this._freezeAura);
+
+    const crystal = this.scene.add.graphics();
+    crystal.fillStyle(0xe0f7ff, 0.58);
+    crystal.lineStyle(1.5, 0xffffff, 0.88);
+    crystal.beginPath();
+    crystal.moveTo(0, -12);
+    crystal.lineTo(8, -4);
+    crystal.lineTo(5, 10);
+    crystal.lineTo(0, 16);
+    crystal.lineTo(-5, 10);
+    crystal.lineTo(-8, -4);
+    crystal.closePath();
+    crystal.fillPath();
+    crystal.strokePath();
+    crystal.setPosition(0, -this.radius - 6);
+    crystal.setVisible(false);
+    this._freezeCrystal = crystal;
+    this.add(crystal);
+  }
+
+  setFrozenVisualVisible(visible) {
+    this.ensureFreezeVisuals();
+    if (this._freezeAura) this._freezeAura.setVisible(visible);
+    if (this._freezeCrystal) this._freezeCrystal.setVisible(visible);
+    if (this.sprite?.setTint) {
+      if (visible) this.sprite.setTint(0xc9f2ff);
+      else this.sprite.clearTint();
+    }
+    if (this.body?.setStrokeStyle) {
+      this.body.setStrokeStyle(2, visible ? 0xe0f7ff : 0xffffff, visible ? 1 : 0.85);
+    }
+  }
+
+  applyStun(ms) {
+    const now = this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, ms || 0);
+    this.stunUntil = Math.max(this.stunUntil || 0, until);
+  }
+
+  applyFreeze(ms) {
+    if (!this.isAlive) return;
+
+    const now = this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, ms || 0);
+    this.freezeUntil = Math.max(this.freezeUntil || 0, until);
+    this.applyStun(ms);
+    this.setFrozenVisualVisible(true);
+
+    if (this.scene?.add && this.scene?.tweens) {
+      const burst = this.scene.add.circle(this.x, this.y, this.radius + 5, 0xbfe9ff, 0.18).setDepth(11);
+      burst.setStrokeStyle(2, 0xe0f7ff, 0.92);
+      this.scene.tweens.add({
+        targets: burst,
+        scale: 1.28,
+        alpha: 0,
+        duration: 180,
+        ease: 'Cubic.Out',
+        onComplete: () => burst.destroy()
+      });
+    }
+
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
+    this._freezeClearTimer = this.scene?.time?.delayedCall(Math.max(0, until - now) + 10, () => {
+      const current = this.scene?.time?.now ?? 0;
+      if ((this.freezeUntil || 0) > current) return;
+      this.setFrozenVisualVisible(false);
+    });
+  }
+
   die(reason = 'unknown') {
     if (!this.isAlive) return;
     this.isAlive = false;
     this.isInvincible = true;
+    this.setFrozenVisualVisible(false);
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
 
     try { this.scene?.tweens?.killTweensOf?.(this); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this.body); } catch (_) { /* ignore */ }
@@ -379,6 +468,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     try { this.scene?.tweens?.killTweensOf?.(this.hpBarBg); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this.hpBarFill); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._debuffUi?.container); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._freezeAura); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._freezeCrystal); } catch (_) { /* ignore */ }
+
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
 
     if (this.hpBarBg) this.hpBarBg.setVisible(false);
     if (this.hpBarFill) this.hpBarFill.setVisible(false);
@@ -391,6 +484,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.hpBarBg = null;
     this.hpBarFill = null;
     this._debuffUi = null;
+    this._freezeAura = null;
+    this._freezeCrystal = null;
   }
 
   destroy(fromScene) {
@@ -407,6 +502,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     // 血条同步（跟随衰减/恢复等未来扩展）
     this.updateHpBar();
+
+    if (this.isStunned()) {
+      return;
+    }
 
     // 若绑定 Boss 且 Boss 已死：脱离 Boss，作为普通留场单位继续存在
     if (this.followBoss && (!this.followBoss.isAlive || this.followBoss.isDestroyed)) {

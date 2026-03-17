@@ -46,6 +46,7 @@
 - 流星雨（id=druid_meteor_shower）：星落数量 +2，但单次伤害略降
 - 陨石（id=druid_meteor）：每 10 秒下一次星落变为巨型陨石（更大范围/更高伤害）
 - 星火（id=druid_starfire）：星落命中后 30% 概率同位置额外触发一次（不连锁）
+- 滋养（id=druid_nourish，maxLevel=3）：生命低于30%时自动触发，在15/10/5秒内缓慢回复30%生命，冷却30秒
 
 ### 战士·近战挥砍（coreKey=warrior）
 - 回旋（id=warrior_spin）：挥砍变为 360° 回旋斩
@@ -64,7 +65,7 @@
 - 圣焰（id=paladin_holyfire）：锤击命中后留下圣焰持续伤害
 - 连锤（id=paladin_triple）：每 5 秒下一次锤击额外追加 2 次余震
 - 制裁（id=paladin_stun，maxLevel=3）：锤击眩晕概率 10%/20%/30%
-- 神圣庇护（id=paladin_divine_shelter，maxLevel=3）：生命低于30%时自动触发，获得40%/60%/80%减伤，持续3秒，冷却30秒
+- 神圣庇护（id=paladin_divine_shelter，maxLevel=3）：生命低于30%时自动触发，获得40%/60%/80%减伤，持续5秒，冷却30秒
 
 ### 术士（coreKey=warlock）
 - 毒性浓度（id=warlock_toxicity，maxLevel=3）：剧毒 debuff 最大层数 +1

@@ -15,42 +15,118 @@ import { START_ROOM } from '../data/mapPool';
 const EMERGENCY_COOLDOWN_DEFS = {
   paladin: {
     talentId: 'paladin_divine_shelter',
+    enhancementTalentId: 'paladin_shelter_extension',
     skillId: 'paladin_divine_shelter',
     label: '神圣庇护',
     iconText: '护',
+    enhancedLabel: '圣佑绵延',
+    enhancedIconText: '佑',
     accentColor: 0xfbbf24,
-    durationMs: 3000,
+    durationMs: 5000,
+    durationByEnhancementLevel: [5000, 8000, 10000, 12000],
     cooldownMs: 30000,
     values: [0, 0.4, 0.6, 0.8],
-    describe(value) {
-      return `生命低于30%时自动触发：获得${Math.round(value * 100)}%减伤，持续3秒。冷却30秒。`;
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
+      return `生命低于30%时自动触发：获得${Math.round((state.value || 0) * 100)}%减伤，持续${seconds}秒。冷却30秒。`;
     }
   },
   scatter: {
     talentId: 'archer_nimble_evade',
+    enhancementTalentId: 'archer_evade_mastery',
     skillId: 'archer_nimble_evade',
     label: '灵巧回避',
     iconText: '避',
+    enhancedLabel: '残影步调',
+    enhancedIconText: '影',
     accentColor: 0x34d399,
     durationMs: 3000,
+    durationByEnhancementLevel: [3000, 5000, 8000, 10000],
     cooldownMs: 30000,
     values: [0, 0.4, 0.6, 0.8],
-    describe(value) {
-      return `生命低于30%时自动触发：闪避率 +${Math.round(value * 100)}%，持续3秒。冷却30秒。`;
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
+      return `生命低于30%时自动触发：闪避率 +${Math.round((state.value || 0) * 100)}%，持续${seconds}秒。冷却30秒。`;
     }
   },
   warrior: {
     talentId: 'warrior_blood_conversion',
+    enhancementTalentId: 'warrior_bloodlust_mastery',
     skillId: 'warrior_blood_conversion',
-    label: '吸血',
+    label: '猩红嗜血',
     iconText: '血',
+    enhancedLabel: '狂血渴饮',
+    enhancedIconText: '狂',
     accentColor: 0xf87171,
     cooldownMs: 30000,
-    values: [0, 0.4, 0.7, 1.0],
+    values: [0, 1.0, 1.0, 1.0],
+    lifestealMultiplierByEnhancementLevel: [1.0, 1.2, 1.5, 2.0],
     durationByLevel: [0, 5000, 10000, 15000],
-    describe(value, durationMs) {
-      const seconds = Math.max(0, Math.round((Number(durationMs) || 0) / 1000));
-      return `生命低于30%时自动触发：攻击伤害转化为${Math.round(value * 100)}%吸血，持续${seconds}秒。冷却30秒。`;
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
+      return `生命低于30%时自动触发：攻击伤害转化为${Math.round((state.value || 0) * 100)}%吸血，持续${seconds}秒。冷却30秒。`;
+    }
+  },
+  mage: {
+    talentId: 'mage_frost_nova',
+    enhancementTalentId: 'mage_frost_domain',
+    skillId: 'mage_frost_nova',
+    label: '冰霜新星',
+    iconText: '冰',
+    enhancedLabel: '极寒疆域',
+    enhancedIconText: '霜',
+    accentColor: 0x7dd3fc,
+    cooldownMs: 30000,
+    radiusPx: 220,
+    radiusByEnhancementLevel: [220, 300, 380, 480],
+    values: [0, 3000, 5000, 10000],
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.value) || 0) / 1000));
+      return `生命低于30%时自动触发：释放冰霜新星，冻结周围敌人${seconds}秒，范围${Math.round(state.radiusPx || 0)}。冷却30秒。`;
+    }
+  },
+  warlock: {
+    talentId: 'warlock_infernal',
+    enhancementTalentId: 'warlock_infernal_contract',
+    skillId: 'warlock_infernal',
+    label: '炼狱魔火',
+    iconText: '狱',
+    enhancedLabel: '灰烬契约',
+    enhancedIconText: '契',
+    accentColor: 0x22c55e,
+    cooldownMs: 30000,
+    durationMs: 10000,
+    hpCostPct: 0.15,
+    hpCostPctByEnhancementLevel: [0.15, 0.10, 0.05, 0.0],
+    values: [0, 1, 2, 3],
+    hpScaleByLevel: [0, 0.85, 1.10, 1.45],
+    damageMultByLevel: [0, 1.10, 1.45, 1.85],
+    healPerHitByLevel: [0, 8, 14, 22],
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
+      const level = Math.max(0, Math.round(Number(state.value) || 0));
+      const hpScale = [0, 85, 110, 145][level] || 0;
+      const damageScale = [0, 110, 145, 185][level] || 0;
+      const healPerHit = [0, 8, 14, 22][level] || 0;
+      return `生命低于30%时自动触发：消耗${Math.round((state.hpCostPct || 0) * 100)}%生命召唤地狱火，持续${seconds}秒。当前等级使地狱火生命为玩家${hpScale}%基准、攻击为${damageScale}%基准、每击回复${healPerHit}生命。冷却30秒。`;
+    }
+  },
+  drone: {
+    talentId: 'druid_nourish',
+    enhancementTalentId: 'druid_nourish_growth',
+    skillId: 'druid_nourish',
+    label: '自然滋养',
+    iconText: '养',
+    enhancedLabel: '丰饶脉动',
+    enhancedIconText: '丰',
+    accentColor: 0x22c55e,
+    cooldownMs: 30000,
+    values: [0, 0.3, 0.3, 0.3],
+    healMultiplierByEnhancementLevel: [1.0, 1.5, 1.8, 2.0],
+    durationByLevel: [0, 15000, 10000, 5000],
+    describe(state) {
+      const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
+      return `生命低于30%时自动触发：在${seconds}秒内缓慢回复${Math.round((state.value || 0) * 100)}%生命。冷却30秒。`;
     }
   }
 };
@@ -1450,23 +1526,108 @@ class GameScene extends Phaser.Scene {
     const def = coreKey ? EMERGENCY_COOLDOWN_DEFS[coreKey] : null;
     if (!def) return null;
     const level = this.getSkillLevel(def.talentId);
-    const value = def.values[clampTalentLevel(level)] || 0;
-    const durationMs = Array.isArray(def.durationByLevel)
+    const enhancementLevel = this.getSkillLevel(def.enhancementTalentId);
+    let value = def.values[clampTalentLevel(level)] || 0;
+    let durationMs = Array.isArray(def.durationByLevel)
       ? Number(def.durationByLevel[clampTalentLevel(level)] || 0)
       : Number(def.durationMs || 0);
-    return {
+    let radiusPx = Number(def.radiusPx || 0);
+    let hpCostPct = Number(def.hpCostPct || 0);
+
+    if (Array.isArray(def.durationByEnhancementLevel)) {
+      durationMs = Number(def.durationByEnhancementLevel[clampTalentLevel(enhancementLevel)] || durationMs);
+    }
+    if (Array.isArray(def.healMultiplierByEnhancementLevel)) {
+      value *= Number(def.healMultiplierByEnhancementLevel[clampTalentLevel(enhancementLevel)] || 1);
+    }
+    if (Array.isArray(def.lifestealMultiplierByEnhancementLevel)) {
+      value *= Number(def.lifestealMultiplierByEnhancementLevel[clampTalentLevel(enhancementLevel)] || 1);
+    }
+    if (Array.isArray(def.radiusByEnhancementLevel)) {
+      radiusPx = Number(def.radiusByEnhancementLevel[clampTalentLevel(enhancementLevel)] || radiusPx);
+    }
+    if (Array.isArray(def.hpCostPctByEnhancementLevel)) {
+      hpCostPct = Number(def.hpCostPctByEnhancementLevel[clampTalentLevel(enhancementLevel)] ?? hpCostPct);
+    }
+
+    const state = {
       ...def,
       level,
+      enhancementLevel,
       value,
       durationMs,
-      description: def.describe(value, durationMs)
+      radiusPx,
+      hpCostPct
     };
+    if (enhancementLevel > 0) {
+      state.label = String(def.enhancedLabel || def.label || def.skillId || '');
+      state.iconText = String(def.enhancedIconText || def.iconText || '✦');
+    } else {
+      state.label = String(def.label || def.skillId || '');
+      state.iconText = String(def.iconText || '✦');
+    }
+    state.description = typeof def.describe === 'function' ? def.describe(state) : '';
+    return state;
+  }
+
+  triggerMageFrostNova(config = {}) {
+    const player = this.player;
+    if (!player?.isAlive) return;
+
+    const radius = Math.max(80, Math.round(Number(config.radiusPx || 220)));
+    const freezeMs = Math.max(250, Math.round(Number(config.value || 0)));
+    if (freezeMs <= 0) return;
+
+    player.playFrostNovaEffect?.(radius);
+
+    const targets = [];
+    const boss = this.bossManager?.getCurrentBoss?.();
+    if (boss?.isAlive) targets.push(boss);
+
+    const minions = this.bossManager?.getMinions?.() || [];
+    minions.forEach((minion) => {
+      if (minion?.isAlive) targets.push(minion);
+    });
+
+    targets.forEach((enemy) => {
+      const distance = Phaser.Math.Distance.Between(player.x, player.y, enemy.x, enemy.y);
+      if (distance > radius) return;
+
+      if (typeof enemy.applyFreeze === 'function') {
+        enemy.applyFreeze(freezeMs, { source: 'mage_frost_nova', player, radius });
+      } else if (typeof enemy.applyStun === 'function') {
+        enemy.applyStun(freezeMs);
+      }
+
+      this.showDamageNumber?.(enemy.x, enemy.y - Math.max(26, (enemy.bossSize || enemy.radius || 20) + 18), '冻结', {
+        color: '#9be7ff',
+        fontSize: 18,
+        whisper: true
+      });
+    });
+  }
+
+  triggerWarlockInfernal(config = {}) {
+    const player = this.player;
+    if (!player?.isAlive) return;
+    if (!this.undeadSummonManager?.summonInfernal) return;
+
+    const hpCost = Math.max(1, Math.round((player.maxHp || 1) * Math.max(0, Number(config.hpCostPct) || 0.15)));
+    player.spendHealth?.(hpCost, { minRemaining: 1, color: '#86efac', fontSize: 20, whisper: true });
+
+    this.undeadSummonManager.summonInfernal({
+      level: Math.max(1, Math.round(Number(config.value || config.level || 1))),
+      durationMs: Math.max(1000, Math.round(Number(config.durationMs) || 10000)),
+      hpScale: Number(config.hpScaleByLevel?.[Math.max(0, Math.round(Number(config.value || config.level || 1)))]) || undefined,
+      damageMult: Number(config.damageMultByLevel?.[Math.max(0, Math.round(Number(config.value || config.level || 1)))]) || undefined,
+      healPerHit: Number(config.healPerHitByLevel?.[Math.max(0, Math.round(Number(config.value || config.level || 1)))]) || undefined
+    });
   }
 
   installPassiveCooldownSkills() {
     const potionSmall = getItemById('potion_small');
 
-    ['paladin', 'scatter', 'warrior'].forEach((coreKey) => {
+    ['paladin', 'scatter', 'warrior', 'mage', 'warlock', 'drone'].forEach((coreKey) => {
       const state = this.getEmergencyCooldownTalentState(coreKey);
       if (!state) return;
 
@@ -1495,12 +1656,19 @@ class GameScene extends Phaser.Scene {
           if (coreKey === 'paladin') {
             this.player.emergencyMitigationMult = Math.max(0, 1 - next.value);
             this.player.emergencyMitigationUntil = now + next.durationMs;
+            this.player.playDivineShelterEffect?.(next.durationMs);
           } else if (coreKey === 'scatter') {
             this.player.emergencyDodgeBonus = next.value;
             this.player.emergencyDodgeUntil = now + next.durationMs;
           } else if (coreKey === 'warrior') {
             this.player.emergencyLifestealPercent = next.value;
             this.player.emergencyLifestealUntil = now + next.durationMs;
+          } else if (coreKey === 'mage') {
+            this.triggerMageFrostNova(next);
+          } else if (coreKey === 'warlock') {
+            this.triggerWarlockInfernal(next);
+          } else if (coreKey === 'drone') {
+            this.player.activateEmergencyRegen?.(next.value, next.durationMs);
           }
           this.toast?.show?.({ icon: next.iconText, text: `${next.label} 触发` }, { durationMs: 1000 });
         },

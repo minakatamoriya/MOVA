@@ -18,7 +18,8 @@ export default class BulletManager {
     this.maxPoolSize = 100; // 最大对象池大小
     
     // ── 拖尾粒子池（取代 per-bullet timer+tween） ──
-    this._trailPool = [];          // 空闲 circle 对象
+    this._trailPool = [];          // 空闲 dot trail 对象
+    this._trailStreakPool = [];    // 空闲 streak trail 对象
     this._trailActive = [];        // 正在衰减中的粒子 {sprite, life, maxLife}
     this._trailPoolMax = 200;      // 池上限
     this._trailInterval = 110;     // 每颗子弹发射拖尾间隔 ms
@@ -65,7 +66,19 @@ export default class BulletManager {
       skipUpdate = false,
       maxLifeMs = null,
       arrowLenMult = 1,
-      arrowThickMult = 1
+      arrowThickMult = 1,
+      arrowHighlightColor = null,
+      arrowFeatherColor = null,
+      trailIntervalMs = null,
+      trailLifeMs = null,
+      trailAlpha = null,
+      trailScale = null,
+      trailMode = null,
+      trailScaleX = null,
+      trailScaleY = null,
+      speedStartMult = null,
+      speedEndMult = null,
+      speedRampMs = null
     } = options;
 
     const resolvedStroke = strokeColor ?? 0x00ffff;
@@ -77,42 +90,58 @@ export default class BulletManager {
     if (resolvedType === 'arrow') {
       // 箭矢：用“预渲染贴图 + Image”代替 Container(多个子物体)
       // 目的：减少每发箭矢的对象创建与 draw calls，降低移动+连射时的 GC/卡顿。
-      const texKey = '__bm_arrow_v1';
+      const highlightColor = arrowHighlightColor ?? 0x54ff68;
+      const featherColor = arrowFeatherColor ?? 0x25c944;
+      const texKey = `__bm_arrow_${color.toString(16)}_${resolvedStroke.toString(16)}_${highlightColor.toString(16)}_${featherColor.toString(16)}`;
       if (!this.scene.textures?.exists?.(texKey)) {
         const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-        const W = 64;
-        const H = 32;
-        const cx = 10;
+        const W = 88;
+        const H = 40;
+        const cx = 12;
         const cy = Math.floor(H / 2);
 
-        // 外圈（白色，模拟“描边”）
+        // 纯亮绿色分层，避免白色高光，把荧光感留给同色系亮度差。
         g.clear();
-        g.fillStyle(0xffffff, 1);
-        g.fillRect(cx, cy - 4, 34, 8);
-        g.fillTriangle(cx + 34, cy - 8, cx + 34, cy + 8, cx + 52, cy);
+        g.fillStyle(resolvedStroke, 0.98);
+        g.fillRect(cx + 6, cy - 6, 38, 12);
+        g.fillTriangle(cx + 42, cy - 10, cx + 42, cy + 10, cx + 64, cy);
 
-        // 内芯（灰色，后续用 tint 映射为核心色）
-        g.fillStyle(0x9aa0a6, 1);
-        g.fillRect(cx + 1, cy - 2, 32, 4);
-        g.fillTriangle(cx + 33, cy - 5, cx + 33, cy + 5, cx + 49, cy);
+        g.fillStyle(color, 1);
+        g.fillRect(cx + 8, cy - 4, 34, 8);
+        g.fillTriangle(cx + 40, cy - 7, cx + 40, cy + 7, cx + 60, cy);
+
+        g.fillStyle(highlightColor, 0.95);
+        g.fillRect(cx + 10, cy - 2, 26, 4);
+        g.fillTriangle(cx + 36, cy - 4, cx + 36, cy + 4, cx + 51, cy);
+
+        g.fillStyle(featherColor, 0.92);
+        g.fillTriangle(cx - 1, cy, cx + 10, cy - 6, cx + 12, cy - 1);
+        g.fillTriangle(cx - 1, cy, cx + 10, cy + 6, cx + 12, cy + 1);
+
+        g.lineStyle(1, highlightColor, 0.72);
+        g.beginPath();
+        g.moveTo(cx + 10, cy);
+        g.lineTo(cx + 52, cy);
+        g.strokePath();
 
         g.generateTexture(texKey, W, H);
         g.destroy();
       }
 
       // 目标：更“长、粗、亮”，且保持利落条形
-      const shaftLen = Math.max(14, Math.round(radius * 2.8 * arrowLenMult));
-      const shaftW = Math.max(3, Math.round(radius * 0.62 * arrowThickMult));
-      const headLen = Math.max(7, Math.round(radius * 1.10 * arrowLenMult));
+      const shaftLen = Math.max(16, Math.round(radius * 3.15 * arrowLenMult));
+      const shaftW = Math.max(4, Math.round(radius * 0.9 * arrowThickMult));
+      const headLen = Math.max(8, Math.round(radius * 1.28 * arrowLenMult));
       const totalLen = shaftLen + headLen;
-      const totalH = Math.max(6, shaftW * 2);
+      const totalH = Math.max(8, Math.round(shaftW * 2.4));
 
       bullet = this.scene.add.image(x, y, texKey).setOrigin(0.5, 0.5);
       bullet.setDisplaySize(totalLen, totalH);
-      bullet.setTint(color);
       bullet.setBlendMode(Phaser.BlendModes.ADD);
+      bullet.setAlpha(0.96);
 
       bullet.radius = radius; // 碰撞仍用圆形半径
+      bullet._trailAnchorOffset = Math.max(8, totalLen * 0.44);
       bullet.rotateToVelocity = true;
       // 兼容 basicAttackMods / 其它逻辑对 setStrokeStyle 的调用
       bullet.setStrokeStyle = () => bullet;
@@ -126,6 +155,14 @@ export default class BulletManager {
     bullet.damage = damage;
     // 碰撞层使用 bullet.radius；必须同步创建时的几何半径
     bullet.speed = speed;
+    bullet.baseSpeed = speed;
+    if (speedRampMs != null) {
+      bullet.speedStart = Math.max(1, speed * Math.max(0.05, speedStartMult ?? 1));
+      bullet.speedEnd = Math.max(1, speed * Math.max(0.05, speedEndMult ?? 1));
+      bullet.speedRampMs = Math.max(1, Math.round(speedRampMs));
+      bullet.speedRampElapsed = 0;
+      bullet.speed = bullet.speedStart;
+    }
     bullet.angleOffset = angleOffset;
     bullet.isAbsoluteAngle = isAbsoluteAngle;
     bullet.homing = homing;
@@ -150,7 +187,7 @@ export default class BulletManager {
 
     // 创建光晕
     if (hasGlow) {
-      const glowAlpha = (resolvedType === 'arrow') ? 0.28 : 0.2;
+      const glowAlpha = (resolvedType === 'arrow') ? 0.36 : 0.2;
       const glow = this.scene.add.circle(x, y, glowRadius, glowColor ?? color, glowAlpha);
       glow.depth = -1;
       bullet.glow = glow;
@@ -161,6 +198,13 @@ export default class BulletManager {
       bullet._hasTrail = true;
       bullet._trailColor = trailColor ?? resolvedStroke;
       bullet._trailNext = 0; // 立即可发射
+      bullet._trailInterval = Math.max(40, Math.round(trailIntervalMs ?? (resolvedType === 'arrow' ? 72 : this._trailInterval)));
+      bullet._trailLifeMs = Math.max(80, Math.round(trailLifeMs ?? (resolvedType === 'arrow' ? 170 : 220)));
+      bullet._trailAlpha = Phaser.Math.Clamp(trailAlpha ?? (resolvedType === 'arrow' ? 0.42 : 0.7), 0.08, 1);
+      bullet._trailScale = Phaser.Math.Clamp(trailScale ?? (resolvedType === 'arrow' ? 0.88 : 1), 0.2, 2.2);
+      bullet._trailMode = trailMode ?? (resolvedType === 'arrow' ? 'streak' : 'dot');
+      bullet._trailScaleX = Phaser.Math.Clamp(trailScaleX ?? bullet._trailScale, 0.15, 4);
+      bullet._trailScaleY = Phaser.Math.Clamp(trailScaleY ?? bullet._trailScale, 0.1, 4);
       bullet._trailTracked = true;
       this._trailBullets.add(bullet);
     }
@@ -462,28 +506,67 @@ export default class BulletManager {
 
   /* ─── 高性能拖尾粒子系统 ─── */
 
+  _getTrailStreakTexture() {
+    const texKey = '__bm_trail_streak_v2';
+    if (this.scene.textures?.exists?.(texKey)) return texKey;
+
+    const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    const width = 64;
+    const height = 8;
+    for (let i = 0; i < 16; i++) {
+      const t = i / 15;
+      const x = Math.round(t * (width - 1));
+      const segmentW = Math.max(1, Math.ceil(width / 16));
+      const alpha = t;
+      g.fillStyle(0xffffff, alpha * alpha * 0.95);
+      g.fillRect(x, 0, segmentW, height);
+    }
+    g.generateTexture(texKey, width, height);
+    g.destroy();
+    return texKey;
+  }
+
   /** 从池中取出或新建一个 trail circle */
-  _acquireTrailParticle(x, y, color) {
-    let p = this._trailPool.pop();
+  _acquireTrailParticle(mode, x, y, color, alpha = 0.7, scaleX = 1, scaleY = scaleX, rotation = 0) {
+    const useStreak = mode === 'streak';
+    const pool = useStreak ? this._trailStreakPool : this._trailPool;
+    let p = pool.pop();
     if (p) {
       p.setPosition(x, y);
-      p.setAlpha(0.7);
-      p.setScale(1);
+      p.setAlpha(alpha);
+      p.setScale(scaleX, scaleY);
+      p.setRotation(rotation);
       p.setVisible(true);
       p.setActive(true);
-      p.fillColor = color;
+      if (useStreak) p.setTint(color);
+      else p.fillColor = color;
     } else {
-      p = this.scene.add.circle(x, y, 2, color, 0.7);
-      p.setDepth(-1);
+      if (useStreak) {
+        p = this.scene.add.image(x, y, this._getTrailStreakTexture());
+        p.setOrigin(0.98, 0.5);
+        p.setTint(color);
+        p.setBlendMode(Phaser.BlendModes.ADD);
+        p.setDepth(-1);
+        p.setAlpha(alpha);
+        p.setScale(scaleX, scaleY);
+        p.setRotation(rotation);
+      } else {
+        p = this.scene.add.circle(x, y, 2, color, alpha);
+        p.setDepth(-1);
+        p.setScale(scaleX, scaleY);
+        p.setRotation(rotation);
+      }
     }
+    p._trailMode = mode || 'dot';
     return p;
   }
   /** 回收一个 trail circle 到池中 */
   _releaseTrailParticle(p) {
     p.setVisible(false);
     p.setActive(false);
-    if (this._trailPool.length < this._trailPoolMax) {
-      this._trailPool.push(p);
+    const pool = p?._trailMode === 'streak' ? this._trailStreakPool : this._trailPool;
+    if (pool.length < this._trailPoolMax) {
+      pool.push(p);
     } else {
       p.destroy();
     }
@@ -492,8 +575,6 @@ export default class BulletManager {
   /** 每帧调用：发射新粒子 + 衰减现有粒子 */
   _updateTrails(delta) {
     const now = this.scene.time?.now ?? 0;
-    const interval = this._trailInterval;
-    const fadeDuration = 220; // ms
 
     if (this._trailBullets.size === 0 && this._trailActive.length === 0) return;
 
@@ -504,12 +585,32 @@ export default class BulletManager {
         if (b) b._trailTracked = false;
         continue;
       }
+      const interval = Math.max(40, b._trailInterval || this._trailInterval);
       if (now < b._trailNext) continue;
       b._trailNext = now + interval;
-      const px = b.x + (((Math.random() - 0.5) * 8) | 0);
-      const py = b.y + (((Math.random() - 0.5) * 8) | 0);
-      const p = this._acquireTrailParticle(px, py, b._trailColor);
-      this._trailActive.push({ sprite: p, life: 0, maxLife: fadeDuration });
+      const startAlpha = Phaser.Math.Clamp(b._trailAlpha || 0.7, 0.08, 1);
+      const startScaleX = Phaser.Math.Clamp(b._trailScaleX || b._trailScale || 1, 0.15, 4);
+      const startScaleY = Phaser.Math.Clamp(b._trailScaleY || b._trailScale || 1, 0.1, 4);
+      const trailAngle = b.angleRad ?? (b.isAbsoluteAngle ? b.angleOffset : (-Math.PI / 2 + b.angleOffset)) ?? b.rotation ?? 0;
+      const isStreak = b._trailMode === 'streak';
+      const mode = isStreak ? 'streak' : 'dot';
+      const anchorOffset = b._trailAnchorOffset || 12;
+      const px = isStreak
+        ? b.x - Math.cos(trailAngle) * anchorOffset
+        : b.x + (((Math.random() - 0.5) * 8) | 0);
+      const py = isStreak
+        ? b.y - Math.sin(trailAngle) * anchorOffset
+        : b.y + (((Math.random() - 0.5) * 8) | 0);
+      const p = this._acquireTrailParticle(mode, px, py, b._trailColor, startAlpha, startScaleX, startScaleY, isStreak ? trailAngle : 0);
+      this._trailActive.push({
+        sprite: p,
+        life: 0,
+        maxLife: Math.max(80, b._trailLifeMs || 220),
+        startAlpha,
+        startScaleX,
+        startScaleY,
+        mode
+      });
     }
 
     // 2) 衰减活跃粒子
@@ -524,8 +625,18 @@ export default class BulletManager {
         active.pop();
       } else {
         const frac = 1 - t.life / t.maxLife;
-        t.sprite.setAlpha(0.7 * frac);
-        t.sprite.setScale(0.3 + 0.7 * frac);
+        t.sprite.setAlpha(t.startAlpha * frac);
+        if (t.mode === 'streak') {
+          t.sprite.setScale(
+            Math.max(0.12, t.startScaleX * (0.45 + 0.55 * frac)),
+            Math.max(0.04, t.startScaleY * (0.72 + 0.28 * frac))
+          );
+        } else {
+          t.sprite.setScale(
+            Math.max(0.08, t.startScaleX * (0.2 + 0.8 * frac)),
+            Math.max(0.06, t.startScaleY * (0.34 + 0.66 * frac))
+          );
+        }
       }
     }
   }
@@ -642,6 +753,14 @@ export default class BulletManager {
       if (bullet.glow && bullet.glow.active) {
         bullet.glow.x = bullet.x;
         bullet.glow.y = bullet.y;
+      }
+
+      // 轻量速度曲线：支持“由慢到快”的发射手感。
+      if (bullet.speedRampMs) {
+        bullet.speedRampElapsed = Math.min(bullet.speedRampMs, (bullet.speedRampElapsed || 0) + delta);
+        const t = Phaser.Math.Clamp((bullet.speedRampElapsed || 0) / bullet.speedRampMs, 0, 1);
+        const eased = 1 - ((1 - t) * (1 - t));
+        bullet.speed = Phaser.Math.Linear(bullet.speedStart || bullet.baseSpeed || bullet.speed, bullet.speedEnd || bullet.baseSpeed || bullet.speed, eased);
       }
 
       // 检查寻踪

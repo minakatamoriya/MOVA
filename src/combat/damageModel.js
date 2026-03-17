@@ -18,8 +18,8 @@ function roundDamage(value, minimum = 1) {
   return Math.max(minimum, Math.round(toNumber(value, 0)));
 }
 
-function getArcherRangeBonus(level) {
-  return [0, 10, 20, 30][Math.max(0, Math.min(3, Math.round(level || 0)))] || 0;
+function getArcherRangeMultiplier(level) {
+  return [1, 1.12, 1.24, 1.36][Math.max(0, Math.min(3, Math.round(level || 0)))] || 1;
 }
 
 export function normalizeStatMods(mods = {}) {
@@ -88,8 +88,10 @@ export function buildPlayerDerivedStats(player, options = {}) {
     * toMultiplier(player?.universalRangeMult, 1)
     * toMultiplier(player?.natureRangeMult, 1);
 
-  // 猎人射程升级是固定台阶值，再统一乘范围倍率
-  const archerBaseRange = Math.round(toNumber(player?.archerArrowRangeBase, 330)) + getArcherRangeBonus(player?.archerArrowRangeLevel || 0);
+  // 猎人射程升级改为百分比台阶，再统一乘范围倍率，保证成长更直观。
+  const archerBaseRange = Math.round(
+    toNumber(player?.archerArrowRangeBase, 330) * getArcherRangeMultiplier(player?.archerArrowRangeLevel || 0)
+  );
 
   return {
     equipmentMods,
@@ -101,7 +103,7 @@ export function buildPlayerDerivedStats(player, options = {}) {
     bulletDamage: roundDamage(toNumber(player?.baseBulletDamage, 1) * damageMult),
     fireRate: Math.max(60, Math.round(toNumber(player?.baseFireRate, 60) * fireRateMult)),
     moveSpeed: Math.max(50, Math.round(toNumber(player?.baseMoveSpeed, 50) * speedMult)),
-    archerArrowRange: Math.min(360, Math.round(archerBaseRange * rangeMult)),
+    archerArrowRange: Math.min(420, Math.round(archerBaseRange * rangeMult)),
     moonfireRange: Math.max(80, Math.round(toNumber(player?.moonfireRangeBase, 300) * rangeMult)),
     druidStarfallRange: Math.max(80, Math.round(toNumber(player?.druidStarfallRangeBase, 310) * rangeMult)),
     mageMissileRange: Math.max(80, Math.round(toNumber(player?.mageMissileRangeBase, player?.mageMissileRange || 280) * rangeMult)),

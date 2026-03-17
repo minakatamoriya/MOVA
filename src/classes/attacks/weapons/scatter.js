@@ -40,7 +40,7 @@ export function fireScatter(player) {
   const acquireRange = Phaser.Math.Clamp(
     Math.round(player.archerArrowRange || player.archerArrowRangeBase || 330),
     200,
-    360
+    player.archerArrowRangeMax || 420
   );
   const hasTargetInRange = (() => {
     if (!target || !target.isAlive) return false;
@@ -67,16 +67,8 @@ export function fireScatter(player) {
   const start = -player.scatterSpread * (count - 1) / 2;
   for (let i = 0; i < count; i++) {
     const off = start + player.scatterSpread * i;
-
-    // 轻度追踪：锁定同一目标；扇形偏移保持（中心线跟随，展开角不变）
-    const bullet = player.createBulletAtAngle(baseAngle + off, true);
-    if (bullet) {
-      bullet.homing = true;
-      bullet.homingMode = 'fan_lock';
-      bullet.lockTarget = target;
-      bullet.fanOffsetRad = off;
-      bullet.homingTurnRadPerSec = Phaser.Math.DegToRad(48);
-    }
+    // 固定角度展开：中心列瞄准目标，两侧按发射瞬间角度散开，不再二次聚拢。
+    player.createBulletAtAngle(baseAngle + off, true);
   }
 
   return true;

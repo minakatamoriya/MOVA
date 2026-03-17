@@ -19,7 +19,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
     // 控制：眩晕/定身（自然伙伴等效果用）
     this.stunUntil = 0;
+    this.freezeUntil = 0;
     this._stunResumeTimer = null;
+    this._freezeClearTimer = null;
+    this._freezeAura = null;
+    this._freezeCrystal = null;
 
     // 记录移动 tween，便于暂停/恢复
     this.moveTween = null;
@@ -1484,6 +1488,45 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     return (this.stunUntil || 0) > now;
   }
 
+  ensureFreezeVisuals() {
+    if (!this.scene?.add) return;
+    if (this._freezeAura?.active && this._freezeCrystal?.active) return;
+
+    const radius = (this.bossSize || 50) + 14;
+    this._freezeAura = this.scene.add.circle(0, 0, radius, 0x8fdcff, 0.10);
+    this._freezeAura.setStrokeStyle(4, 0xe0f7ff, 0.82);
+    this._freezeAura.setVisible(false);
+    this.add(this._freezeAura);
+
+    const crystal = this.scene.add.graphics();
+    crystal.fillStyle(0xe0f7ff, 0.55);
+    crystal.lineStyle(2, 0xffffff, 0.88);
+    crystal.beginPath();
+    crystal.moveTo(0, -24);
+    crystal.lineTo(15, -8);
+    crystal.lineTo(10, 18);
+    crystal.lineTo(0, 30);
+    crystal.lineTo(-10, 18);
+    crystal.lineTo(-15, -8);
+    crystal.closePath();
+    crystal.fillPath();
+    crystal.strokePath();
+    crystal.setPosition(0, -Math.max(8, Math.round((this.bossSize || 50) * 0.30)));
+    crystal.setVisible(false);
+    this._freezeCrystal = crystal;
+    this.add(crystal);
+  }
+
+  setFrozenVisualVisible(visible) {
+    this.ensureFreezeVisuals();
+    if (this._freezeAura) this._freezeAura.setVisible(visible);
+    if (this._freezeCrystal) this._freezeCrystal.setVisible(visible);
+    if (this.sprite?.setTint) {
+      if (visible) this.sprite.setTint(0xc9f2ff);
+      else this.sprite.clearTint();
+    }
+  }
+
   applyStun(ms) {
     const now = this.scene?.time?.now ?? 0;
     const until = now + Math.max(0, ms || 0);
@@ -1518,6 +1561,37 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       if (this.moveTween && this.moveTween.isPaused()) this.moveTween.resume();
       if (this.moveTimer) this.moveTimer.paused = false;
       if (this.attackTimer) this.attackTimer.paused = false;
+    });
+  }
+
+  applyFreeze(ms) {
+    if (!this.isAlive) return;
+
+    const now = this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, ms || 0);
+    this.freezeUntil = Math.max(this.freezeUntil || 0, until);
+    this.applyStun(ms);
+    this.setFrozenVisualVisible(true);
+
+    if (this.scene?.add && this.scene?.tweens) {
+      const burst = this.scene.add.circle(this.x, this.y, (this.bossSize || 50) + 8, 0xbfe9ff, 0.16);
+      burst.setStrokeStyle(3, 0xe0f7ff, 0.90);
+      burst.setDepth(11);
+      this.scene.tweens.add({
+        targets: burst,
+        scale: 1.32,
+        alpha: 0,
+        duration: 220,
+        ease: 'Cubic.Out',
+        onComplete: () => burst.destroy()
+      });
+    }
+
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
+    this._freezeClearTimer = this.scene?.time?.delayedCall(Math.max(0, until - now) + 10, () => {
+      const current = this.scene?.time?.now ?? 0;
+      if ((this.freezeUntil || 0) > current) return;
+      this.setFrozenVisualVisible(false);
     });
   }
 
@@ -1714,6 +1788,8 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     if (!this.isAlive) return;
     
     this.isAlive = false;
+    this.setFrozenVisualVisible(false);
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
     // 进入死亡流程时，立刻阻止任何后续机制继续生成
     this.isDestroyed = true;
     this.setHudVisible(false);
@@ -1870,6 +1946,8 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     try { this.clearHazards(); } catch (_) { /* ignore */ }
     if (this.attackTimer) this.attackTimer.remove();
     if (this.moveTimer) this.moveTimer.remove();
+    if (this._stunResumeTimer) this._stunResumeTimer.remove();
+    if (this._freezeClearTimer) this._freezeClearTimer.remove();
     this.destroyScreenHud();
     super.destroy();
   }

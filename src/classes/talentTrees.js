@@ -10,16 +10,10 @@ export const TREE_DEFS = [
     color: resolveClassColor('archer'),
     core: { id: 'scatter_core', name: '初始：猎人', maxLevel: 1, desc: '解锁散射射击。' },
     nodes: [
-      { id: 'archer_rapidfire', name: '连射', maxLevel: 1, desc: '每次攻击后，10% 概率免费再射一轮。' },
-      { id: 'archer_pierce', name: '穿透', maxLevel: 1, desc: '箭矢命中后不消失，最多额外穿透 1 次。' },
-      { id: 'archer_arrowrain', name: '箭雨', maxLevel: 1, desc: '每 5 秒，下一次攻击变为箭雨，覆盖更大范围，伤害翻倍。' },
       { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 3, desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒。' },
-
-      // 基础技能数值升级（3 级）
-      { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+1/+2/+3）。' },
-      { id: 'archer_rate', name: '射速', maxLevel: 3, desc: '基础射击攻速提升（+1/+2/+3）。' },
-      { id: 'archer_damage', name: '攻击力', maxLevel: 3, desc: '基础射击伤害提升（+1/+2/+3）。' },
-      { id: 'archer_scatter', name: '散射', maxLevel: 3, desc: '基础射击散射升级：1列→3列→5列。' }
+      { id: 'archer_evade_mastery', name: '残影步调', maxLevel: 3, desc: '强化灵巧回避：持续时间提高至5/8/10秒。' },
+      { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+12%/+24%/+36%）。' },
+      { id: 'archer_scatter', name: '散射', maxLevel: 3, desc: '基础射击初始为1列；升级后变为3列→5列→7列，中心列始终锁定目标。' }
     ],
     ultimate: { id: 'scatter_ultimate', name: '终极：弹幕风暴', maxLevel: 1, desc: '散射进化为高密度弹幕。' }
   },
@@ -31,7 +25,9 @@ export const TREE_DEFS = [
     nodes: [
       { id: 'druid_meteor_shower', name: '流星雨', maxLevel: 1, desc: '星落数量 +2，但单次伤害略微降低。' },
       { id: 'druid_meteor', name: '陨石', maxLevel: 1, desc: '每 10 秒，下一次星落变为巨型陨石：范围更大，伤害更高。' },
-      { id: 'druid_starfire', name: '星火', maxLevel: 1, desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）。' }
+      { id: 'druid_starfire', name: '星火', maxLevel: 1, desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）。' },
+      { id: 'druid_nourish', name: '自然滋养', maxLevel: 3, desc: '生命低于30%时自动触发：在15/10/5秒内缓慢回复30%生命，冷却30秒。' },
+      { id: 'druid_nourish_growth', name: '丰饶脉动', maxLevel: 3, desc: '强化自然滋养：总回复量额外提高50%/80%/100%。' }
     ],
     ultimate: { id: 'drone_ultimate', name: '终极：自然编队', maxLevel: 1, desc: '宠物进入编队火力形态。' }
   },
@@ -45,7 +41,8 @@ export const TREE_DEFS = [
       { id: 'warrior_swordqi', name: '剑气', maxLevel: 1, desc: '挥砍时额外发射一道月牙剑气，近战判定仍保留。' },
       { id: 'warrior_endure', name: '持久', maxLevel: 1, desc: '战士近战形态获得 20% 伤害减免。' },
       { id: 'warrior_range', name: '月牙扩展', maxLevel: 4, desc: '月牙斩有效范围提升（可叠加）。' },
-      { id: 'warrior_blood_conversion', name: '吸血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为40%/70%/100%吸血，持续5/10/15秒，冷却30秒。' }
+      { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒。' },
+      { id: 'warrior_bloodlust_mastery', name: '狂血渴饮', maxLevel: 3, desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%。' }
     ],
     ultimate: { id: 'warrior_ultimate', name: '终极：剑刃风暴', maxLevel: 1, desc: '挥砍形成连斩冲击。' }
   },
@@ -58,7 +55,8 @@ export const TREE_DEFS = [
       { id: 'mage_refract', name: '折射', maxLevel: 1, desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%。' },
       { id: 'mage_arcane_perception', name: '奥术感知', maxLevel: 3, desc: '奥术射线索敌范围提升。' },
       { id: 'mage_energy_focus', name: '能量汇集', maxLevel: 3, desc: '奥术射线伤害提升，并随层数变粗更亮（+10%/+20%/+30%）。' },
-      
+      { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 3, desc: '生命低于30%时自动触发：释放冰霜新星，冻结周围敌人 3/5/10 秒，冷却30秒。' },
+      { id: 'mage_frost_domain', name: '极寒疆域', maxLevel: 3, desc: '强化冰霜新星：冻结范围扩大至300/380/480。' }
     ],
     ultimate: { id: 'mage_ultimate', name: '终极：贯穿聚焦', maxLevel: 1, desc: '激光聚焦并贯穿。' }
   },
@@ -72,7 +70,8 @@ export const TREE_DEFS = [
       { id: 'paladin_holyfire', name: '圣焰', maxLevel: 1, desc: '锤击命中后留下圣焰持续伤害。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
       { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' },
-      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 3, desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续3秒，冷却30秒。' }
+      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 3, desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒。' },
+      { id: 'paladin_shelter_extension', name: '圣佑绵延', maxLevel: 3, desc: '强化神圣庇护：持续时间提高至8/10/12秒。' }
     ],
     ultimate: { id: 'paladin_ultimate', name: '终极：神圣裁决', maxLevel: 1, desc: '脉冲强化为审判领域。' }
   },
@@ -84,7 +83,9 @@ export const TREE_DEFS = [
     nodes: [
       { id: 'warlock_toxicity', name: '毒性浓度', maxLevel: 3, desc: '剧毒 debuff 最大层数 +1（可叠加）。' },
       { id: 'warlock_corrode', name: '腐蚀', maxLevel: 3, desc: '毒圈持续时间 +1 秒（可叠加）。' },
-      { id: 'warlock_spread', name: '扩散', maxLevel: 3, desc: '毒圈范围 +20%（可叠加）。' }
+      { id: 'warlock_spread', name: '扩散', maxLevel: 3, desc: '毒圈范围 +20%（可叠加）。' },
+      { id: 'warlock_infernal', name: '炼狱魔火', maxLevel: 3, desc: '生命低于30%时自动触发：消耗15%生命召唤地狱火 10 秒，冷却30秒。等级会提升地狱火生命、攻击与每击回血。' },
+      { id: 'warlock_infernal_contract', name: '灰烬契约', maxLevel: 3, desc: '强化炼狱魔火：生命消耗降低至10%/5%/0%。' }
     ],
     ultimate: { id: 'warlock_ultimate', name: '终极：腐化蔓延', maxLevel: 1, desc: '中毒与虚弱扩散。' }
   },
@@ -194,6 +195,7 @@ export const SKILL_TO_TREE = {
   archer_pierce: 'archer',
   archer_arrowrain: 'archer',
   archer_nimble_evade: 'archer',
+  archer_evade_mastery: 'archer',
   archer_range: 'archer',
   archer_rate: 'archer',
   archer_damage: 'archer',
@@ -205,6 +207,8 @@ export const SKILL_TO_TREE = {
   druid_meteor_shower: 'druid',
   druid_meteor: 'druid',
   druid_starfire: 'druid',
+  druid_nourish: 'druid',
+  druid_nourish_growth: 'druid',
   drone_ultimate: 'druid',
 
   // 其余职业
@@ -214,12 +218,15 @@ export const SKILL_TO_TREE = {
   warrior_endure: 'warrior',
   warrior_range: 'warrior',
   warrior_blood_conversion: 'warrior',
+  warrior_bloodlust_mastery: 'warrior',
   warrior_ultimate: 'warrior',
 
   mage_core: 'mage',
   mage_refract: 'mage',
   mage_arcane_perception: 'mage',
   mage_energy_focus: 'mage',
+  mage_frost_nova: 'mage',
+  mage_frost_domain: 'mage',
   mage_ultimate: 'mage',
 
   paladin_core: 'paladin',
@@ -228,12 +235,15 @@ export const SKILL_TO_TREE = {
   paladin_triple: 'paladin',
   paladin_stun: 'paladin',
   paladin_divine_shelter: 'paladin',
+  paladin_shelter_extension: 'paladin',
   paladin_ultimate: 'paladin',
 
   warlock_core: 'warlock',
   warlock_toxicity: 'warlock',
   warlock_spread: 'warlock',
   warlock_corrode: 'warlock',
+  warlock_infernal: 'warlock',
+  warlock_infernal_contract: 'warlock',
   warlock_autoseek: 'third',
   warlock_malady: 'warlock',
   warlock_contagion: 'warlock',

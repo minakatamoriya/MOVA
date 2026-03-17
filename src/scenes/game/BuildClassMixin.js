@@ -304,6 +304,9 @@ export function applyBuildClassMixin(GameScene) {
         case 'mage_energy_focus':
           this.player.mageEnergyFocusLevel = Math.min(3, (this.player.mageEnergyFocusLevel || 0) + 1);
           break;
+        case 'mage_frost_nova':
+          this.player.mageFrostNovaLevel = Math.min(3, (this.player.mageFrostNovaLevel || 0) + 1);
+          break;
 
         case 'archer_bounce':
           this.player.archerArrowBounce = 1;
@@ -955,6 +958,11 @@ export function applyBuildClassMixin(GameScene) {
           }
         }
       }
+
+      combinedPool = combinedPool.filter((opt) => {
+        if (!opt?.requiredSkillId) return true;
+        return (skillTreeLevels[opt.requiredSkillId] || 0) >= getMaxLevel(opt.requiredSkillId);
+      });
 
       combinedPool = combinedPool.filter(opt => !isMaxed(opt.id));
       combinedPool = combinedPool.filter((opt, index, arr) => arr.findIndex((item) => item?.id === opt?.id) === index);
@@ -2120,7 +2128,7 @@ export function applyBuildClassMixin(GameScene) {
       const r = Phaser.Math.Clamp(
         Math.round(this.player.archerArrowRange || this.player.archerArrowRangeBase || 330),
         240,
-        360
+        this.player.archerArrowRangeMax || 420
       );
 
       this._archerRangeRing.setRadius(r);
