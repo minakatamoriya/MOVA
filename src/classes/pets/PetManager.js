@@ -148,7 +148,7 @@ export default class PetManager {
   }
 
   getCurrentTarget() {
-    if (this.scene?.exitDoorActive || this.scene?._pathChoiceActive) return null;
+    if (this.scene?.exitDoorActive || this.scene?._pathChoiceActive || this.scene?._postBossRewardActive) return null;
 
     const boss = this.scene?.bossManager?.getCurrentBoss?.();
     const now = this.scene.time?.now ?? 0;

@@ -217,8 +217,8 @@ class GameScene extends Phaser.Scene {
     this.startRoomDoorRift = null;
     this._startRoomObjects = [];
 
-    // 迷雾模式：soft = "柔和笔刷式永久揭开（非网格）"
-    this.fogMode = 'soft';
+    // 混沌竞技场不再使用迷雾与小地图
+    this.fogMode = 'none';
 
     // 地图背景图缩放系数：1=按 Cover 铺满；<1 会让背景图更小（可能露出边缘空白）
     this.mapBgScaleMult = 1;
@@ -266,6 +266,19 @@ class GameScene extends Phaser.Scene {
     this._pathChoiceActive = false;    // 三选一 UI 是否激活
     this._pathChoiceObjects = [];      // 三选一 UI 对象
     this._pathDoorZones = [];          // 三选一碰撞区域
+    this.chaosArenaMaxRounds = 6;
+    this._roundBossDefeated = false;
+    this._roundClearCountdownActive = false;
+    this._roundClearCountdownSeconds = 0;
+    this._roundClearCountdownText = null;
+    this._roundClearCountdownSubText = null;
+    this._roundClearCountdownTimer = null;
+    this._postBossRewardActive = false;
+    this._postBossRewardChoiceMade = false;
+    this._postBossRewardSelected = null;
+    this._postBossRewardPayload = null;
+    this._postBossRewardObjects = [];
+    this._arenaContinueKey = null;
 
     // 进图过场：半透明遮罩 + 居中文字，期间冻结局内逻辑
     this._sceneIntroActive = false;
@@ -283,8 +296,7 @@ class GameScene extends Phaser.Scene {
     // 因此每次开新局都必须在 init() 重置"六选一/出口门/关卡"状态。
 
     // 迷雾/小地图默认关闭（用于性能排查）；由设置开关控制
-    const fogEnabled = this.registry?.get?.('fogEnabled') === true;
-    this.fogMode = fogEnabled ? 'soft' : 'none';
+    this.fogMode = 'none';
 
     this.currentLevel = 1;
     this.levelBossTriggered = false;
@@ -365,6 +377,17 @@ class GameScene extends Phaser.Scene {
     this._pathChoiceActive = false;
     this._pathChoiceObjects = [];
     this._pathDoorZones = [];
+    this._roundBossDefeated = false;
+    this._roundClearCountdownActive = false;
+    this._roundClearCountdownSeconds = 0;
+    this._roundClearCountdownText = null;
+    this._roundClearCountdownSubText = null;
+    this._roundClearCountdownTimer = null;
+    this._postBossRewardActive = false;
+    this._postBossRewardChoiceMade = false;
+    this._postBossRewardSelected = null;
+    this._postBossRewardPayload = null;
+    this._postBossRewardObjects = [];
     this._mapNameText = null;
     this._levelUpCinematicActive = false;
     this._combatBehaviorPauseApplied = false;
@@ -381,7 +404,14 @@ class GameScene extends Phaser.Scene {
   }
 
   isCombatBehaviorPaused() {
-    return !!(this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive || this._sceneIntroActive || this._pathChoiceActive);
+    return !!(
+      this.viewMenuOpen
+      || this.viewMenuClosing
+      || this._levelUpCinematicActive
+      || this._sceneIntroActive
+      || this._pathChoiceActive
+      || this._postBossRewardActive
+    );
   }
 
   syncCombatBehaviorPause() {
@@ -618,6 +648,8 @@ class GameScene extends Phaser.Scene {
         this.grantTestLevelUp?.();
       };
       this._debugLevelUpKey.on('down', this._debugLevelUpHandler);
+
+      this._arenaContinueKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     }
 
@@ -1228,7 +1260,6 @@ class GameScene extends Phaser.Scene {
     // 重建 HUD 和小地图
     this.rebuildTopLeftHud?.();
     this.rebuildBottomHud?.();
-    this.repositionMiniMap?.();
     this.bossManager?.getCurrentBoss?.()?.layoutScreenHud?.();
 
     console.log(`📐 游戏尺寸变化: ${w}×${h}`);
@@ -1244,6 +1275,8 @@ class GameScene extends Phaser.Scene {
 
     // 清理三选一 UI
     this.cleanupPathChoiceObjects();
+    this.cleanupPostBossRewardUI?.();
+    this.resetChaosArenaRoundFlow?.();
     this.clearSceneEntryPresentation({ immediate: true, restoreControls: false });
 
     // 底图对象可能在场景关闭时被 Phaser 自动销毁，但引用仍在；这里显式置空避免复用失效对象
@@ -1329,6 +1362,7 @@ class GameScene extends Phaser.Scene {
     this._debugGridPrintHandler = null;
     this._debugLevelUpKey = null;
     this._debugLevelUpHandler = null;
+    this._arenaContinueKey = null;
     this.clearDebugGridOverlay?.();
 
     if (this.cooldownHud) {
@@ -1966,6 +2000,10 @@ class GameScene extends Phaser.Scene {
           console.log('[Level1] intro wave cleared');
         }
       }
+
+      if (this._roundBossDefeated) {
+        this.evaluateChaosArenaRoundState?.();
+      }
     };
     this.events.on('minionKilled', this._minionKilledHandler);
 
@@ -2349,6 +2387,30 @@ class GameScene extends Phaser.Scene {
       }
       return;
     }
+
+    if (this._postBossRewardActive) {
+      if (this.bulletManager) {
+        this.bulletManager.update(delta);
+      }
+      if (this.petManager) {
+        this.petManager.update(time, delta);
+      }
+      if (this.undeadSummonManager) {
+        this.undeadSummonManager.update(time, delta);
+      }
+      this.updateDrops(delta);
+      this.updateWarriorRangeRing?.(time);
+      this.updatePaladinTargetingRing(time);
+      this.updateArcherRangeRing(time);
+      this.updateMageRangeRing?.(time);
+      this.updateDruidRangeRing?.(time);
+      this.updateWarlockRangeRing?.(time);
+
+      if (this._postBossRewardChoiceMade && this._arenaContinueKey && Phaser.Input.Keyboard.JustDown(this._arenaContinueKey)) {
+        this.confirmPostBossRewardAndContinue?.();
+      }
+      return;
+    }
     
     // 更新 Boss 管理器
     if (this.bossManager) {
@@ -2388,11 +2450,8 @@ class GameScene extends Phaser.Scene {
       this.undeadSummonManager.update(time, delta);
     }
 
-    // 起始房间流程：选武器 -> 出现门 -> 进门开始第一关
+    // 起始房间流程：选武器后直接进入混沌竞技场
     if (this.inStartRoom) {
-      if (this.weaponSelected && !this.startRoomDoorActive) {
-        this.spawnStartRoomDoor();
-      }
       if (this.startRoomDoorActive && this.startRoomDoorZone && this.player) {
         const touched = this.startRoomDoorRift
           ? isTouchingRiftPortal(this.player, this.startRoomDoorRift)
@@ -2468,7 +2527,6 @@ class GameScene extends Phaser.Scene {
         });
       }
     }
-    this.updateMiniMapOverlay();
 
     // 开局六选一：不依赖 Arcade Physics，使用距离触碰拾取
     // 起始房间的图标使用 scrollFactor=0（屏幕坐标），因此检测也要用"玩家屏幕坐标"。
@@ -2589,6 +2647,9 @@ class GameScene extends Phaser.Scene {
   handlePlayerDeathOnce() {
     if (this._playerDeathHandled) return;
     this._playerDeathHandled = true;
+
+    this.cleanupPostBossRewardUI?.();
+    this.resetChaosArenaRoundFlow?.();
 
     // 禁用输入，避免残留移动/操作
     try { this.input.enabled = false; } catch (_) { /* ignore */ }

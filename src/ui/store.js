@@ -11,9 +11,6 @@ export const useUiStore = create((set) => ({
   showDamage: true,
   setShowDamage: (v) => set({ showDamage: !!v }),
 
-  fogEnabled: false,
-  setFogEnabled: (v) => set({ fogEnabled: !!v }),
-
   showEnemyOverlays: false,
   setShowEnemyOverlays: (v) => set({ showEnemyOverlays: !!v }),
 

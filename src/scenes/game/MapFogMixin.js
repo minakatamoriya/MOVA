@@ -261,13 +261,8 @@ export function applyMapFogMixin(GameScene) {
       this.setupStartingWeaponPickups({ force: true, layout: 'startRoom' });
 
       this.currentMapInfo = { ...START_ROOM };
-      // 迷雾/小地图开关：默认关闭；关闭时起始房间也不显示小地图
-      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
-      if (fogEnabled) this.setupStartRoomMiniMap();
-      else {
-        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
-        this.miniMap = null;
-      }
+      if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
+      this.miniMap = null;
 
       if (this.systemMessage) {
         this.systemMessage.show('请选择一件趁手的武器！', {
@@ -332,37 +327,14 @@ export function applyMapFogMixin(GameScene) {
       console.log('[StartRoom] beginAdventure. mainCore=', this.registry?.get?.('mainCore'), 'weaponType=', this.player?.weaponType);
 
       this.currentLevel = 1;
-      this.currentStage = 0;
+      this.currentStage = 1;
       this.levelBossTriggered = false;
-
-      this.currentMapInfo = { id: 'tutorial_level', name: '试炼之地', subtitle: '教程', line: NEUTRAL };
 
       this.cleanupStartRoomObjects();
 
-      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
-      this.fogMode = fogEnabled ? 'soft' : 'none';
-      // 试炼之地使用自定义底图（map1.png）
-      this.setupWorldMapForLevel(this.currentLevel, { backgroundKey: 'map1' });
-      if (fogEnabled) {
-        this.setupSoftFogOfWar();
-        this.setupMiniMap();
-      } else {
-        if (this._fogWorldObjects) {
-          this._fogWorldObjects.forEach(o => o?.destroy?.());
-        }
-        this._fogWorldObjects = [];
-        if (this.fogWorldRT) { this.fogWorldRT.destroy(); this.fogWorldRT = null; }
-        if (this.fogBrushImage) { this.fogBrushImage.destroy(); this.fogBrushImage = null; }
-        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
-        this.miniMap = null;
-      }
-
-      // 延迟生成首波小怪：避免与地图/迷雾/小地图创建挤在同一帧导致掉帧
-      this.time.delayedCall(80, () => {
-        this.spawnLevel1IntroWave();
+      this.time.delayedCall(60, () => {
+        this.startChaosArenaRound?.(1, { durationMs: 2000 });
       });
-
-      this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
     },
 
     getBossSpawnPoint() {
@@ -427,7 +399,7 @@ export function applyMapFogMixin(GameScene) {
       if (debugGrid) this.renderDebugGridOverlay();
       else this.clearDebugGridOverlay();
 
-      const bossPt = this.getBossSpawnPoint();
+      const bossPt = opts?.overrideBossSpawnPoint || this.getBossSpawnPoint();
       this.bossRoomZone = this.add.zone(bossPt.x, bossPt.y, cellSize * 2, cellSize * 2);
       this.bossRoomZone.setDepth(-80);
       this._worldMapObjects.push(this.bossRoomZone);
@@ -436,7 +408,13 @@ export function applyMapFogMixin(GameScene) {
       const cam = this.cameras.main;
       cam.setBounds(0, 0, worldSize, worldSize);
       if (this.player) {
-        const spawn = this.getSpawnPoint();
+        const preservePlayerPosition = !!opts?.preservePlayerPosition;
+        const spawn = preservePlayerPosition
+          ? {
+              x: Phaser.Math.Clamp(this.player.x, 32, worldSize - 32),
+              y: Phaser.Math.Clamp(this.player.y, 32, worldSize - 32)
+            }
+          : this.getSpawnPoint();
         this.player.setPosition(spawn.x, spawn.y);
         cam.startFollow(this.player, true, 0.12, 0.12);
         cam.setFollowOffset(0, 0);
@@ -457,7 +435,7 @@ export function applyMapFogMixin(GameScene) {
             this._isTutorialBoss = true;
             this.bossManager.spawnTutorialBoss(bPt);
           } else if (mapBossData && this.bossManager.spawnMapBoss) {
-            const bPt = this.getBossSpawnPoint();
+            const bPt = opts?.overrideBossSpawnPoint || this.getBossSpawnPoint();
             this.bossManager.spawnMapBoss(mapBossData, bPt, this.currentStage || 1, true);
           }
 
@@ -749,144 +727,22 @@ export function applyMapFogMixin(GameScene) {
 
     setupMiniMap() {
       if (this.miniMapRoot) this.miniMapRoot.destroy();
-
-      const cam = this.cameras.main;
-
-      const margin = 16;
-      const miniW = 130;
-      const miniH = 130;
-      const x0 = margin;
-      const y0 = cam.height - margin - miniH;
-
-      this.miniMapRoot = this.add.container(0, 0);
-      this.miniMapRoot.setDepth(950);
-      this.miniMapRoot.setScrollFactor(0);
-
-      const bg = this.add.rectangle(x0, y0, miniW, miniH, 0x060610, 0.82).setOrigin(0, 0);
-      bg.setStrokeStyle(2, 0x2a2a3a, 0.9);
-      bg.setScrollFactor(0);
-
-      const mapG = this.add.graphics();
-      mapG.setScrollFactor(0);
-      mapG.setPosition(x0, y0);
-
-      const cfg = this.mapConfig;
-      const worldSize = cfg.gridSize * cfg.cellSize;
-      const sx = miniW / worldSize;
-      const sy = miniH / worldSize;
-
-      mapG.clear();
-      // 小地图底色：略调亮，提高与“未探索迷雾”的对比度
-      mapG.fillStyle(0x222a44, 1);
-      mapG.fillRect(0, 0, miniW, miniH);
-
-      mapG.lineStyle(1, 0x222244, 0.35);
-      for (let i = 0; i <= cfg.gridSize; i++) {
-        const p = i * cfg.cellSize;
-        mapG.beginPath();
-        mapG.moveTo(0, p * sy);
-        mapG.lineTo(miniW, p * sy);
-        mapG.strokePath();
-
-        mapG.beginPath();
-        mapG.moveTo(p * sx, 0);
-        mapG.lineTo(p * sx, miniH);
-        mapG.strokePath();
+      this.miniMapRoot = null;
+      this.miniMap = null;
+      if (this._mapNameText) {
+        this._mapNameText.destroy();
+        this._mapNameText = null;
       }
-
-      const overlay = this.add.graphics();
-      overlay.setScrollFactor(0);
-      overlay.setPosition(x0, y0);
-
-      const fogRT = this.make.renderTexture({ x: x0, y: y0, width: miniW, height: miniH }, true);
-      fogRT.setOrigin(0, 0);
-      fogRT.setScrollFactor(0);
-      fogRT.setDepth(951);
-      // 未探索迷雾：更黑更不透明，突出“未探索 vs 已探索”的差异
-      fogRT.fill(0x000000, 0.94);
-
-      const brushKey = this.ensureRadialLightTexture('minimap_fog_brush_soft', 128);
-      const fogBrushImage = this.make.image({ x: 0, y: 0, key: brushKey, add: false });
-      fogBrushImage.setOrigin(0.5, 0.5);
-      const miniDesiredRadius = 26;
-      const miniBaseRadius = 64;
-      this._miniFogBrushBaseScale = miniDesiredRadius / miniBaseRadius;
-      fogBrushImage.setScale(this._miniFogBrushBaseScale);
-
-      this.miniMap = {
-        x0,
-        y0,
-        w: miniW,
-        h: miniH,
-        sx,
-        sy,
-        overlay,
-        fogRT,
-        fogBrushImage
-      };
-
-      this.miniMapRoot.add([bg, mapG, fogRT, overlay]);
-
-      this.updateMapNameText();
     },
 
     setupStartRoomMiniMap() {
       if (this.miniMapRoot) this.miniMapRoot.destroy();
       this.miniMap = null;
-
-      const cam = this.cameras.main;
-      const margin = 16;
-      const miniW = 130;
-      const miniH = 130;
-      const x0 = margin;
-      const y0 = cam.height - margin - miniH;
-
-      this.miniMapRoot = this.add.container(0, 0);
-      this.miniMapRoot.setDepth(950);
-      this.miniMapRoot.setScrollFactor(0);
-
-      const bg = this.add.rectangle(x0, y0, miniW, miniH, 0x060610, 0.82).setOrigin(0, 0);
-      bg.setStrokeStyle(2, 0x2a2a3a, 0.9);
-      bg.setScrollFactor(0);
-
-      const mapG = this.add.graphics();
-      mapG.setScrollFactor(0);
-      mapG.setPosition(x0, y0);
-
-      mapG.clear();
-      mapG.fillStyle(0x222a44, 1);
-      mapG.fillRect(0, 0, miniW, miniH);
-
-      const cx = miniW / 2;
-      const cy = miniH / 2;
-      const armW = 8;
-      const armL = 40;
-      mapG.fillStyle(0x4466aa, 0.6);
-      mapG.fillRect(cx - armW / 2, cy - armL, armW, armL * 2);
-      mapG.fillRect(cx - armL, cy - armW / 2, armL * 2, armW);
-      mapG.fillStyle(0x88bbff, 0.8);
-      mapG.fillCircle(cx, cy, 6);
-
-      const overlay = this.add.graphics();
-      overlay.setScrollFactor(0);
-      overlay.setPosition(x0, y0);
-
-      const cfg = this.getStartRoomConfig();
-      const sx = miniW / cfg.worldW;
-      const sy = miniH / cfg.worldH;
-
-      this.miniMap = {
-        x0, y0,
-        w: miniW, h: miniH,
-        sx, sy,
-        overlay,
-        fogRT: null,
-        fogBrushImage: null
-      };
-
-      this.miniMapRoot.add([bg, mapG, overlay]);
-
-      this.updateMapNameText();
+      this.miniMapRoot = null;
+      if (this._mapNameText) {
+        this._mapNameText.destroy();
+        this._mapNameText = null;
+      }
     },
 
     updateMapNameText() {
@@ -894,112 +750,17 @@ export function applyMapFogMixin(GameScene) {
         this._mapNameText.destroy();
         this._mapNameText = null;
       }
-      if (!this.miniMap) return;
-
-      const name = this.currentMapInfo?.name || '未知地点';
-      const { x0, y0, w } = this.miniMap;
-
-      this._mapNameText = this.add.text(x0 + w / 2, y0 - 10, name, {
-        fontSize: '14px',
-        fontFamily: 'Arial, sans-serif',
-        color: '#ccddff',
-        stroke: '#000000',
-        strokeThickness: 3,
-        align: 'center'
-      }).setOrigin(0.5, 1);
-      this._mapNameText.setScrollFactor(0);
-      this._mapNameText.setDepth(952);
     },
 
     updateMiniMapOverlay() {
-      if (!this.miniMap || !this.player) return;
-
-      const now = this.time?.now ?? 0;
-      if (this._miniMapOverlayNextAt && now < this._miniMapOverlayNextAt) return;
-      this._miniMapOverlayNextAt = now + 50;
-
-      const cfg = this.mapConfig;
-      const worldW = this.inStartRoom ? (this.getStartRoomConfig().worldW) : (cfg.gridSize * cfg.cellSize);
-      const worldH = this.inStartRoom ? (this.getStartRoomConfig().worldH) : (cfg.gridSize * cfg.cellSize);
-
-      const { overlay, sx, sy } = this.miniMap;
-      const cam = this.cameras.main;
-      const view = cam.worldView;
-
-      // 若玩家移动到小地图遮挡区域：淡化小地图
-      {
-        const { x0, y0, w, h } = this.miniMap;
-        const zoom = (cam && Number.isFinite(cam.zoom)) ? cam.zoom : 1;
-        const bounds = (typeof this.player.getBounds === 'function')
-          ? this.player.getBounds()
-          : { left: this.player.x - 16, right: this.player.x + 16, top: this.player.y - 16, bottom: this.player.y + 16 };
-        const pad = 2;
-        const pLeft = (bounds.left - view.x) * zoom;
-        const pRight = (bounds.right - view.x) * zoom;
-        const pTop = (bounds.top - view.y) * zoom;
-        const pBottom = (bounds.bottom - view.y) * zoom;
-
-        // 以“边界矩形”判定，而不是中心点；一旦边界触碰到小地图区域就淡化
-        const mmLeft = x0;
-        const mmRight = x0 + w;
-        const mmTop = y0;
-        const mmBottom = y0 + h;
-
-        const overlapped = !(pRight < (mmLeft - pad) || pLeft > (mmRight + pad) || pBottom < (mmTop - pad) || pTop > (mmBottom + pad));
-        const targetAlpha = overlapped ? 0.2 : 1;
-
-        if (this.miniMapRoot && this.miniMapRoot.alpha !== targetAlpha) {
-          this.miniMapRoot.setAlpha(targetAlpha);
-        }
-        if (this._mapNameText && this._mapNameText.alpha !== targetAlpha) {
-          this._mapNameText.setAlpha(targetAlpha);
-        }
-      }
-
-      const px = Phaser.Math.Clamp(this.player.x, 0, worldW);
-      const py = Phaser.Math.Clamp(this.player.y, 0, worldH);
-
-      const mx = px * sx;
-      const my = py * sy;
-
-      const vx = Phaser.Math.Clamp(view.x, 0, worldW) * sx;
-      const vy = Phaser.Math.Clamp(view.y, 0, worldH) * sy;
-      const vw = Phaser.Math.Clamp(view.width, 0, worldW) * sx;
-      const vh = Phaser.Math.Clamp(view.height, 0, worldH) * sy;
-
-      overlay.clear();
-      overlay.lineStyle(2, 0xffffff, 0.9);
-      overlay.strokeRect(vx, vy, vw, vh);
-
-      // Boss 位置：闪烁红圈标记
-      {
-        const boss = this.bossManager?.getCurrentBoss?.() || null;
-        if (boss && boss.isAlive) {
-          const bx = Phaser.Math.Clamp(boss.x, 0, worldW) * sx;
-          const by = Phaser.Math.Clamp(boss.y, 0, worldH) * sy;
-          const t = (now || 0) * 0.014;
-          const pulse = 0.25 + 0.65 * (0.5 + 0.5 * Math.sin(t));
-          overlay.lineStyle(2, 0xff3333, pulse);
-          overlay.strokeCircle(bx, by, 7);
-        }
-      }
-
-      overlay.fillStyle(0x00ffff, 1);
-      overlay.fillCircle(mx, my, 3);
+      return;
     },
 
     /**
      * 屏幕尺寸变化时重新定位小地图（底部锚定）
      */
     repositionMiniMap() {
-      if (!this.miniMapRoot || !this.miniMap) return;
-
-      // 重建小地图以正确定位
-      if (this.inStartRoom) {
-        this.setupStartRoomMiniMap();
-      } else {
-        this.setupMiniMap();
-      }
+      return;
     }
 
   });

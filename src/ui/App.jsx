@@ -13,9 +13,6 @@ export default function App() {
 
   const showDamage = useUiStore((s) => s.showDamage);
   const setShowDamage = useUiStore((s) => s.setShowDamage);
-
-  const fogEnabled = useUiStore((s) => s.fogEnabled);
-  const setFogEnabled = useUiStore((s) => s.setFogEnabled);
   const showEnemyOverlays = useUiStore((s) => s.showEnemyOverlays);
   const setShowEnemyOverlays = useUiStore((s) => s.setShowEnemyOverlays);
 
@@ -90,7 +87,6 @@ export default function App() {
   useEffect(() => {
     const onSettingsChanged = (settings) => {
       setShowDamage(settings?.showDamage !== false);
-      setFogEnabled(settings?.fogEnabled === true);
       setShowEnemyOverlays(settings?.showEnemyOverlays === true);
     };
     uiBus.on('phaser:settingsChanged', onSettingsChanged);
@@ -99,7 +95,7 @@ export default function App() {
     return () => {
       uiBus.off('phaser:settingsChanged', onSettingsChanged);
     };
-  }, [setShowDamage, setFogEnabled, setShowEnemyOverlays]);
+  }, [setShowDamage, setShowEnemyOverlays]);
 
   useEffect(() => {
     if (!viewOpen) return;
@@ -849,34 +845,6 @@ export default function App() {
                     const v = !!e.target.checked;
                     setShowDamage(v);
                     uiBus.emit('ui:settings:setShowDamage', v);
-                  }}
-                  style={{ width: 20, height: 20 }}
-                />
-              </label>
-
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  padding: 12,
-                  borderRadius: 12,
-                  border: '2px solid rgba(42,42,58,1)',
-                  background: 'rgba(11, 11, 24, 0.62)'
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 900, fontSize: 20 }}>启用迷雾与小地图</div>
-                  <div style={{ opacity: 0.75, fontSize: 16, marginTop: 4 }}>默认关闭；用于排查试炼之地卡顿</div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={fogEnabled}
-                  onChange={(e) => {
-                    const v = !!e.target.checked;
-                    setFogEnabled(v);
-                    uiBus.emit('ui:settings:setFogEnabled', v);
                   }}
                   style={{ width: 20, height: 20 }}
                 />

@@ -48,7 +48,7 @@ export function clampPointToPlayerVision(scene, player, x, y, inset = 0) {
 }
 
 export function collectCombatEnemies(scene) {
-  if (scene?.exitDoorActive || scene?._pathChoiceActive) return [];
+  if (scene?.exitDoorActive || scene?._pathChoiceActive || scene?._postBossRewardActive) return [];
 
   const enemies = [];
   const boss = scene?.bossManager?.getCurrentBoss?.();

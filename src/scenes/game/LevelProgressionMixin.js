@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { STAGE_FLOW, LINE_META, NEUTRAL, getLayerChoices, getMapById } from '../../data/mapPool';
-import { getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
+import { ALL_MAPS, STAGE_FLOW, LINE_META, NEUTRAL, getLayerChoices, getMapById } from '../../data/mapPool';
+import { getMapBoss, getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
 import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
@@ -24,11 +24,148 @@ function distributeExpRewards(totalExp, count) {
 export function applyLevelProgressionMixin(GameScene) {
   Object.assign(GameScene.prototype, {
 
-    advanceToNextLevel() {
-      this.currentLevel = (this.currentLevel || 1) + 1;
+    getChaosArenaMaxRounds() {
+      return Math.max(1, Math.floor(Number(this.chaosArenaMaxRounds) || 6));
+    },
 
-      this.cleanupPathChoiceObjects();
+    clearChaosArenaCountdownOverlay() {
+      if (this._roundClearCountdownText) {
+        this._roundClearCountdownText.destroy();
+        this._roundClearCountdownText = null;
+      }
+      if (this._roundClearCountdownSubText) {
+        this._roundClearCountdownSubText.destroy();
+        this._roundClearCountdownSubText = null;
+      }
+      if (this._roundClearCountdownTimer) {
+        this._roundClearCountdownTimer.remove();
+        this._roundClearCountdownTimer = null;
+      }
+    },
+
+    resetChaosArenaRoundFlow() {
+      this.clearChaosArenaCountdownOverlay();
+      this._roundBossDefeated = false;
+      this._roundClearCountdownActive = false;
+      this._roundClearCountdownSeconds = 0;
+    },
+
+    getRemainingCombatantCounts() {
+      const remaining = this.bossManager?.getMinions?.() || [];
+      let minions = 0;
+      let elites = 0;
+      for (let i = 0; i < remaining.length; i++) {
+        const unit = remaining[i];
+        if (!unit || !unit.isAlive) continue;
+        if (unit.isElite) elites += 1;
+        else minions += 1;
+      }
+      return {
+        minions,
+        elites,
+        total: minions + elites,
+      };
+    },
+
+    aggroRemainingEnemies() {
+      const remaining = this.bossManager?.getMinions?.() || [];
+      const now = this.time?.now ?? 0;
+      remaining.forEach((unit) => {
+        if (!unit || !unit.isAlive) return;
+        unit.aggroOnSeen = false;
+        unit.aggroActive = true;
+        unit._aggroStartAt = now;
+      });
+    },
+
+    updateRemainingEnemiesPrompt() {
+      if (!this._roundBossDefeated || this._roundClearCountdownActive) return;
+
+      const counts = this.getRemainingCombatantCounts();
+      if (counts.total <= 0) {
+        this.systemMessage?.hide('chaos_remaining_enemies', { immediate: true });
+        return;
+      }
+
+      const parts = [];
+      if (counts.minions > 0) parts.push(`小怪 ${counts.minions}`);
+      if (counts.elites > 0) parts.push(`精英 ${counts.elites}`);
+      const text = `Boss 已击败，清场后开始下一轮。剩余：${parts.join(' / ')}`;
+      this.systemMessage?.show(text, {
+        key: 'chaos_remaining_enemies',
+        sticky: true
+      });
+    },
+
+    startChaosArenaClearCountdown() {
+      if (this._roundClearCountdownActive) return;
+
+      this._roundClearCountdownActive = true;
+      this._roundClearCountdownSeconds = 10;
+      this.systemMessage?.hide('chaos_remaining_enemies', { immediate: true });
+
+      const cam = this.cameras.main;
+      this.clearChaosArenaCountdownOverlay();
+
+      this._roundClearCountdownText = this.add.text(cam.centerX, cam.centerY - 16, '10', {
+        fontSize: '108px',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        color: '#ffdd44',
+        stroke: '#000000',
+        strokeThickness: 8,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2800);
+
+      this._roundClearCountdownSubText = this.add.text(cam.centerX, cam.centerY + 64, '战场已清空，10 秒后开始下一轮', {
+        fontSize: '24px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center'
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2800);
+
+      this._roundClearCountdownTimer = this.time.addEvent({
+        delay: 1000,
+        repeat: 9,
+        callback: () => {
+          if (!this.scene?.isActive?.('GameScene')) return;
+          this._roundClearCountdownSeconds -= 1;
+
+          if (this._roundClearCountdownSeconds <= 0) {
+            this.resetChaosArenaRoundFlow();
+            this.advanceToNextLevel();
+            return;
+          }
+
+          if (this._roundClearCountdownText) {
+            this._roundClearCountdownText.setText(String(this._roundClearCountdownSeconds));
+          }
+          if (this._roundClearCountdownSubText) {
+            this._roundClearCountdownSubText.setText(`战场已清空，${this._roundClearCountdownSeconds} 秒后开始下一轮`);
+          }
+        }
+      });
+    },
+
+    evaluateChaosArenaRoundState() {
+      if (!this._roundBossDefeated) return;
+
+      const counts = this.getRemainingCombatantCounts();
+      if (counts.total > 0) {
+        this.aggroRemainingEnemies();
+        this.updateRemainingEnemiesPrompt();
+        return;
+      }
+
+      this.startChaosArenaClearCountdown();
+    },
+
+    cleanupRoundTransitionObjects() {
+      this.cleanupPathChoiceObjects?.();
       this._pathChoiceActive = false;
+      this.cleanupPostBossRewardUI?.();
+      this.resetChaosArenaRoundFlow?.();
 
       this.exitDoorActive = false;
       this.exitDoorRift = null;
@@ -40,10 +177,172 @@ export function applyLevelProgressionMixin(GameScene) {
         this.exitDoorVisuals.forEach(v => v?.destroy?.());
       }
       this.exitDoorVisuals = null;
+    },
+
+    getChaosArenaEncounterForStage(stage) {
+      const targetStage = Math.max(1, Math.floor(stage || 1));
+      const maxRounds = this.getChaosArenaMaxRounds();
+
+      if (targetStage >= maxRounds) {
+        const finalMap = getMapById('chaos_throne');
+        return finalMap ? { ...finalMap } : {
+          id: 'chaos_throne',
+          name: '混沌王座',
+          subtitle: '最终决战',
+          line: NEUTRAL,
+        };
+      }
+
+      const visited = new Set(this.runState?.visitedMapIds || []);
+      const pool = ALL_MAPS.filter((map) => map && !visited.has(map.id));
+      const fallback = ALL_MAPS.filter(Boolean);
+      const candidates = pool.length > 0 ? pool : fallback;
+      const choice = Phaser.Utils.Array.GetRandom(candidates);
+
+      return choice ? { ...choice } : {
+        id: `chaos_round_${targetStage}`,
+        name: '混沌竞技场',
+        subtitle: `第${targetStage}轮`,
+        line: NEUTRAL,
+      };
+    },
+
+    getChaosArenaPresentation(stage, mapInfo) {
+      const maxRounds = this.getChaosArenaMaxRounds();
+      const boss = mapInfo?.id ? getMapBoss(mapInfo.id) : null;
+
+      if (stage >= maxRounds) {
+        return {
+          name: '混沌竞技场',
+          subtitle: boss?.name || '最终决战'
+        };
+      }
+
+      return {
+        name: `混沌竞技场·第${stage}轮`,
+        subtitle: boss?.name || mapInfo?.name || 'Boss 挑战'
+      };
+    },
+
+    getArenaWorldAndViewRect() {
+      const world = this.worldBoundsRect || new Phaser.Geom.Rectangle(0, 0, (this.mapConfig?.gridSize || 20) * (this.mapConfig?.cellSize || 128), (this.mapConfig?.gridSize || 20) * (this.mapConfig?.cellSize || 128));
+      const cam = this.cameras?.main;
+      const view = cam?.worldView
+        ? new Phaser.Geom.Rectangle(cam.worldView.x, cam.worldView.y, cam.worldView.width, cam.worldView.height)
+        : new Phaser.Geom.Rectangle(world.x, world.y, world.width, world.height);
+      return { world, view };
+    },
+
+    buildArenaSpawnPointForSide(side, t, options = {}) {
+      const { world, view } = this.getArenaWorldAndViewRect();
+      const offscreenPad = Math.max(48, Math.round(options.offscreenPad || 96));
+      const edgeInset = Math.max(24, Math.round(options.edgeInset || 48));
+      const laneInset = Math.max(24, Math.round(options.laneInset || 72));
+      const insideView = options.insideView === true;
+      const jitter = Math.max(0, Math.round(options.jitter || 0));
+      const safeT = Phaser.Math.Clamp(Number(t) || 0.5, 0.12, 0.88);
+
+      const clampX = (x) => Phaser.Math.Clamp(x, world.x + edgeInset, world.right - edgeInset);
+      const clampY = (y) => Phaser.Math.Clamp(y, world.y + edgeInset, world.bottom - edgeInset);
+
+      const horizontalMin = Math.max(world.x + laneInset, Math.min(view.x + laneInset, world.right - laneInset));
+      const horizontalMax = Math.min(world.right - laneInset, Math.max(view.right - laneInset, world.x + laneInset));
+      const verticalMin = Math.max(world.y + laneInset, Math.min(view.y + laneInset, world.bottom - laneInset));
+      const verticalMax = Math.min(world.bottom - laneInset, Math.max(view.bottom - laneInset, world.y + laneInset));
+
+      let x = world.centerX;
+      let y = world.centerY;
+
+      if (side === 'top' || side === 'bottom') {
+        const minX = Math.min(horizontalMin, horizontalMax);
+        const maxX = Math.max(horizontalMin, horizontalMax);
+        x = Phaser.Math.Linear(minX, maxX, safeT);
+        y = side === 'top'
+          ? (insideView ? view.y + offscreenPad : view.y - offscreenPad)
+          : (insideView ? view.bottom - offscreenPad : view.bottom + offscreenPad);
+      } else {
+        const minY = Math.min(verticalMin, verticalMax);
+        const maxY = Math.max(verticalMin, verticalMax);
+        y = Phaser.Math.Linear(minY, maxY, safeT);
+        x = side === 'left'
+          ? (insideView ? view.x + offscreenPad : view.x - offscreenPad)
+          : (insideView ? view.right - offscreenPad : view.right + offscreenPad);
+      }
+
+      if (jitter > 0) {
+        if (side === 'top' || side === 'bottom') x += Phaser.Math.Between(-jitter, jitter);
+        else y += Phaser.Math.Between(-jitter, jitter);
+      }
+
+      return { x: clampX(x), y: clampY(y), side };
+    },
+
+    getAvailableArenaSpawnSides(options = {}) {
+      const { world, view } = this.getArenaWorldAndViewRect();
+      const offscreenPad = Math.max(48, Math.round(options.offscreenPad || 96));
+      const sides = [];
+      if ((view.y - world.y) > offscreenPad) sides.push('top');
+      if ((world.bottom - view.bottom) > offscreenPad) sides.push('bottom');
+      if ((view.x - world.x) > offscreenPad) sides.push('left');
+      if ((world.right - view.right) > offscreenPad) sides.push('right');
+      return sides;
+    },
+
+    getDynamicSpawnPoint(index = 0, total = 1, options = {}) {
+      const player = this.player;
+      const { view } = this.getArenaWorldAndViewRect();
+      const safeTotal = Math.max(1, Math.floor(total || 1));
+      const availableSides = this.getAvailableArenaSpawnSides(options);
+      const fallbackSides = ['top', 'right', 'bottom', 'left'];
+      const sides = availableSides.length > 0 ? availableSides : fallbackSides;
+      const t = (Math.max(0, index) + 1) / (safeTotal + 1);
+      const minPlayerDistance = Math.max(140, Math.round(options.minPlayerDistance || 240));
+      const insideView = options.insideView === true;
+
+      const orderedSides = [...sides].sort((a, b) => {
+        const pa = this.buildArenaSpawnPointForSide(a, t, options);
+        const pb = this.buildArenaSpawnPointForSide(b, t, options);
+        const da = player ? Phaser.Math.Distance.Between(pa.x, pa.y, player.x, player.y) : 0;
+        const db = player ? Phaser.Math.Distance.Between(pb.x, pb.y, player.x, player.y) : 0;
+        return db - da;
+      });
+
+      for (let i = 0; i < orderedSides.length; i++) {
+        const side = orderedSides[(index + i) % orderedSides.length];
+        const point = this.buildArenaSpawnPointForSide(side, t, options);
+        const dist = player ? Phaser.Math.Distance.Between(point.x, point.y, player.x, player.y) : Infinity;
+        const inView = Phaser.Geom.Rectangle.Contains(view, point.x, point.y);
+        if (dist >= minPlayerDistance && (!!insideView === inView || !insideView)) {
+          return point;
+        }
+      }
+
+      return this.buildArenaSpawnPointForSide(orderedSides[0] || 'top', t, options);
+    },
+
+    getBossArenaEntryPoint() {
+      return this.getDynamicSpawnPoint(0, 1, {
+        insideView: true,
+        offscreenPad: 110,
+        edgeInset: 84,
+        laneInset: 120,
+        minPlayerDistance: 320,
+        jitter: 18,
+      });
+    },
+
+    startChaosArenaRound(stage, opts = {}) {
+      const targetStage = Math.max(1, Math.floor(stage || 1));
+      const mapInfo = this.getChaosArenaEncounterForStage(targetStage);
+      const preservePlayerPosition = targetStage > 1;
+      const bossEntryPoint = preservePlayerPosition ? this.getBossArenaEntryPoint() : null;
+
+      this.cleanupRoundTransitionObjects();
 
       if (this.bulletManager?.destroyAllBullets) {
         this.bulletManager.destroyAllBullets();
       }
+
       if (Array.isArray(this.drops)) {
         this.drops.forEach(d => {
           if (d?.sprite && d.sprite.destroy) d.sprite.destroy();
@@ -55,45 +354,69 @@ export function applyLevelProgressionMixin(GameScene) {
         this.bossManager.destroyMinions();
       }
 
-      if (!this.currentMapInfo || this.currentMapInfo.id === 'start_room' || this.currentMapInfo.id === 'tutorial_level') {
-        const stageEntry = STAGE_FLOW.find(s => s.layer === this.currentStage);
-        if (stageEntry && stageEntry.mapId) {
-          const fixedMap = getMapById(stageEntry.mapId);
-          if (fixedMap) {
-            this.currentMapInfo = { ...fixedMap };
-            this.runState.visitedMapIds.push(fixedMap.id);
-          }
-        }
+      const currentBoss = this.bossManager?.getCurrentBoss?.();
+      if (currentBoss?.destroy) {
+        currentBoss.destroy();
+        this.bossManager.currentBoss = null;
       }
 
-      console.log('[MapBranch] advancing to level', this.currentLevel, 'stage', this.currentStage, 'map:', this.currentMapInfo?.name);
-
-      this.setupWorldMapForLevel(this.currentLevel);
-
-      const fogEnabled = this.registry?.get?.('fogEnabled') === true;
-      this.fogMode = fogEnabled ? 'soft' : 'none';
-      if (fogEnabled) {
-        this.setupSoftFogOfWar();
-        this.setupMiniMap();
-      } else {
-        // 确保彻底关闭：不保留上关的 RT/小地图对象
-        if (this._fogWorldObjects) {
-          this._fogWorldObjects.forEach(o => o?.destroy?.());
-        }
-        this._fogWorldObjects = [];
-        if (this.fogWorldRT) { this.fogWorldRT.destroy(); this.fogWorldRT = null; }
-        if (this.fogBrushImage) { this.fogBrushImage.destroy(); this.fogBrushImage = null; }
-        if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
-        this.miniMap = null;
-      }
-
-      const mapId = this.currentMapInfo?.id;
-      if (mapId) {
-        this.spawnMapMonsters(mapId);
-      }
-
+      this.currentLevel = targetStage;
+      this.currentStage = targetStage;
+      this.currentMapInfo = { ...mapInfo };
+      this.currentLine = mapInfo?.line || NEUTRAL;
       this.levelBossTriggered = false;
-      this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
+
+      if (!Array.isArray(this.runState?.visitedMapIds)) {
+        this.runState = { visitedMapIds: [] };
+      }
+      if (mapInfo?.id && !this.runState.visitedMapIds.includes(mapInfo.id)) {
+        this.runState.visitedMapIds.push(mapInfo.id);
+      }
+
+      this.fogMode = 'none';
+
+      this.setupWorldMapForLevel(this.currentLevel, {
+        backgroundKey: 'map1',
+        preservePlayerPosition,
+        overrideBossSpawnPoint: bossEntryPoint,
+      });
+      if (this._fogWorldObjects) {
+        this._fogWorldObjects.forEach(o => o?.destroy?.());
+      }
+      this._fogWorldObjects = [];
+      if (this.fogWorldRT) { this.fogWorldRT.destroy(); this.fogWorldRT = null; }
+      if (this.fogBrushImage) { this.fogBrushImage.destroy(); this.fogBrushImage = null; }
+      if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
+      this.miniMap = null;
+
+      if (mapInfo?.id) {
+        this.spawnMapMonsters(mapInfo.id);
+      }
+
+      this.resetChaosArenaRoundFlow();
+
+      if (this.player?.fireTimer) {
+        this.player.fireTimer.paused = false;
+      }
+      if (this.player?.weaponType !== 'warrior_melee') {
+        this.player.canFire = true;
+      }
+
+      const presentation = this.getChaosArenaPresentation(targetStage, mapInfo);
+      this.showSceneEntryPresentation?.(presentation, {
+        durationMs: opts.durationMs || 1800
+      });
+    },
+
+    advanceToNextLevel() {
+      const nextStage = Math.max(1, Math.floor(this.currentStage || 0) + 1);
+      if (nextStage > this.getChaosArenaMaxRounds()) {
+        this.showVictorySettlement();
+        return;
+      }
+
+      console.log('[ChaosArena] advancing to round', nextStage);
+      this.startChaosArenaRound(nextStage);
     },
 
     getMaxExpForLevel(level) {
@@ -330,10 +653,6 @@ export function applyLevelProgressionMixin(GameScene) {
 
       this.weaponPickupNodes = [];
 
-      if (this.inStartRoom) {
-        this.spawnStartRoomDoor();
-      }
-
       if (this.systemMessage) {
         this.systemMessage.hide('startroom_pick_weapon', { immediate: false });
 
@@ -357,20 +676,204 @@ export function applyLevelProgressionMixin(GameScene) {
           }
         })();
 
-        this.systemMessage.show(`你获得了${className}技能 ${baseSkillName}，开始你的冒险吧！`, {
+        this.systemMessage.show(`你获得了${className}技能 ${baseSkillName}，混沌竞技场即将开启。`, {
           key: 'startroom_got_skill',
-          durationMs: 3200,
+          durationMs: 1800,
           onDismiss: () => {
           }
         });
       }
 
       this.levelBossTriggered = false;
+
+      if (this.inStartRoom) {
+        this.time.delayedCall(180, () => {
+          if (this.scene?.isActive?.('GameScene')) {
+            this.beginAdventureFromStartRoom?.();
+          }
+        });
+      }
     },
 
-    onBossDefeatedOpenExitDoor() {
+    createPostBossRewardButton(x, y, title, subtitle, accentColor, onClick) {
+      const container = this.add.container(x, y).setScrollFactor(0).setDepth(2802);
+      const bg = this.add.rectangle(0, 0, 240, 132, 0x111827, 0.96);
+      bg.setStrokeStyle(3, accentColor, 0.95);
+      const titleText = this.add.text(0, -24, title, {
+        fontSize: '24px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4,
+        align: 'center'
+      }).setOrigin(0.5);
+      const subText = this.add.text(0, 26, subtitle, {
+        fontSize: '15px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#d1d5db',
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: { width: 200 }
+      }).setOrigin(0.5);
+
+      container.add([bg, titleText, subText]);
+      container.setSize(240, 132);
+      container.setInteractive({ useHandCursor: true });
+      container.on('pointerover', () => bg.setFillStyle(0x1f2937, 1));
+      container.on('pointerout', () => bg.setFillStyle(0x111827, 0.96));
+      container.on('pointerdown', () => onClick?.());
+
+      return container;
+    },
+
+    showPostBossContinuePrompt(message) {
+      const cam = this.cameras.main;
+      const bottomPanel = this.add.container(cam.centerX, cam.height - 88).setScrollFactor(0).setDepth(2805);
+      const bg = this.add.rectangle(0, 0, 440, 72, 0x05070c, 0.90);
+      bg.setStrokeStyle(2, 0xffdd88, 0.95);
+      const text = this.add.text(0, -10, message, {
+        fontSize: '18px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3,
+        align: 'center',
+        wordWrap: { width: 380 }
+      }).setOrigin(0.5);
+      const hint = this.add.text(0, 20, '点击这里或按空格开始下一轮', {
+        fontSize: '14px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#fbbf24',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
+
+      bottomPanel.add([bg, text, hint]);
+      bottomPanel.setSize(440, 72);
+      bottomPanel.setInteractive({ useHandCursor: true });
+      bottomPanel.on('pointerdown', () => this.confirmPostBossRewardAndContinue());
+      this._postBossRewardObjects.push(bottomPanel);
+    },
+
+    cleanupPostBossRewardUI(options = {}) {
+      if (Array.isArray(this._postBossRewardObjects)) {
+        this._postBossRewardObjects.forEach(o => o?.destroy?.());
+      }
+      this._postBossRewardObjects = [];
+
+      if (options.keepState) return;
+
+      this._postBossRewardActive = false;
+      this._postBossRewardChoiceMade = false;
+      this._postBossRewardSelected = null;
+      this._postBossRewardPayload = null;
+    },
+
+    resolvePostBossReward(choice) {
+      if (!this._postBossRewardActive || this._postBossRewardChoiceMade) return;
+
+      const payload = this._postBossRewardPayload || {};
+      this._postBossRewardChoiceMade = true;
+      this._postBossRewardSelected = choice;
+
+      this.cleanupPostBossRewardUI({ keepState: true });
+
+      if (choice === 'loot') {
+        const rewardBoss = payload.rewardBoss || {
+          x: this.player?.x || 0,
+          y: this.player?.y || 0,
+          attackPatterns: [{}]
+        };
+        this.spawnBossDrops?.(rewardBoss);
+        this.systemMessage?.show('你选择了战利品补给。整理完毕后，确认开启下一轮。', {
+          key: 'chaos_reward_loot',
+          durationMs: 2400
+        });
+        this.showPostBossContinuePrompt('已投放战利品补给');
+        return;
+      }
+
+      const healAmount = Math.max(12, Math.round((this.player?.maxHp || 100) * 0.35));
+      const restored = this.player?.heal?.(healAmount) || 0;
+      this.events.emit('updatePlayerInfo');
+      this.systemMessage?.show(`你选择了恢复，回复了 ${restored} 点生命。`, {
+        key: 'chaos_reward_heal',
+        durationMs: 2200
+      });
+      this.showPostBossContinuePrompt('已完成恢复');
+    },
+
+    openPostBossRewardChoice(payload = {}) {
+      if (this._postBossRewardActive) return;
+
+      const boss = payload?.boss || null;
+      this.cleanupPostBossRewardUI();
+      this._postBossRewardActive = true;
+      this._postBossRewardChoiceMade = false;
+      this._postBossRewardSelected = null;
+      this._postBossRewardPayload = {
+        rewardBoss: boss ? {
+          x: Number(boss.x) || 0,
+          y: Number(boss.y) || 0,
+          attackPatterns: Array.isArray(boss.attackPatterns) ? boss.attackPatterns : [{}]
+        } : null
+      };
+
+      const cam = this.cameras.main;
+      const overlay = this.add.rectangle(cam.centerX, cam.centerY, cam.width, cam.height, 0x000000, 0.64)
+        .setScrollFactor(0)
+        .setDepth(2800);
+      const panel = this.add.rectangle(cam.centerX, cam.centerY - 20, 620, 260, 0x090d16, 0.95)
+        .setScrollFactor(0)
+        .setDepth(2801);
+      panel.setStrokeStyle(3, 0xffdd88, 0.95);
+
+      const title = this.add.text(cam.centerX, cam.centerY - 112, '本轮 Boss 已击败', {
+        fontSize: '34px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 5,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2802);
+
+      const subtitle = this.add.text(cam.centerX, cam.centerY - 74, '选择本轮结算奖励，然后确认开启下一轮战斗', {
+        fontSize: '18px',
+        fontFamily: 'Arial, sans-serif',
+        color: '#d1d5db',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(2802);
+
+      const lootButton = this.createPostBossRewardButton(
+        cam.centerX - 150,
+        cam.centerY + 18,
+        '战利品补给',
+        '投放一批 Boss 战利品，适合继续做构筑。',
+        0x60a5fa,
+        () => this.resolvePostBossReward('loot')
+      );
+
+      const healButton = this.createPostBossRewardButton(
+        cam.centerX + 150,
+        cam.centerY + 18,
+        '恢复生命',
+        '立即恢复 35% 最大生命，提升下轮容错。',
+        0x34d399,
+        () => this.resolvePostBossReward('heal')
+      );
+
+      this._postBossRewardObjects.push(overlay, panel, title, subtitle, lootButton, healButton);
+    },
+
+    confirmPostBossRewardAndContinue() {
+      if (!this._postBossRewardActive || !this._postBossRewardChoiceMade) return;
+      this.cleanupPostBossRewardUI();
+      this.advanceToNextLevel();
+    },
+
+    onBossDefeatedOpenExitDoor(payload = {}) {
       if (!this.mapConfig) return;
-      if (this.exitDoorActive) return;
       if (this._pathChoiceActive) return;
 
       try { this.bulletManager?.clearBossBullets?.(); } catch (_) { /* ignore */ }
@@ -382,26 +885,10 @@ export function applyLevelProgressionMixin(GameScene) {
         this.player.canFire = true;
       }
 
-      this.currentStage = (this.currentStage || 0) + 1;
+      this._roundBossDefeated = true;
+      this._roundClearCountdownActive = false;
 
-      const flow = STAGE_FLOW.find(s => s.layer === this.currentStage);
-      if (!flow) {
-        this.showVictorySettlement();
-        return;
-      }
-
-      if (flow.type === 'intro' || flow.type === 'choice') {
-        this.showPathChoiceUI();
-      } else if (flow.type === 'fixed') {
-        const fixedMap = getMapById(flow.mapId);
-        if (fixedMap) {
-          this.currentMapInfo = { ...fixedMap };
-          this.runState.visitedMapIds.push(fixedMap.id);
-        }
-        this.spawnSingleExitDoor();
-      } else {
-        this.spawnSingleExitDoor();
-      }
+      this.evaluateChaosArenaRoundState();
     },
 
     spawnSingleExitDoor() {
@@ -773,13 +1260,17 @@ export function applyLevelProgressionMixin(GameScene) {
         const def = minions[i % minions.length];
         const size = getRoleSize('minion');
         const hp   = Math.round(balance.minions.hp);
-
-        const mx = Phaser.Math.Between(Math.floor(cell * 1.5), Math.floor(worldSize - cell * 1.5));
-        const my = Phaser.Math.Between(Math.floor(worldSize * 0.4), Math.floor(worldSize * 0.8));
+        const spawnPt = this.getDynamicSpawnPoint(i, minionCount, {
+          offscreenPad: Math.max(72, Math.round(cell * 0.85)),
+          edgeInset: Math.max(32, Math.round(cell * 0.35)),
+          laneInset: Math.max(40, Math.round(cell * 0.65)),
+          minPlayerDistance: Math.max(220, Math.round(cell * 2.0)),
+          jitter: Math.max(12, Math.round(cell * 0.18)),
+        });
 
         const m = new TestMinion(this, {
-          x: mx,
-          y: my,
+          x: spawnPt.x,
+          y: spawnPt.y,
           type: def.moveType === 'shooter' ? 'shooter' : 'chaser',
           name: def.name,
           hp,
@@ -789,7 +1280,8 @@ export function applyLevelProgressionMixin(GameScene) {
           contactDamage: balance.minions.contactDamage,
           expReward: minionExpRewards[i] ?? 0,
           isElite: false,
-          aggroOnSeen: true,
+          aggroOnSeen: false,
+          spawnProtectedUntilVisible: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
           aggroRadius: 420,
           shootRange: (def.moveType === 'shooter') ? 190 : undefined,
@@ -810,13 +1302,17 @@ export function applyLevelProgressionMixin(GameScene) {
         const def = elites[i % elites.length];
         const size = getRoleSize('elite');
         const hp   = Math.round(balance.elites.hp);
-
-        const ex = Phaser.Math.Between(Math.floor(cell * 2), Math.floor(worldSize - cell * 2));
-        const ey = Phaser.Math.Between(Math.floor(worldSize * 0.15), Math.floor(worldSize * 0.45));
+        const spawnPt = this.getDynamicSpawnPoint(i, eliteCount, {
+          offscreenPad: Math.max(84, Math.round(cell * 0.95)),
+          edgeInset: Math.max(32, Math.round(cell * 0.35)),
+          laneInset: Math.max(48, Math.round(cell * 0.75)),
+          minPlayerDistance: Math.max(260, Math.round(cell * 2.3)),
+          jitter: Math.max(14, Math.round(cell * 0.16)),
+        });
 
         const m = new TestMinion(this, {
-          x: ex,
-          y: ey,
+          x: spawnPt.x,
+          y: spawnPt.y,
           type: def.moveType === 'shooter' ? 'shooter' : 'chaser',
           name: def.name,
           hp,
@@ -826,7 +1322,8 @@ export function applyLevelProgressionMixin(GameScene) {
           contactDamage: balance.elites.contactDamage,
           expReward: eliteExpRewards[i] ?? 0,
           isElite: true,
-          aggroOnSeen: true,
+          aggroOnSeen: false,
+          spawnProtectedUntilVisible: true,
           aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
           aggroRadius: 460,
           shootRange: (def.moveType === 'shooter') ? 230 : undefined,

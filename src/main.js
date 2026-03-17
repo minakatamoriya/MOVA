@@ -273,11 +273,6 @@ if (!game.registry.has('showDamage')) {
   game.registry.set('showDamage', true);
 }
 
-// 设置：是否启用迷雾与小地图（默认关闭，用于性能排查）
-if (!game.registry.has('fogEnabled')) {
-  game.registry.set('fogEnabled', false);
-}
-
 // 设置：是否显示敌人头顶血条与 debuff（默认关闭，保持画面干净）
 if (!game.registry.has('showEnemyOverlays')) {
   game.registry.set('showEnemyOverlays', false);
@@ -286,7 +281,6 @@ if (!game.registry.has('showEnemyOverlays')) {
 const emitSettings = () => {
   uiBus.emit('phaser:settingsChanged', {
     showDamage: game.registry.get('showDamage') !== false,
-    fogEnabled: game.registry.get('fogEnabled') === true,
     showEnemyOverlays: game.registry.get('showEnemyOverlays') === true
   });
 };
@@ -297,11 +291,6 @@ uiBus.on('ui:settings:request', () => {
 
 uiBus.on('ui:settings:setShowDamage', (v) => {
   game.registry.set('showDamage', !!v);
-  emitSettings();
-});
-
-uiBus.on('ui:settings:setFogEnabled', (v) => {
-  game.registry.set('fogEnabled', !!v);
   emitSettings();
 });
 

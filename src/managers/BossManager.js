@@ -245,7 +245,6 @@ export default class BossManager {
       this.scene.events.emit('updatePlayerInfo');
     }
 
-    // 掉落奖励
     if (this.scene.spawnBossDrops && defeatedBoss) {
       this.scene.spawnBossDrops(defeatedBoss, data);
     }
@@ -254,9 +253,9 @@ export default class BossManager {
     this.scene.petManager?.resetPositionsAroundPlayer?.();
     this.scene.undeadSummonManager?.onBossDefeated?.();
 
-    // 新关卡流程：击败 Boss -> 打开出口门（由场景负责）
+    // 新流程：击败 Boss -> 等待清场，清场后倒计时进入下一轮
     if (this.scene && typeof this.scene.onBossDefeatedOpenExitDoor === 'function') {
-      this.scene.onBossDefeatedOpenExitDoor();
+      this.scene.onBossDefeatedOpenExitDoor({ boss: defeatedBoss, data });
       return;
     }
 

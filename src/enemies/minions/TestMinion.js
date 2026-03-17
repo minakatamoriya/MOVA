@@ -75,6 +75,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       ? Math.max(0, Math.floor(config.expReward))
       : (this.isElite ? 120 : 100);
 
+    this.spawnProtectedUntilVisible = !!config.spawnProtectedUntilVisible;
+    this._spawnProtectionCleared = !this.spawnProtectedUntilVisible;
+    if (this.spawnProtectedUntilVisible) {
+      this.isInvincible = true;
+    }
+
     this.createVisuals(config.color);
     this.syncOverheadUiVisibility();
     this.updateHpBar();
@@ -248,6 +254,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
   takeDamage(damage, context = {}) {
     if (!this.isAlive) return false;
+    if (this.isInvincible) return false;
 
     if (!this._firstDamagedAt) {
       this._firstDamagedAt = (this.scene?.time?.now ?? 0);
@@ -267,7 +274,6 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       else this.followBoss.combatActive = true;
     }
 
-    if (this.isInvincible) return false;
     const applied = Math.max(1, Math.round(damage || 0));
     this.currentHp -= applied;
 
@@ -507,6 +513,21 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       return;
     }
 
+    const cam = this.scene?.cameras?.main;
+    const view = cam?.worldView;
+    if (this.spawnProtectedUntilVisible && !this._spawnProtectionCleared) {
+      const inView = !!(view && Phaser.Geom.Rectangle.Contains(view, this.x, this.y));
+      if (!inView) {
+        this.isInvincible = true;
+        return;
+      }
+      this._spawnProtectionCleared = true;
+      this.spawnProtectedUntilVisible = false;
+      this.isInvincible = false;
+      this.aggroActive = true;
+      this._aggroStartAt = (this.scene?.time?.now ?? time ?? 0);
+    }
+
     // 若绑定 Boss 且 Boss 已死：脱离 Boss，作为普通留场单位继续存在
     if (this.followBoss && (!this.followBoss.isAlive || this.followBoss.isDestroyed)) {
       this.followBoss = null;
@@ -533,8 +554,6 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     // 进入视野后才激活（用于第一关首波扎堆小怪）
     if (!this.followBoss && this.aggroOnSeen && !this.aggroActive) {
-      const cam = this.scene?.cameras?.main;
-      const view = cam?.worldView;
       const inView = (view && Phaser.Geom.Rectangle.Contains(view, this.x, this.y));
       const inRange = (player && player.isAlive)
         ? (Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y) <= this.aggroRadius)
