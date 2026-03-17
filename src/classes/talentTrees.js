@@ -98,7 +98,6 @@ export const TREE_DEFS = [
     core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，提供技能加速与站桩奖励。' },
     nodes: [
       { id: 'arcane_swift', name: '迅捷', maxLevel: 1, desc: '所有攻击的攻击速度/冷却时间 -8%。' },
-      { id: 'arcane_enlighten', name: '启迪', maxLevel: 1, desc: '每次升级三选一变为四选一（选项 +1）。' },
       { id: 'arcane_circle', name: '法阵', maxLevel: 1, desc: '站立不动 2 秒后阵内攻击力 +20%，移动则消失。' }
     ],
     ultimate: { id: 'arcane_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
@@ -131,7 +130,7 @@ export const TREE_DEFS = [
     id: 'curse',
     name: '术士-副',
     color: resolveClassColor('warlock'),
-    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，提供亡灵召唤强化。' },
+    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，获得死灵共鸣：召唤物伤害 +12%、生命值 +10%，并解锁亡灵召唤强化。' },
     nodes: [
       { id: 'curse_skeleton_guard', name: '骷髅卫士', maxLevel: 3, desc: '召唤骷髅卫士协同近战。等级 1/2/3 时上限为 1/3/5。' },
       { id: 'curse_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '召唤骷髅法师跟随作战。等级 1/2/3 时上限为 1/3/5。' }
@@ -154,35 +153,14 @@ export const TREE_DEFS = [
     id: 'nature',
     name: '德鲁伊-副',
     color: resolveClassColor('druid'),
-    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，结契召唤物（熊/鹰/树精）并强化。' },
+    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，获得自然亲和：受到治疗效果 +12%，并逐步召唤熊灵、战鹰、树精。' },
     nodes: [
-      { id: 'druid_pet_bear', name: '契约：熊灵', maxLevel: 1, desc: '熊：坦克与嘲讽，吸引火力。' },
-      { id: 'druid_pet_hawk', name: '契约：战鹰', maxLevel: 1, desc: '鹰：高频打击，优先低血目标。' },
-      { id: 'druid_pet_treant', name: '契约：树精', maxLevel: 1, desc: '树精：周期治疗，偏续航。' }
-      ,
-      // 熊系强化（可叠加）
-      { id: 'nature_bear_solidarity', name: '共担', maxLevel: 3, desc: '玩家受击时，熊灵替你承担一部分伤害。' },
-      { id: 'nature_bear_strength', name: '蛮力', maxLevel: 3, desc: '提高你的攻击力。' },
-      { id: 'nature_bear_carapace', name: '甲壳', maxLevel: 3, desc: '降低你受到的伤害。' },
-      { id: 'nature_bear_rage', name: '自然之怒', maxLevel: 3, desc: '熊灵受击后，你短时间内伤害提高。' },
-      { id: 'nature_bear_earthquake', name: '震地', maxLevel: 3, desc: '熊灵受击时有概率眩晕 Boss 1 秒。' },
-      { id: 'nature_bear_thornshield', name: '荆棘护体', maxLevel: 3, desc: '提高反伤比例。' },
-
-      // 鹰系强化（可叠加）
-      { id: 'nature_hawk_crit', name: '锐眼', maxLevel: 3, desc: '暴击率提升。' },
-      { id: 'nature_hawk_evade', name: '疾羽', maxLevel: 3, desc: '闪避率提升。' },
-      { id: 'nature_hawk_speed', name: '风行', maxLevel: 3, desc: '移动速度提升。' },
-      { id: 'nature_hawk_windslash', name: '风刃', maxLevel: 3, desc: '战鹰周期性触发风刃追加伤害。' },
-      { id: 'nature_hawk_skycall', name: '天降', maxLevel: 3, desc: '战鹰攻击有概率引发额外打击。' },
-      { id: 'nature_hawk_huntmark', name: '猎手标记', maxLevel: 3, desc: '战鹰命中后给 Boss 上标记：你对其伤害提高。' },
-
-      // 树精强化（可叠加）
-      { id: 'nature_treant_regen', name: '回春', maxLevel: 3, desc: '提高树精治疗量/频率。' },
-      { id: 'nature_treant_root', name: '缠绕', maxLevel: 3, desc: '树精治疗时有概率短暂定身 Boss。' },
-      { id: 'nature_treant_armor', name: '树皮', maxLevel: 3, desc: '提高固定减伤。' },
-      { id: 'nature_treant_thorns', name: '荆棘', maxLevel: 3, desc: '提高反伤比例。' },
-      { id: 'nature_treant_summon', name: '萌芽', maxLevel: 3, desc: '树精治疗时有概率额外提供护盾。' },
-      { id: 'nature_treant_reborn', name: '再生', maxLevel: 3, desc: '树精被击败后的回归冷却更短。' }
+      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 1, desc: '召唤熊灵协同作战，负责扛伤与近战压制。' },
+      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 1, desc: '召唤战鹰协同作战，负责持续高频打击。' },
+      { id: 'druid_pet_treant', name: '树精', maxLevel: 1, desc: '召唤树精协同作战，负责周期治疗与续航。' },
+      { id: 'nature_bear_vitality', name: '熊灵厚甲', maxLevel: 3, desc: '熊灵生命值提高 +25%/+50%/+75%。' },
+      { id: 'nature_hawk_swiftness', name: '鹰击疾掠', maxLevel: 3, desc: '战鹰攻击间隔缩短 12%/24%/36%。' },
+      { id: 'nature_treant_bloom', name: '林灵繁茂', maxLevel: 3, desc: '树精单次治疗量提高 +2/+4/+6。' }
     ],
     ultimate: { id: 'nature_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   }
@@ -262,7 +240,6 @@ export const SKILL_TO_TREE = {
 
   // 副职业通用：奥术
   arcane_swift: 'arcane',
-  arcane_enlighten: 'arcane',
   arcane_circle: 'arcane',
 
   // 副职业通用：游侠
@@ -289,27 +266,10 @@ export const SKILL_TO_TREE = {
   druid_pet_hawk: 'nature',
   druid_pet_treant: 'nature',
 
-  // 副职业通用：自然伙伴（分支强化）
-  nature_bear_solidarity: 'nature',
-  nature_bear_strength: 'nature',
-  nature_bear_carapace: 'nature',
-  nature_bear_rage: 'nature',
-  nature_bear_earthquake: 'nature',
-  nature_bear_thornshield: 'nature',
-
-  nature_hawk_crit: 'nature',
-  nature_hawk_evade: 'nature',
-  nature_hawk_speed: 'nature',
-  nature_hawk_windslash: 'nature',
-  nature_hawk_skycall: 'nature',
-  nature_hawk_huntmark: 'nature',
-
-  nature_treant_regen: 'nature',
-  nature_treant_root: 'nature',
-  nature_treant_armor: 'nature',
-  nature_treant_thorns: 'nature',
-  nature_treant_summon: 'nature',
-  nature_treant_reborn: 'nature'
+  // 副职业通用：自然伙伴（宠物强化）
+  nature_bear_vitality: 'nature',
+  nature_hawk_swiftness: 'nature',
+  nature_treant_bloom: 'nature'
   ,
 
   // 第三天赋（占位）

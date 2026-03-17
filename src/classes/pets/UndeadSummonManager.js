@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { calculateResolvedDamage } from '../../combat/damageModel';
+import { clearPendingMeleeWindup, hasPendingMeleeWindup, startMeleeWindup } from './meleeWindup';
+import { clampPointToPlayerVision, collectCombatEnemies, isPointInPlayerVision } from './playerVision';
 
 const SUMMON_TYPES = /** @type {const} */ ({
   guard: 'guard',
@@ -12,6 +14,10 @@ const LEVEL_TO_CAP = {
   2: 3,
   3: 5
 };
+
+const MELEE_TARGET_VISION_PADDING = 72;
+const MELEE_RETURN_VISION_PADDING = 24;
+const MELEE_MOVE_VISION_INSET = 18;
 
 export default class UndeadSummonManager {
   constructor(scene) {
@@ -27,7 +33,6 @@ export default class UndeadSummonManager {
       [SUMMON_TYPES.mage, 0]
     ]);
     this.acquireRangeBase = 260;
-    this.maxLeashRange = 340;
     this.respawnDelayMs = 5000;
   }
 
@@ -45,6 +50,46 @@ export default class UndeadSummonManager {
   getDesiredCount(type) {
     const lvl = Math.min(3, this.getOwnedLevel(type));
     return LEVEL_TO_CAP[lvl] || 0;
+  }
+
+  getSummonHealthMultiplier() {
+    return Math.max(0.1, Number(this.player?.summonHealthMultiplier) || 1);
+  }
+
+  getSummonDamageMultiplier() {
+    return Math.max(0.1, Number(this.player?.summonDamageMultiplier) || 1);
+  }
+
+  refreshSummonStats() {
+    for (const list of this.units.values()) {
+      for (let i = 0; i < list.length; i++) {
+        const unit = list[i];
+        if (!unit?.active) continue;
+
+        let nextMaxHp = unit.maxHp || 1;
+        if (unit.summonType === SUMMON_TYPES.guard) {
+          nextMaxHp = Math.max(24, Math.round((this.player?.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier()));
+        } else if (unit.summonType === SUMMON_TYPES.mage) {
+          nextMaxHp = Math.max(12, Math.round((this.player?.maxHp || 100) * 0.18 * this.getSummonHealthMultiplier()));
+        }
+
+        const missing = Math.max(0, (unit.maxHp || nextMaxHp) - (unit.currentHp || 0));
+        unit.maxHp = nextMaxHp;
+        unit.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+      }
+    }
+
+    const infernals = this.infernals || [];
+    for (let i = 0; i < infernals.length; i++) {
+      const unit = infernals[i];
+      if (!unit?.active) continue;
+      const level = Phaser.Math.Clamp(Math.round(Number(unit.infernalLevel) || 1), 1, 3);
+      const hpScale = Math.max(0.1, Number(unit.infernalHpScale) || ([0, 0.85, 1.10, 1.45][level] || 1));
+      const nextMaxHp = Math.max(180, Math.round(((this.player?.maxHp || 100) * hpScale + (this.player?.bulletDamage || 1) * (12 + level * 8)) * this.getSummonHealthMultiplier()));
+      const missing = Math.max(0, (unit.maxHp || nextMaxHp) - (unit.currentHp || 0));
+      unit.maxHp = nextMaxHp;
+      unit.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+    }
   }
 
   refreshFromPlayer() {
@@ -89,29 +134,13 @@ export default class UndeadSummonManager {
   }
 
   getAllEnemies() {
-    if (this.scene?.exitDoorActive || this.scene?._pathChoiceActive) {
-      return [];
-    }
-
-    const enemies = [];
-    const boss = this.scene?.bossManager?.getCurrentBoss?.();
-    if (boss && boss.isAlive) enemies.push(boss);
-
-    const minions = this.scene?.bossManager?.getMinions?.() || this.scene?.bossManager?.minions || [];
-    if (Array.isArray(minions)) {
-      minions.forEach((minion) => {
-        if (minion && minion.isAlive) enemies.push(minion);
-      });
-    }
-
-    return enemies;
+    return collectCombatEnemies(this.scene);
   }
 
   getNearestEnemy(originX, originY, acquireRange) {
     const player = this.player;
     if (!player) return null;
 
-    const leash2 = this.maxLeashRange * this.maxLeashRange;
     const acquire2 = acquireRange * acquireRange;
     const enemies = this.getAllEnemies();
     let best = null;
@@ -125,7 +154,30 @@ export default class UndeadSummonManager {
       const pdy = enemy.y - player.y;
       const playerD2 = pdx * pdx + pdy * pdy;
       if (playerD2 > acquire2) continue;
-      if (playerD2 > leash2) continue;
+
+      const dx = enemy.x - originX;
+      const dy = enemy.y - originY;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        best = enemy;
+        bestD2 = d2;
+      }
+    }
+
+    return best;
+  }
+
+  getNearestVisibleEnemy(originX, originY) {
+    if (!this.player) return null;
+
+    const enemies = this.getAllEnemies();
+    let best = null;
+    let bestD2 = Infinity;
+
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      if (!enemy || !enemy.isAlive) continue;
+      if (!isPointInPlayerVision(this.scene, this.player, enemy.x, enemy.y, MELEE_TARGET_VISION_PADDING)) continue;
 
       const dx = enemy.x - originX;
       const dy = enemy.y - originY;
@@ -220,12 +272,16 @@ export default class UndeadSummonManager {
     unit.summonType = SUMMON_TYPES.guard;
     unit.isUndeadSummon = true;
     unit.hitRadius = 13;
-    unit.maxHp = Math.max(24, Math.round((this.player.maxHp || 100) * 0.32));
+    unit.maxHp = Math.max(24, Math.round((this.player.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier()));
     unit.currentHp = unit.maxHp;
     unit.moveSpeed = 210;
     unit.attackRange = 20;
     unit.attackCooldownMs = 950;
     unit.damageMult = 0.52;
+    unit.attackWindupMs = 150;
+    unit.attackArcRadius = 28;
+    unit.attackArcThickness = 10;
+    unit.attackArcColor = 0xe8e8e8;
     unit.anchorAngle = angle;
     unit.anchorRadius = 42;
     unit.lastAttackAt = 0;
@@ -250,7 +306,7 @@ export default class UndeadSummonManager {
     unit.summonType = SUMMON_TYPES.mage;
     unit.isUndeadSummon = true;
     unit.hitRadius = 11;
-    unit.maxHp = Math.max(12, Math.round((this.player.maxHp || 100) * 0.18));
+    unit.maxHp = Math.max(12, Math.round((this.player.maxHp || 100) * 0.18 * this.getSummonHealthMultiplier()));
     unit.currentHp = unit.maxHp;
     unit.followLerp = 0.12;
     unit.attackCooldownMs = 1450;
@@ -313,13 +369,18 @@ export default class UndeadSummonManager {
     unit.isInfernal = true;
     unit.infernalLevel = level;
     unit.hitRadius = 22;
-    unit.maxHp = Math.max(180, Math.round((this.player.maxHp || 100) * hpScale + (this.player.bulletDamage || 1) * (12 + level * 8)));
+    unit.maxHp = Math.max(180, Math.round(((this.player.maxHp || 100) * hpScale + (this.player.bulletDamage || 1) * (12 + level * 8)) * this.getSummonHealthMultiplier()));
     unit.currentHp = unit.maxHp;
     unit.moveSpeed = 250;
     unit.attackRange = 28;
     unit.attackCooldownMs = 760;
     unit.damageMult = damageMult;
     unit.damageTakenMult = 0.55;
+    unit.infernalHpScale = hpScale;
+    unit.attackWindupMs = 190;
+    unit.attackArcRadius = 38;
+    unit.attackArcThickness = 14;
+    unit.attackArcColor = 0x8fff7f;
     unit.anchorAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
     unit.anchorRadius = 56;
     unit.lastAttackAt = 0;
@@ -399,7 +460,7 @@ export default class UndeadSummonManager {
     const acquireRange = this.getAcquireRange();
 
     for (let i = 0; i < guardList.length; i++) {
-      this.updateGuard(guardList[i], i, guardList.length, time, delta, acquireRange);
+      this.updateGuard(guardList[i], i, guardList.length, time, delta);
     }
 
     for (let i = 0; i < mageList.length; i++) {
@@ -408,7 +469,7 @@ export default class UndeadSummonManager {
 
     this.infernals = (this.infernals || []).filter((unit) => unit && unit.active && (unit.currentHp || 0) > 0);
     for (let i = 0; i < this.infernals.length; i++) {
-      this.updateInfernal(this.infernals[i], time, delta, acquireRange);
+      this.updateInfernal(this.infernals[i], time, delta);
     }
   }
 
@@ -440,31 +501,43 @@ export default class UndeadSummonManager {
     }
   }
 
-  updateGuard(unit, index, total, time, delta, acquireRange) {
+  updateGuard(unit, index, total, time, delta) {
     if (!unit || !unit.active) return;
 
-    const target = this.getNearestEnemy(unit.x, unit.y, acquireRange);
+    const target = this.getNearestVisibleEnemy(unit.x, unit.y);
     const anchorAngle = unit.anchorAngle + time * 0.0012;
     const anchorX = this.player.x + Math.cos(anchorAngle) * (unit.anchorRadius || 42);
     const anchorY = this.player.y + 20 + Math.sin(anchorAngle) * 18;
+    const needsRecall = !isPointInPlayerVision(this.scene, this.player, unit.x, unit.y, MELEE_RETURN_VISION_PADDING);
 
-    let desiredX = anchorX;
-    let desiredY = anchorY;
-    if (target) {
-      const surroundAngle = total > 0 ? (Math.PI * 2 * index) / Math.max(1, total) : 0;
+    let desiredX = unit.x;
+    let desiredY = unit.y;
+    if (needsRecall) {
+      desiredX = anchorX;
+      desiredY = anchorY;
+    } else if (target) {
+      const centerIndex = (Math.max(1, total) - 1) * 0.5;
+      const spreadStep = total > 1 ? 0.42 : 0;
+      const surroundAngle = Phaser.Math.Angle.Between(target.x, target.y, this.player.x, this.player.y) + (index - centerIndex) * spreadStep;
       const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
       desiredX = target.x + Math.cos(surroundAngle) * (enemyRadius + unit.hitRadius + 18);
       desiredY = target.y + Math.sin(surroundAngle) * (enemyRadius + unit.hitRadius + 18);
     }
 
-    const dx = desiredX - unit.x;
-    const dy = desiredY - unit.y;
+    const clamped = clampPointToPlayerVision(this.scene, this.player, desiredX, desiredY, MELEE_MOVE_VISION_INSET);
+
+    const dx = clamped.x - unit.x;
+    const dy = clamped.y - unit.y;
     const dist = Math.hypot(dx, dy) || 1;
     const step = unit.moveSpeed * (delta / 1000);
     unit.x += (dx / dist) * Math.min(step, dist);
     unit.y += (dy / dist) * Math.min(step, dist);
 
-    if (!target || !target.isAlive) return;
+    if (needsRecall || !target || !target.isAlive) {
+      clearPendingMeleeWindup(unit);
+      unit.rotation = Phaser.Math.Angle.RotateTo(unit.rotation || 0, 0, 0.16);
+      return;
+    }
 
     const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
     const tx = target.x - unit.x;
@@ -472,16 +545,39 @@ export default class UndeadSummonManager {
     const tdist = Math.hypot(tx, ty) || 1;
     unit.rotation = Phaser.Math.Angle.Between(unit.x, unit.y, target.x, target.y);
 
+    if (hasPendingMeleeWindup(unit, time)) {
+      return;
+    }
+
     if (tdist <= enemyRadius + unit.hitRadius + unit.attackRange && time - unit.lastAttackAt >= unit.attackCooldownMs) {
       unit.lastAttackAt = time;
-      const baseDamage = Math.max(1, Math.round((this.player.bulletDamage || 1) * unit.damageMult));
-      const result = calculateResolvedDamage({ attacker: this.player, target, baseDamage, now: time });
-      target.takeDamage(result.amount, { attacker: this.player, source: 'skeleton_guard', suppressHitReaction: false });
-      this.player.onDealDamage?.(result.amount);
-      this.scene.showDamageNumber(target.x, target.y - 28, result.amount, { color: '#dcdcdc', whisper: true, fontSize: 20, isCrit: result.isCrit });
-      const slash = this.scene.add.line(0, 0, unit.x, unit.y, target.x, target.y, 0xdcdcdc, 0.55);
-      slash.setLineWidth(2, 2);
-      this.scene.tweens.add({ targets: slash, alpha: 0, duration: 120, onComplete: () => slash.destroy() });
+      const attackRange = enemyRadius + unit.hitRadius + unit.attackRange;
+      startMeleeWindup({
+        scene: this.scene,
+        unit,
+        target,
+        now: time,
+        color: unit.attackArcColor,
+        windupMs: unit.attackWindupMs,
+        radius: unit.attackArcRadius,
+        thickness: unit.attackArcThickness,
+        onStrike: (strikeTarget) => {
+          if (!strikeTarget?.isAlive || strikeTarget.isInvincible) return;
+          const hitDx = strikeTarget.x - unit.x;
+          const hitDy = strikeTarget.y - unit.y;
+          const hitDist = Math.hypot(hitDx, hitDy);
+          if (hitDist > attackRange + 18) return;
+
+          const baseDamage = Math.max(1, Math.round((this.player.bulletDamage || 1) * unit.damageMult * this.getSummonDamageMultiplier()));
+          const result = calculateResolvedDamage({ attacker: this.player, target: strikeTarget, baseDamage, now: this.scene.time?.now ?? time });
+          strikeTarget.takeDamage(result.amount, { attacker: this.player, source: 'skeleton_guard', suppressHitReaction: false });
+          this.player.onDealDamage?.(result.amount);
+          this.scene.showDamageNumber(strikeTarget.x, strikeTarget.y - 28, result.amount, { color: '#dcdcdc', whisper: true, fontSize: 20, isCrit: result.isCrit });
+          const slash = this.scene.add.line(0, 0, unit.x, unit.y, strikeTarget.x, strikeTarget.y, 0xdcdcdc, 0.55);
+          slash.setLineWidth(2, 2);
+          this.scene.tweens.add({ targets: slash, alpha: 0, duration: 120, onComplete: () => slash.destroy() });
+        }
+      });
     }
   }
 
@@ -525,7 +621,7 @@ export default class UndeadSummonManager {
     }
   }
 
-  updateInfernal(unit, time, delta, acquireRange) {
+  updateInfernal(unit, time, delta) {
     if (!unit || !unit.active) return;
 
     if ((unit.expireAt || 0) <= time) {
@@ -533,28 +629,38 @@ export default class UndeadSummonManager {
       return;
     }
 
-    const target = this.getNearestEnemy(unit.x, unit.y, acquireRange);
+    const target = this.getNearestVisibleEnemy(unit.x, unit.y);
     const anchorAngle = (unit.anchorAngle || 0) + time * 0.0009;
     const anchorX = this.player.x + Math.cos(anchorAngle) * (unit.anchorRadius || 56);
     const anchorY = this.player.y + 24 + Math.sin(anchorAngle) * 22;
+    const needsRecall = !isPointInPlayerVision(this.scene, this.player, unit.x, unit.y, MELEE_RETURN_VISION_PADDING);
 
-    let desiredX = anchorX;
-    let desiredY = anchorY;
-    if (target) {
+    let desiredX = unit.x;
+    let desiredY = unit.y;
+    if (needsRecall) {
+      desiredX = anchorX;
+      desiredY = anchorY;
+    } else if (target) {
       const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
       const angle = Phaser.Math.Angle.Between(target.x, target.y, this.player.x, this.player.y);
       desiredX = target.x + Math.cos(angle) * (enemyRadius + unit.hitRadius + 20);
       desiredY = target.y + Math.sin(angle) * (enemyRadius + unit.hitRadius + 20);
     }
 
-    const dx = desiredX - unit.x;
-    const dy = desiredY - unit.y;
+    const clamped = clampPointToPlayerVision(this.scene, this.player, desiredX, desiredY, MELEE_MOVE_VISION_INSET);
+
+    const dx = clamped.x - unit.x;
+    const dy = clamped.y - unit.y;
     const dist = Math.hypot(dx, dy) || 1;
     const step = unit.moveSpeed * (delta / 1000);
     unit.x += (dx / dist) * Math.min(step, dist);
     unit.y += (dy / dist) * Math.min(step, dist);
 
-    if (!target || !target.isAlive) return;
+    if (needsRecall || !target || !target.isAlive) {
+      clearPendingMeleeWindup(unit);
+      unit.rotation = Phaser.Math.Angle.RotateTo(unit.rotation || 0, 0, 0.14);
+      return;
+    }
 
     const enemyRadius = Number.isFinite(target?.bossSize) ? target.bossSize : (Number(target?.radius) || 16);
     const tx = target.x - unit.x;
@@ -562,23 +668,46 @@ export default class UndeadSummonManager {
     const tdist = Math.hypot(tx, ty) || 1;
     unit.rotation = Phaser.Math.Angle.Between(unit.x, unit.y, target.x, target.y) * 0.08;
 
+    if (hasPendingMeleeWindup(unit, time)) {
+      return;
+    }
+
     if (tdist <= enemyRadius + unit.hitRadius + unit.attackRange && time - unit.lastAttackAt >= unit.attackCooldownMs) {
       unit.lastAttackAt = time;
-      const baseDamage = Math.max(1, Math.round((this.player.bulletDamage || 1) * unit.damageMult + 6));
-      const result = calculateResolvedDamage({ attacker: this.player, target, baseDamage, now: time });
-      target.takeDamage(result.amount, { attacker: this.player, source: 'infernal', suppressHitReaction: false });
-      this.player.onDealDamage?.(result.amount);
+      const attackRange = enemyRadius + unit.hitRadius + unit.attackRange;
+      startMeleeWindup({
+        scene: this.scene,
+        unit,
+        target,
+        now: time,
+        color: unit.attackArcColor,
+        windupMs: unit.attackWindupMs,
+        radius: unit.attackArcRadius,
+        thickness: unit.attackArcThickness,
+        onStrike: (strikeTarget) => {
+          if (!strikeTarget?.isAlive || strikeTarget.isInvincible) return;
+          const hitDx = strikeTarget.x - unit.x;
+          const hitDy = strikeTarget.y - unit.y;
+          const hitDist = Math.hypot(hitDx, hitDy);
+          if (hitDist > attackRange + 20) return;
 
-      const healAmount = Math.max(1, Math.round(unit.healOnHit || 0));
-      const restored = this.player.heal?.(healAmount) || 0;
-      if (restored > 0) {
-        this.scene.showDamageNumber(this.player.x, this.player.y - 56, `+${restored}`, { color: '#86efac', fontSize: 20, whisper: true });
-      }
+          const baseDamage = Math.max(1, Math.round(((this.player.bulletDamage || 1) * unit.damageMult + 6) * this.getSummonDamageMultiplier()));
+          const result = calculateResolvedDamage({ attacker: this.player, target: strikeTarget, baseDamage, now: this.scene.time?.now ?? time });
+          strikeTarget.takeDamage(result.amount, { attacker: this.player, source: 'infernal', suppressHitReaction: false });
+          this.player.onDealDamage?.(result.amount);
 
-      this.scene.showDamageNumber(target.x, target.y - 32, result.amount, { color: '#7dff7a', whisper: true, fontSize: 22, isCrit: result.isCrit });
-      const slash = this.scene.add.line(0, 0, unit.x, unit.y, target.x, target.y, 0x7dff7a, 0.65);
-      slash.setLineWidth(4, 1);
-      this.scene.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+          const healAmount = Math.max(1, Math.round(unit.healOnHit || 0));
+          const restored = this.player.heal?.(healAmount) || 0;
+          if (restored > 0) {
+            this.scene.showDamageNumber(this.player.x, this.player.y - 56, `+${restored}`, { color: '#86efac', fontSize: 20, whisper: true });
+          }
+
+          this.scene.showDamageNumber(strikeTarget.x, strikeTarget.y - 32, result.amount, { color: '#7dff7a', whisper: true, fontSize: 22, isCrit: result.isCrit });
+          const slash = this.scene.add.line(0, 0, unit.x, unit.y, strikeTarget.x, strikeTarget.y, 0x7dff7a, 0.65);
+          slash.setLineWidth(4, 1);
+          this.scene.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+        }
+      });
     }
   }
 
@@ -595,7 +724,10 @@ export default class UndeadSummonManager {
   }
 
   destroyUnit(unit) {
-    if (unit?.active) unit.destroy();
+    if (unit?.active) {
+      clearPendingMeleeWindup(unit);
+      unit.destroy();
+    }
   }
 
   destroy() {

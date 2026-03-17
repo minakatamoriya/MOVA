@@ -89,19 +89,11 @@ export const UPGRADE_POOLS = {
   ]
 };
 
-// 自然伙伴：结契选择（固定三选一）
-export const NATURE_CONTRACT_OPTIONS = [
-  { id: 'druid_pet_bear', category: 'build', name: '契约：熊灵', desc: '熊：坦克与嘲讽，吸引火力', icon: '熊契' },
-  { id: 'druid_pet_hawk', category: 'build', name: '契约：战鹰', desc: '鹰：高频打击，优先低血目标', icon: '鹰契' },
-  { id: 'druid_pet_treant', category: 'build', name: '契约：树精', desc: '树精：周期治疗，偏续航', icon: '树契' }
-];
-
-// 通用天赋（副职业池）：纯被动
+// 通用天赋（副职业池）
 export const UNIVERSAL_POOLS = {
   // 🔵 法师·奥术
   arcane: [
     { id: 'arcane_swift', category: 'build', name: '迅捷', desc: '所有攻击的攻击速度/冷却时间 -8%', icon: '法副' },
-    { id: 'arcane_enlighten', category: 'build', name: '启迪', desc: '每次升级三选一变为四选一（选项 +1）', icon: '+1' },
     { id: 'arcane_circle', category: 'build', name: '法阵', desc: '站立不动 2 秒后生成法阵：阵内攻击力 +20%，移动则消失', icon: '法副' }
   ],
 
@@ -132,58 +124,35 @@ export const UNIVERSAL_POOLS = {
     { id: 'guardian_counter', category: 'build', name: '反制', desc: '格挡成功后，对攻击者造成 100% 攻击力的反击伤害', icon: '骑副' }
   ],
 
-  // 🌿 德鲁伊·自然伙伴（第一层在 GameScene 强制提供“结契：熊/鹰/树精”）
-  nature: []
+  // 🌿 德鲁伊·自然伙伴
+  nature: [
+    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '召唤熊灵协同作战，负责扛伤与近战压制', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '召唤战鹰协同作战，负责持续高频打击', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '召唤树精协同作战，负责周期治疗与续航', icon: '德副', maxLevel: 1 },
+    { id: 'nature_bear_vitality', category: 'build', name: '熊灵厚甲', desc: '熊灵生命值提高 +25%/+50%/+75%', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
+    { id: 'nature_hawk_swiftness', category: 'build', name: '鹰击疾掠', desc: '战鹰攻击间隔缩短 12%/24%/36%', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
+    { id: 'nature_treant_bloom', category: 'build', name: '林灵繁茂', desc: '树精单次治疗量提高 +2/+4/+6', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
+  ]
 };
 
 // 第二次三选一：副职业“入门节点”选项（直接给真实被动/入口）
 // 说明：
 // - 选中这些节点时，会在 GameScene.applyUpgrade 中自动写入 offFaction
-// - 自然伙伴：第二次三选一里直接出现“熊/鹰/树精”契约选项（不再需要中间入口）
+// - 自然伙伴：这里先解锁德鲁伊副职业，后续再从自然伙伴池中抽取熊/鹰/树精与其强化
 export const OFF_FACTION_ENTRY_OPTIONS = [
   // 奥术 -> 迅捷
-  { id: 'arcane_swift', category: 'build', name: '迅捷', desc: '所有攻击的攻击速度/冷却时间 -8%', icon: '法副' },
+  { id: 'arcane_swift', category: 'build', name: '迅捷', desc: '所有攻击的攻击速度/冷却时间 -8%', icon: '解锁法师副职业！' },
   // 游侠 -> 精准
-  { id: 'ranger_precise', category: 'build', name: '精准', desc: '暴击率 +10%', icon: '猎副' },
+  { id: 'ranger_precise', category: 'build', name: '精准', desc: '暴击率 +10%', icon: '解锁猎人副职业！' },
   // 不屈 -> 血怒
-  { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '战副' },
-  // 诅咒 -> 骷髅卫士
-  { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 },
+  { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '解锁战士副职业！' },
+  // 诅咒 -> 死灵共鸣
+  { id: 'off_curse', category: 'build', name: '死灵共鸣', desc: '你的召唤物伤害 +12%，生命值 +10%，解锁诅咒池', icon: '解锁术士副职业！' },
   // 守护 -> 坚盾
-  { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '骑副' },
-  // 自然伙伴：直接结契
-  { id: 'druid_pet_bear', category: 'build', name: '契约：熊灵', desc: '熊：坦克与嘲讽，吸引火力', icon: '熊契' },
-  { id: 'druid_pet_hawk', category: 'build', name: '契约：战鹰', desc: '鹰：高频打击，优先低血目标', icon: '鹰契' },
-  { id: 'druid_pet_treant', category: 'build', name: '契约：树精', desc: '树精：周期治疗，偏续航', icon: '树契' }
+  { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '解锁圣骑士副职业！' },
+  // 自然伙伴 -> 自然亲和
+  { id: 'off_nature', category: 'build', name: '自然亲和', desc: '受到治疗效果 +12%，解锁自然伙伴池', icon: '解锁德鲁伊副职业！' }
 ];
-
-// 自然伙伴：结契后只从对应分支强化池抽取
-export const NATURE_BRANCH_POOLS = {
-  bear: [
-    { id: 'nature_bear_solidarity', category: 'build', name: '共担', desc: '玩家受到伤害时，熊灵替你承担一部分（可叠加）', icon: '熊副' },
-    { id: 'nature_bear_strength', category: 'build', name: '蛮力', desc: '提高你的攻击力（可叠加）', icon: '熊副' },
-    { id: 'nature_bear_carapace', category: 'build', name: '甲壳', desc: '降低你受到的伤害（可叠加）', icon: '熊副' },
-    { id: 'nature_bear_rage', category: 'build', name: '自然之怒', desc: '熊灵受击后，你短时间内伤害提高（可叠加）', icon: '熊副' },
-    { id: 'nature_bear_earthquake', category: 'build', name: '震地', desc: '熊灵受击时有概率眩晕 Boss 1 秒（可叠加）', icon: '熊副' },
-    { id: 'nature_bear_thornshield', category: 'build', name: '荆棘护体', desc: '提高你的反伤比例（可叠加）', icon: '熊副' }
-  ],
-  hawk: [
-    { id: 'nature_hawk_crit', category: 'build', name: '锐眼', desc: '暴击率提升（可叠加）', icon: '鹰副' },
-    { id: 'nature_hawk_evade', category: 'build', name: '疾羽', desc: '闪避率提升（可叠加）', icon: '鹰副' },
-    { id: 'nature_hawk_speed', category: 'build', name: '风行', desc: '移动速度提升（可叠加）', icon: '鹰副' },
-    { id: 'nature_hawk_windslash', category: 'build', name: '风刃', desc: '战鹰周期性触发风刃追加伤害（可叠加）', icon: '鹰副' },
-    { id: 'nature_hawk_skycall', category: 'build', name: '天降', desc: '战鹰攻击有概率引发额外打击（可叠加）', icon: '鹰副' },
-    { id: 'nature_hawk_huntmark', category: 'build', name: '猎手标记', desc: '战鹰命中后给 Boss 上标记：你对其伤害提高（可叠加）', icon: '鹰副' }
-  ],
-  treant: [
-    { id: 'nature_treant_regen', category: 'build', name: '回春', desc: '提高树精治疗量/频率（可叠加）', icon: '树副' },
-    { id: 'nature_treant_root', category: 'build', name: '缠绕', desc: '树精治疗时有概率短暂定身 Boss（可叠加）', icon: '树副' },
-    { id: 'nature_treant_armor', category: 'build', name: '树皮', desc: '提高固定减伤（可叠加）', icon: '树副' },
-    { id: 'nature_treant_thorns', category: 'build', name: '荆棘', desc: '提高反伤比例（可叠加）', icon: '树副' },
-    { id: 'nature_treant_summon', category: 'build', name: '萌芽', desc: '树精治疗时有概率额外提供护盾（可叠加）', icon: '树副' },
-    { id: 'nature_treant_reborn', category: 'build', name: '再生', desc: '树精被击败后的回归冷却更短（可叠加）', icon: '树副' }
-  ]
-};
 
 // ====== 第三天赋：深度专精 / 双职业专精（占位池，后续由策划填充） ======
 // 设计约束：深度专精池 与 双职业池 完全互斥。
@@ -191,8 +160,8 @@ export const NATURE_BRANCH_POOLS = {
 // - dual：主/副不同主题（例如 法师主 + 自然伙伴副 => 法师+德鲁伊双职业）
 
 export const THIRD_SPEC_PREP_OPTIONS = {
-  depth: { id: 'third_depth_prep', category: 'build', name: '深度专精（前置）', desc: '解锁深度专精天赋（稍后提供）', icon: '深度' },
-  dual: { id: 'third_dual_prep', category: 'build', name: '双职业专精（前置）', desc: '解锁双职业天赋（稍后提供）', icon: '双职' }
+  depth: { id: 'third_depth_prep', category: 'build', name: '本职业深度专精', desc: '解锁深度专精天赋', icon: '专精' },
+  dual: { id: 'third_dual_prep', category: 'build', name: '双职业专精', desc: '解锁双职业天赋', icon: '双职' }
 };
 
 // 深度专精池：按主职业主题拆分
@@ -237,7 +206,7 @@ export const DUAL_SPEC_POOLS = {
     drone: [
       { id: 'dual_mage_drone_arcanebear', category: 'third_dual', name: '奥术之熊', desc: '你的熊灵继承你法阵效果，在法阵内减伤 +20%、攻击力 +30%', icon: '法德', maxLevel: 1 },
       { id: 'dual_mage_drone_starwisdom', category: 'third_dual', name: '星辰智慧', desc: '每层使星落命中后，你的激光冷却 -2%（最高 30%）', icon: '法德', maxLevel: 3 },
-      { id: 'dual_mage_drone_natureoverflow', category: 'third_dual', name: '自然溢流', desc: '你的启迪（四选一）对德鲁伊宠物强化天赋也生效', icon: '法德', maxLevel: 1 }
+      { id: 'dual_mage_drone_natureoverflow', category: 'third_dual', name: '自然溢流', desc: '自然伙伴节点出现权重提高，且熊灵/战鹰/树精强化不会晚于对应宠物本体出现', icon: '法德', maxLevel: 1 }
     ]
   },
   scatter: {

@@ -1,11 +1,17 @@
 import Phaser from 'phaser';
 import { calculateResolvedDamage } from '../../combat/damageModel';
+import { clearPendingMeleeWindup, hasPendingMeleeWindup, startMeleeWindup } from './meleeWindup';
+import { clampPointToPlayerVision, collectCombatEnemies, isPointInPlayerVision } from './playerVision';
 
 const PET_TYPES = /** @type {const} */ ({
   bear: 'bear',
   hawk: 'hawk',
   treant: 'treant'
 });
+
+const MELEE_TARGET_VISION_PADDING = 72;
+const MELEE_RETURN_VISION_PADDING = 24;
+const MELEE_MOVE_VISION_INSET = 18;
 
 export default class PetManager {
   constructor(scene) {
@@ -84,7 +90,38 @@ export default class PetManager {
 
     // 立即尝试生成（若在冷却则等冷却结束自动回归）
     this.ensureSpawn(type);
+    this.refreshPetStats();
     return true;
+  }
+
+  refreshPetStats() {
+    if (!this.player) return;
+
+    const bear = this.active.get(PET_TYPES.bear);
+    if (bear?.active) {
+      const nextMaxHp = this.getBearMaxHp();
+      const missing = Math.max(0, (bear.maxHp || nextMaxHp) - (bear.currentHp || 0));
+      bear.maxHp = nextMaxHp;
+      bear.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+    }
+
+    const treant = this.active.get(PET_TYPES.treant);
+    if (treant?.active) {
+      const nextMaxHp = this.getTreantMaxHp();
+      const missing = Math.max(0, (treant.maxHp || nextMaxHp) - (treant.currentHp || 0));
+      treant.maxHp = nextMaxHp;
+      treant.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+    }
+  }
+
+  getBearMaxHp() {
+    const vitalityLevel = this.player?.natureBearVitalityLevel || 0;
+    const hpMultiplier = 0.85 + vitalityLevel * 0.25;
+    return Math.max(25, Math.round((this.player?.maxHp || 100) * hpMultiplier));
+  }
+
+  getTreantMaxHp() {
+    return Math.max(10, Math.round((this.player?.maxHp || 100) * 0.18));
   }
 
   getTankPet() {
@@ -139,6 +176,41 @@ export default class PetManager {
     return null;
   }
 
+  getBearTarget(pet) {
+    if (!pet || !pet.active || !this.player) return null;
+
+    const now = this.scene.time?.now ?? 0;
+    if (
+      this.focusTarget
+      && now < (this.focusUntil || 0)
+      && this.focusTarget.active
+      && this.focusTarget.isAlive !== false
+      && isPointInPlayerVision(this.scene, this.player, this.focusTarget.x, this.focusTarget.y, MELEE_TARGET_VISION_PADDING)
+    ) {
+      return this.focusTarget;
+    }
+
+    const enemies = collectCombatEnemies(this.scene);
+    let best = null;
+    let bestD2 = Infinity;
+
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      if (!enemy || !enemy.isAlive) continue;
+      if (!isPointInPlayerVision(this.scene, this.player, enemy.x, enemy.y, MELEE_TARGET_VISION_PADDING)) continue;
+
+      const dx = enemy.x - pet.x;
+      const dy = enemy.y - pet.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) {
+        best = enemy;
+        bestD2 = d2;
+      }
+    }
+
+    return best;
+  }
+
   ensureSpawn(type) {
     if (!this.player) return;
 
@@ -179,12 +251,16 @@ export default class PetManager {
     pet.petType = PET_TYPES.bear;
     pet.hitRadius = 16;
 
-    const maxHp = Math.max(25, Math.round((this.player.maxHp || 100) * 0.85));
+    const maxHp = this.getBearMaxHp();
     pet.maxHp = maxHp;
     pet.currentHp = maxHp;
 
     pet.moveSpeed = 210;
     pet.chargeBonus = 1.35;
+    pet.attackWindupMs = 170;
+    pet.attackArcRadius = 34;
+    pet.attackArcThickness = 14;
+    pet.attackArcColor = 0xffd27a;
 
     // 嘲讽/硬扛：Boss 目标选择会优先它
     pet.threat = 1;
@@ -249,7 +325,7 @@ export default class PetManager {
     pet.petType = PET_TYPES.treant;
     pet.hitRadius = 12;
 
-    const maxHp = Math.max(10, Math.round((this.player.maxHp || 100) * 0.18));
+    const maxHp = this.getTreantMaxHp();
     pet.maxHp = maxHp;
     pet.currentHp = maxHp;
 
@@ -321,7 +397,10 @@ export default class PetManager {
     }
 
     const existing = this.active.get(type);
-    if (existing && existing.active) existing.destroy();
+    if (existing && existing.active) {
+      clearPendingMeleeWindup(existing);
+      existing.destroy();
+    }
     this.active.delete(type);
   }
 
@@ -334,8 +413,6 @@ export default class PetManager {
     }
 
     // 更新每个宠物
-    const target = this.getCurrentTarget();
-
     for (const [type, pet] of this.active.entries()) {
       if (!pet || !pet.active) {
         this.active.delete(type);
@@ -343,19 +420,34 @@ export default class PetManager {
       }
 
       if (type === PET_TYPES.hawk) {
-        this.updateHawk(pet, target, time, delta);
+        this.updateHawk(pet, this.getCurrentTarget(), time, delta);
       } else if (type === PET_TYPES.bear) {
-        this.updateBear(pet, target, time, delta);
+        this.updateBear(pet, this.getBearTarget(pet), time, delta);
       } else if (type === PET_TYPES.treant) {
-        this.updateTreant(pet, target, time, delta);
+        this.updateTreant(pet, this.getCurrentTarget(), time, delta);
       }
     }
   }
 
   updateBear(pet, target, time, delta) {
-    // 跟随/冲锋到目标
-    const dx = (target ? target.x : this.player.x) - pet.x;
-    const dy = (target ? target.y : this.player.y) - pet.y;
+    const anchorX = this.player.x - 18;
+    const anchorY = this.player.y + 26;
+    const needsRecall = !isPointInPlayerVision(this.scene, this.player, pet.x, pet.y, MELEE_RETURN_VISION_PADDING);
+
+    let desiredX = pet.x;
+    let desiredY = pet.y;
+
+    if (needsRecall) {
+      desiredX = anchorX;
+      desiredY = anchorY;
+    } else if (target && target.isAlive) {
+      desiredX = target.x;
+      desiredY = target.y;
+    }
+
+    const clamped = clampPointToPlayerVision(this.scene, this.player, desiredX, desiredY, MELEE_MOVE_VISION_INSET);
+    const dx = clamped.x - pet.x;
+    const dy = clamped.y - pet.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
     const speed = pet.moveSpeed;
@@ -367,12 +459,22 @@ export default class PetManager {
     pet.x += (dx / dist) * step * mult;
     pet.y += (dy / dist) * step * mult;
 
+    if (needsRecall || !target || !target.isAlive) {
+      clearPendingMeleeWindup(pet);
+      pet.rotation = Phaser.Math.Angle.RotateTo(pet.rotation || 0, 0, 0.18);
+      return;
+    }
+
+    const currentDx = target.x - pet.x;
+    const currentDy = target.y - pet.y;
+    const currentDist = Math.hypot(currentDx, currentDy) || 1;
+
     if (target && target.isAlive) {
       // 不允许与 Boss 重叠：保持最小分离距离
       const minDist = (target.bossSize || 0) + (pet.hitRadius || 0) + (pet.bossSeparation || 0);
-      if (dist > 0 && dist < minDist) {
-        pet.x = target.x + (dx / dist) * minDist;
-        pet.y = target.y + (dy / dist) * minDist;
+      if (currentDist > 0 && currentDist < minDist) {
+        pet.x = target.x - (currentDx / currentDist) * minDist;
+        pet.y = target.y - (currentDy / currentDist) * minDist;
       }
 
       pet.rotation = Phaser.Math.Angle.Between(pet.x, pet.y, target.x, target.y);
@@ -380,32 +482,48 @@ export default class PetManager {
       // 近身攻击：在“分离圈”附近也能打到
       const attackRange = minDist + (pet.attackRange || 18);
       const focusMult = (this.focusUntil && time < this.focusUntil) ? 0.75 : 1;
-      if (dist <= attackRange && time - this.lastBearAttackAt >= this.bearAttackCd * focusMult) {
+      if (hasPendingMeleeWindup(pet, time)) {
+        return;
+      }
+      if (currentDist <= attackRange && time - this.lastBearAttackAt >= this.bearAttackCd * focusMult) {
         this.lastBearAttackAt = time;
-        if (!target.isInvincible) {
-          const base = Math.max(1, Math.round((this.player.bulletDamage || 30) * (pet.damageMult || 1)));
-          // 熊灵近战现在也吃统一增伤/暴击/目标承伤，避免和主武器脱节
-          const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: base, now: time });
-          target.takeDamage(damageResult.amount);
-          this.player?.onDealDamage?.(damageResult.amount);
-          this.scene.showDamageNumber(target.x, target.y - 42, damageResult.amount, { isCrit: damageResult.isCrit, color: '#ffdd88', fontSize: 26 });
+        startMeleeWindup({
+          scene: this.scene,
+          unit: pet,
+          target,
+          now: time,
+          color: pet.attackArcColor,
+          windupMs: pet.attackWindupMs,
+          radius: pet.attackArcRadius,
+          thickness: pet.attackArcThickness,
+          onStrike: (strikeTarget) => {
+            if (!strikeTarget?.isAlive || strikeTarget.isInvincible) return;
+            const hitDx = strikeTarget.x - pet.x;
+            const hitDy = strikeTarget.y - pet.y;
+            const hitDist = Math.hypot(hitDx, hitDy);
+            if (hitDist > attackRange + 18) return;
 
-          // 轻微撞击特效
-          const puff = this.scene.add.circle(target.x, target.y, 10, 0xffcc88, 0.45);
-          this.scene.tweens.add({
-            targets: puff,
-            alpha: 0,
-            scale: 2.1,
-            duration: 220,
-            onComplete: () => puff.destroy()
-          });
-        }
+            const base = Math.max(1, Math.round((this.player.bulletDamage || 30) * (pet.damageMult || 1)));
+            const damageResult = calculateResolvedDamage({ attacker: this.player, target: strikeTarget, baseDamage: base, now: this.scene.time?.now ?? time });
+            strikeTarget.takeDamage(damageResult.amount);
+            this.player?.onDealDamage?.(damageResult.amount);
+            this.scene.showDamageNumber(strikeTarget.x, strikeTarget.y - 42, damageResult.amount, { isCrit: damageResult.isCrit, color: '#ffdd88', fontSize: 26 });
+
+            const puff = this.scene.add.circle(strikeTarget.x, strikeTarget.y, 10, 0xffcc88, 0.45);
+            this.scene.tweens.add({
+              targets: puff,
+              alpha: 0,
+              scale: 2.1,
+              duration: 220,
+              onComplete: () => puff.destroy()
+            });
+          }
+        });
       }
     }
   }
 
   updateHawk(pet, target, time, delta) {
-    const now = time;
     // 盘旋在玩家头顶
     const t = time;
     const angle = pet.orbitPhase + pet.orbitOmega * t;
@@ -420,50 +538,15 @@ export default class PetManager {
 
     // 100% 命中：直接结算伤害（超快弹道风味）
     const focusMult = (this.focusUntil && time < this.focusUntil) ? 0.75 : 1;
-    if (time - this.lastHawkAttackAt >= this.hawkAttackCd * focusMult) {
+    const hawkSwiftnessLevel = this.player?.natureHawkSwiftnessLevel || 0;
+    const hawkAttackCd = Math.max(220, Math.round(this.hawkAttackCd * (1 - hawkSwiftnessLevel * 0.12)));
+    if (time - this.lastHawkAttackAt >= hawkAttackCd * focusMult) {
       this.lastHawkAttackAt = time;
       if (!target.isInvincible) {
-        // 鹰灵的直伤、风刃、天降全部复用同一结算入口
         const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * 0.22)), now: time });
         target.takeDamage(damageResult.amount);
         this.player?.onDealDamage?.(damageResult.amount);
         this.scene.showDamageNumber(target.x, target.y - 34, damageResult.amount, { color: '#aee8ff', fontSize: 22, whisper: true, isCrit: damageResult.isCrit });
-
-        // 鹰系：猎手标记（提高玩家对 Boss 伤害）
-        const markLvl = this.player?.natureHuntMarkLevel || 0;
-        if (markLvl > 0) {
-          target.debuffs = target.debuffs || {};
-          target.debuffs.huntMarkEnd = now + (3500 + 500 * (markLvl - 1));
-          target.debuffs.huntMarkMult = 1.10 + 0.03 * (markLvl - 1);
-        }
-
-        // 鹰系：风刃（周期性追加伤害）
-        const windLvl = this.player?.natureWindSlashLevel || 0;
-        if (windLvl > 0) {
-          const cd = Math.max(2600, 5200 - windLvl * 700);
-          this._windSlashNextAt = this._windSlashNextAt || (now + cd);
-          if (now >= this._windSlashNextAt) {
-            this._windSlashNextAt = now + cd;
-            const extraResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.28 + 0.06 * (windLvl - 1)))), now: time });
-            target.takeDamage(extraResult.amount);
-            this.player?.onDealDamage?.(extraResult.amount);
-            this.scene.showDamageNumber(target.x, target.y - 18, extraResult.amount, { color: '#d7f6ff', fontSize: 20, whisper: true, isCrit: extraResult.isCrit });
-            if (this.scene.createHitEffect) this.scene.createHitEffect(target.x, target.y, 0xaee8ff);
-          }
-        }
-
-        // 鹰系：天降（概率触发额外打击）
-        const skyLvl = this.player?.natureSkyCallLevel || 0;
-        if (skyLvl > 0) {
-          const chance = Math.min(0.5, 0.12 + 0.05 * (skyLvl - 1));
-          if (Math.random() < chance) {
-            const extraResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * (0.45 + 0.08 * (skyLvl - 1)))), now: time });
-            target.takeDamage(extraResult.amount);
-            this.player?.onDealDamage?.(extraResult.amount);
-            this.scene.showDamageNumber(target.x, target.y - 52, extraResult.amount, { color: '#ffffff', fontSize: 22, whisper: true, isCrit: extraResult.isCrit });
-            if (this.scene.createHitEffect) this.scene.createHitEffect(target.x, target.y, 0xffffff);
-          }
-        }
 
         // 一道极短的“啄击光线”
         const line = this.scene.add.line(0, 0, pet.x, pet.y, target.x, target.y, 0xaee8ff, 0.55);
@@ -501,12 +584,12 @@ export default class PetManager {
     if (now < (pet.healPausedUntil || 0)) return;
 
     // 树精：回春（影响治疗节奏）
-    const regenLvl = this.player?.natureTreantRegenLevel || 0;
-    this.treantHealCd = Math.max(1800, Math.round(3000 * (1 - 0.10 * regenLvl)));
+    const bloomLevel = this.player?.natureTreantBloomLevel || 0;
+    this.treantHealCd = 3000;
 
     if (now - this.lastTreantHealAt >= this.treantHealCd) {
       this.lastTreantHealAt = now;
-      const amount = 3 + regenLvl;
+      const amount = 3 + bloomLevel * 2;
       if (this.player?.heal) {
         this.player.heal(amount);
         this.scene.showDamageNumber(this.player.x, this.player.y - 60, `+${amount}`, { color: '#88ffcc', fontSize: 22, whisper: true });
@@ -520,33 +603,16 @@ export default class PetManager {
           duration: 300,
           onComplete: () => ring.destroy()
         });
-
-        // 树精：萌芽（治疗时概率给护盾）
-        const summonLvl = this.player?.natureTreantSummonLevel || 0;
-        if (summonLvl > 0 && this.player?.updateShieldIndicator) {
-          const chance = Math.min(0.65, 0.15 + 0.10 * (summonLvl - 1));
-          if (Math.random() < chance) {
-            this.player.shieldCharges = (this.player.shieldCharges || 0) + 1;
-            this.player.updateShieldIndicator();
-          }
-        }
-
-        // 树精：缠绕（治疗时概率短暂定身 Boss）
-        const rootLvl = this.player?.natureTreantRootLevel || 0;
-        if (rootLvl > 0) {
-          const boss = this.scene?.bossManager?.getCurrentBoss?.();
-          const chance = Math.min(0.55, 0.10 + 0.05 * (rootLvl - 1));
-          if (boss && boss.isAlive && typeof boss.applyStun === 'function' && Math.random() < chance) {
-            boss.applyStun(400);
-          }
-        }
       }
     }
   }
 
   destroy() {
     for (const pet of this.active.values()) {
-      if (pet && pet.active) pet.destroy();
+      if (pet && pet.active) {
+        clearPendingMeleeWindup(pet);
+        pet.destroy();
+      }
     }
     this.active.clear();
     this.owned.clear();

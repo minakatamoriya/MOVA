@@ -3,6 +3,7 @@ import { uiBus } from './bus';
 import { useUiStore } from './store';
 import { TREE_DEFS, buildThirdTalentTreePlaceholder, getMaxLevel } from '../classes/talentTrees';
 import { ITEM_DEFS } from '../data/items';
+import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
 
 export default function App() {
   const sceneKey = useUiStore((s) => s.sceneKey);
@@ -689,6 +690,20 @@ export default function App() {
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <style>{`
+        @keyframes levelup-card-shimmer {
+          0% { transform: translateX(-130%) rotate(-16deg); opacity: 0; }
+          18% { opacity: 0.18; }
+          50% { opacity: 0.24; }
+          100% { transform: translateX(180%) rotate(-16deg); opacity: 0; }
+        }
+
+        @keyframes levelup-card-pulse {
+          0% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 30px rgba(0,0,0,0.22); }
+          50% { box-shadow: 0 0 0 1px rgba(255,255,255,0.22), 0 18px 42px rgba(0,0,0,0.30); }
+          100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 30px rgba(0,0,0,0.22); }
+        }
+      `}</style>
       {/* 游戏内：右上角“查看”图标（圆形） */}
       {inGame ? (
         <button
@@ -1355,31 +1370,164 @@ export default function App() {
                 alignContent: 'flex-start'
               }}
             >
-              {(levelUp?.options || []).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => uiBus.emit('ui:levelUp:select', opt.id)}
-                  style={{
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    padding: 14,
-                    borderRadius: 12,
-                    border: '2px solid rgba(0,255,0,0.55)',
-                    background: 'rgba(11, 11, 24, 0.62)',
-                    color: '#fff',
-                    width: '100%'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ fontWeight: 900, fontSize: 20, color: '#ffff00' }}>
-                      <span style={{ marginRight: 10, fontSize: 22 }}>{opt.icon}</span>
-                      {opt.name}
+              {(levelUp?.options || []).map((opt) => {
+                const theme = getUpgradeCardTheme(opt);
+                const isSpecial = theme.kind !== 'normal';
+                const iconText = theme.iconText || opt.icon;
+                const levelLabel = opt.offerLevelLabel || '';
+                const displayDesc = opt.offerDesc || opt.desc;
+                const hasTopMeta = !!(theme.badge || theme.kicker || levelLabel);
+
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => uiBus.emit('ui:levelUp:select', opt.id)}
+                    style={{
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      padding: isSpecial ? 16 : 14,
+                      borderRadius: 16,
+                      border: `2px solid ${toRgba(theme.border, isSpecial ? 0.92 : 0.55)}`,
+                      background: theme.gradient,
+                      color: '#fff',
+                      width: '100%',
+                      minHeight: 136,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      boxShadow: theme.shadow,
+                      animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none'
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: `linear-gradient(180deg, ${toRgba(theme.accentSoft, isSpecial ? 0.12 : 0.05)}, rgba(255,255,255,0))`,
+                        pointerEvents: 'none'
+                      }}
+                    />
+                    {theme.effectClassName ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: -20,
+                          bottom: -20,
+                          left: '-18%',
+                          width: '30%',
+                          background: `linear-gradient(180deg, rgba(255,255,255,0), ${toRgba(theme.accentSoft, 0.22)}, rgba(255,255,255,0))`,
+                          filter: 'blur(10px)',
+                          transform: 'rotate(-16deg)',
+                          pointerEvents: 'none',
+                          animation: `levelup-card-shimmer ${theme.kind === 'offclass' ? '2.4s' : '1.9s'} linear infinite`
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 10,
+                        bottom: 10,
+                        width: 6,
+                        borderRadius: 999,
+                        background: toRgba(theme.accent, isSpecial ? 0.95 : 0.40),
+                        boxShadow: `0 0 16px ${toRgba(theme.outerGlow, isSpecial ? 0.35 : 0.16)}`,
+                        pointerEvents: 'none'
+                      }}
+                    />
+                    {theme.badge ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 12,
+                          top: 10,
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 900,
+                          letterSpacing: '0.08em',
+                          color: theme.badgeColor,
+                          background: theme.badgeBackground,
+                          border: `1px solid ${theme.badgeBorder}`,
+                          backdropFilter: 'blur(8px)'
+                        }}
+                      >
+                        {theme.badge}
+                      </div>
+                    ) : null}
+                    {theme.kicker ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 14,
+                          top: 38,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          letterSpacing: '0.08em',
+                          color: 'rgba(255,255,255,0.86)',
+                          textShadow: '0 0 12px rgba(255,255,255,0.12)'
+                        }}
+                      >
+                        {theme.kicker}
+                      </div>
+                    ) : null}
+                    {levelLabel ? (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 18,
+                          top: 10,
+                          padding: '6px 12px',
+                          borderRadius: 999,
+                          fontSize: 16,
+                          fontWeight: 900,
+                          letterSpacing: '0.05em',
+                          color: '#fffdf5',
+                          background: toRgba(theme.accentSoft, 0.14),
+                          backdropFilter: 'blur(8px)'
+                        }}
+                      >
+                        {levelLabel}
+                      </div>
+                    ) : null}
+                    {isSpecial ? (
+                      <>
+                        <div style={{ position: 'absolute', left: 14, top: 14, width: 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.34), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                        <div style={{ position: 'absolute', right: 14, bottom: 14, width: 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.26), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                      </>
+                    ) : null}
+                    <div style={{ position: 'relative', display: 'flex', gap: 12, alignItems: 'flex-start', paddingTop: hasTopMeta ? 24 : 0 }}>
+                      <div
+                        style={{
+                          minWidth: isSpecial ? 58 : 44,
+                          height: isSpecial ? 58 : 44,
+                          borderRadius: isSpecial ? 14 : 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: isSpecial ? 15 : 22,
+                          fontWeight: 900,
+                          color: '#fff',
+                          background: isSpecial ? toRgba(theme.accent, 0.22) : 'rgba(255,255,255,0.06)',
+                          border: `1px solid ${toRgba(theme.accentSoft, isSpecial ? 0.48 : 0.18)}`,
+                          boxShadow: isSpecial ? `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 20px ${toRgba(theme.outerGlow, 0.14)}` : 'none'
+                        }}
+                      >
+                        {iconText}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1, paddingRight: theme.badge ? 88 : 0 }}>
+                        <div style={{ fontWeight: 900, fontSize: isSpecial ? 21 : 20, color: theme.titleColor, lineHeight: 1.2 }}>
+                          {opt.name}
+                        </div>
+                        <div style={{ color: theme.descColor, opacity: 0.9, fontSize: 14, marginTop: 8, lineHeight: 1.45 }}>
+                          {displayDesc}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ opacity: 0.82, fontSize: 14, marginTop: 6 }}>{opt.desc}</div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

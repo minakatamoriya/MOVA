@@ -8,8 +8,6 @@ import {
   UPGRADE_POOLS,
   OFF_FACTION_ENTRY_OPTIONS,
   UNIVERSAL_POOLS,
-  NATURE_BRANCH_POOLS,
-  NATURE_CONTRACT_OPTIONS,
   THIRD_SPEC_PREP_OPTIONS,
   DEPTH_SPEC_POOLS,
   DUAL_SPEC_POOLS,
@@ -18,6 +16,7 @@ import {
 import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
 import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill } from '../../classes/talentTrees';
+import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 
@@ -77,7 +76,6 @@ export function applyBuildClassMixin(GameScene) {
       if (!existingOffFaction) {
         const entryUpgradeToFaction = {
           arcane_swift: 'arcane',
-          arcane_enlighten: 'arcane',
           arcane_circle: 'arcane',
           ranger_precise: 'ranger',
           ranger_agile: 'ranger',
@@ -85,14 +83,11 @@ export function applyBuildClassMixin(GameScene) {
           unyielding_bloodrage: 'unyielding',
           unyielding_battlecry: 'unyielding',
           unyielding_duel: 'unyielding',
-          curse_skeleton_guard: 'curse',
-          curse_skeleton_mage: 'curse',
+          off_curse: 'curse',
           guardian_block: 'guardian',
           guardian_armor: 'guardian',
           guardian_counter: 'guardian',
-          druid_pet_bear: 'nature',
-          druid_pet_hawk: 'nature',
-          druid_pet_treant: 'nature'
+          off_nature: 'nature'
         };
 
         const inferredFaction = entryUpgradeToFaction[upgrade.id] || null;
@@ -129,6 +124,17 @@ export function applyBuildClassMixin(GameScene) {
           if (picked) {
             this.registry.set('offFaction', picked.faction);
             if (this.player?.setOffCore) this.player.setOffCore(picked.accentCore);
+
+            if (upgrade.id === 'off_nature') {
+              this.player.healingTakenMultiplier = Math.min(2.0, (this.player.healingTakenMultiplier || 1) * 1.12);
+            }
+
+            if (upgrade.id === 'off_curse') {
+              this.player.summonDamageMultiplier = Math.min(2.0, (this.player.summonDamageMultiplier || 1) * 1.12);
+              this.player.summonHealthMultiplier = Math.min(2.0, (this.player.summonHealthMultiplier || 1) * 1.10);
+              this.undeadSummonManager?.refreshFromPlayer?.();
+              this.undeadSummonManager?.refreshSummonStats?.();
+            }
 
             const mainCoreKey = this.registry.get('mainCore') || this.buildState.core;
             const thirdSpecType = getThirdSpecTypeForMainOff({ mainCoreKey, offFaction: picked.faction });
@@ -186,73 +192,21 @@ export function applyBuildClassMixin(GameScene) {
         case 'druid_pet_bear':
         case 'druid_pet_hawk':
         case 'druid_pet_treant':
-          if (this.registry && this.registry.get('naturePetType')) break;
           if (this.petManager) {
             this.petManager.unlockPetByUpgradeId(upgrade.id);
-            const owned = this.petManager?.owned ? Array.from(this.petManager.owned) : [];
-            if (owned.length > 0) {
-              this.registry.set('naturePetType', owned[0]);
-            }
+            this.petManager.refreshPetStats?.();
           }
           break;
 
-        case 'nature_bear_solidarity':
-          this.player.natureBearSplit = Math.min(0.30, (this.player.natureBearSplit || 0) + 0.10);
+        case 'nature_bear_vitality':
+          this.player.natureBearVitalityLevel = Math.min(3, (this.player.natureBearVitalityLevel || 0) + 1);
+          this.petManager?.refreshPetStats?.();
           break;
-        case 'nature_bear_strength':
-          this.player.natureDamageMult = Math.min(1.35, (this.player.natureDamageMult || 1) * 1.08);
-          this.player.applyStatMultipliers(this.player.equipmentMods || {});
+        case 'nature_hawk_swiftness':
+          this.player.natureHawkSwiftnessLevel = Math.min(3, (this.player.natureHawkSwiftnessLevel || 0) + 1);
           break;
-        case 'nature_bear_carapace':
-          this.player.natureDamageTakenMult = Math.max(0.85, (this.player.natureDamageTakenMult || 1) * 0.96);
-          break;
-        case 'nature_bear_rage':
-          this.player.natureRageLevel = Math.min(3, (this.player.natureRageLevel || 0) + 1);
-          break;
-        case 'nature_bear_earthquake':
-          this.player.natureEarthquakeLevel = Math.min(3, (this.player.natureEarthquakeLevel || 0) + 1);
-          break;
-        case 'nature_bear_thornshield':
-          this.thornsPercent = Math.min(0.35, (this.thornsPercent || 0) + 0.04);
-          break;
-
-        case 'nature_hawk_crit':
-          this.player.critChance = Math.min(0.95, (this.player.critChance || 0) + 0.03);
-          break;
-        case 'nature_hawk_evade':
-          this.player.dodgeChance = Math.min(0.35, (this.player.dodgeChance || 0) + 0.05);
-          break;
-        case 'nature_hawk_speed':
-          this.player.natureMoveSpeedMult = Math.min(1.35, (this.player.natureMoveSpeedMult || 1) * 1.05);
-          this.player.applyStatMultipliers(this.player.equipmentMods || {});
-          break;
-        case 'nature_hawk_windslash':
-          this.player.natureWindSlashLevel = Math.min(3, (this.player.natureWindSlashLevel || 0) + 1);
-          break;
-        case 'nature_hawk_skycall':
-          this.player.natureSkyCallLevel = Math.min(3, (this.player.natureSkyCallLevel || 0) + 1);
-          break;
-        case 'nature_hawk_huntmark':
-          this.player.natureHuntMarkLevel = Math.min(3, (this.player.natureHuntMarkLevel || 0) + 1);
-          break;
-
-        case 'nature_treant_regen':
-          this.player.natureTreantRegenLevel = Math.min(3, (this.player.natureTreantRegenLevel || 0) + 1);
-          break;
-        case 'nature_treant_root':
-          this.player.natureTreantRootLevel = Math.min(3, (this.player.natureTreantRootLevel || 0) + 1);
-          break;
-        case 'nature_treant_armor':
-          this.player.flatDamageReduction = Math.min(18, (this.player.flatDamageReduction || 0) + 1);
-          break;
-        case 'nature_treant_thorns':
-          this.thornsPercent = Math.min(0.35, (this.thornsPercent || 0) + 0.03);
-          break;
-        case 'nature_treant_summon':
-          this.player.natureTreantSummonLevel = Math.min(3, (this.player.natureTreantSummonLevel || 0) + 1);
-          break;
-        case 'nature_treant_reborn':
-          this.player.natureTreantRebornLevel = Math.min(3, (this.player.natureTreantRebornLevel || 0) + 1);
+        case 'nature_treant_bloom':
+          this.player.natureTreantBloomLevel = Math.min(3, (this.player.natureTreantBloomLevel || 0) + 1);
           break;
         case 'druid_meteor_shower':
           this.player.druidMeteorShower = true;
@@ -375,9 +329,6 @@ export function applyBuildClassMixin(GameScene) {
         case 'arcane_swift':
           this.player.universalFireRateMult = Math.max(0.6, (this.player.universalFireRateMult || 1) * 0.92);
           this.player.applyStatMultipliers(this.player.equipmentMods || { damageMult: 1, fireRateMult: 1, speedMult: 1 });
-          break;
-        case 'arcane_enlighten':
-          this.levelUpChoiceCount = Math.max(this.levelUpChoiceCount || 3, 4);
           break;
         case 'arcane_circle':
           this.player.arcaneCircleEnabled = true;
@@ -913,7 +864,6 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = this.registry.get('mainCore') || this.buildState.core;
       const offFaction = this.registry.get('offFaction') || null;
-      const naturePetType = this.registry.get('naturePetType') || null;
 
       let thirdSpecType = this.registry.get('thirdSpecType') || null;
       if (!thirdSpecType && mainCore && offFaction) {
@@ -921,9 +871,8 @@ export function applyBuildClassMixin(GameScene) {
         if (thirdSpecType) this.registry.set('thirdSpecType', thirdSpecType);
       }
 
-      if (offFaction === 'nature' && !naturePetType) {
-        return [...NATURE_CONTRACT_OPTIONS];
-      }
+      let pendingThirdPrepOption = null;
+      let hasThirdPrep = false;
 
       let combinedPool = [];
 
@@ -931,29 +880,24 @@ export function applyBuildClassMixin(GameScene) {
         combinedPool = combinedPool.concat(pools[mainCore] || []);
       }
 
-      if (stage !== 'main_only') {
-        if (!offFaction) {
-          combinedPool = combinedPool.concat(OFF_FACTION_ENTRY_OPTIONS);
-        }
-      }
-
       if (offFaction && stage !== 'main_only') {
-        if (offFaction === 'nature' && naturePetType && NATURE_BRANCH_POOLS[naturePetType]) {
-          combinedPool = combinedPool.concat(NATURE_BRANCH_POOLS[naturePetType] || []);
-        } else {
-          combinedPool = combinedPool.concat(universalPools[offFaction] || []);
-        }
+        combinedPool = combinedPool.concat(universalPools[offFaction] || []);
       }
 
       if (stage === 'all' && mainCore && offFaction && thirdSpecType) {
         const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
 
+        pendingThirdPrepOption = thirdSpecType === 'depth'
+          ? THIRD_SPEC_PREP_OPTIONS.depth
+          : THIRD_SPEC_PREP_OPTIONS.dual;
+        hasThirdPrep = !!pendingThirdPrepOption && (skillTreeLevels[pendingThirdPrepOption.id] || 0) >= getMaxLevel(pendingThirdPrepOption.id);
+
         if (thirdSpecType === 'depth') {
-          combinedPool = combinedPool.concat([THIRD_SPEC_PREP_OPTIONS.depth]);
-          combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
+          if (hasThirdPrep) {
+            combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
+          }
         } else if (thirdSpecType === 'dual') {
-          combinedPool = combinedPool.concat([THIRD_SPEC_PREP_OPTIONS.dual]);
-          if (accentCoreKey && DUAL_SPEC_POOLS[mainCore] && DUAL_SPEC_POOLS[mainCore][accentCoreKey]) {
+          if (hasThirdPrep && accentCoreKey && DUAL_SPEC_POOLS[mainCore] && DUAL_SPEC_POOLS[mainCore][accentCoreKey]) {
             combinedPool = combinedPool.concat(DUAL_SPEC_POOLS[mainCore][accentCoreKey] || []);
           }
         }
@@ -976,6 +920,31 @@ export function applyBuildClassMixin(GameScene) {
       };
 
       let options = this.pickWeightedUpgrades(combinedPool, choiceCount, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
+
+      if (!offFaction && stage !== 'main_only') {
+        const desiredCount = choiceCount + 1;
+        options = this.appendWeightedUniqueUpgrades(
+          options,
+          OFF_FACTION_ENTRY_OPTIONS,
+          Math.max(0, desiredCount - options.length),
+          (opt) => this.getUpgradeOfferWeight(opt, weightContext)
+        );
+      }
+
+      if (offFaction && stage === 'all' && pendingThirdPrepOption && !hasThirdPrep) {
+        const desiredCount = choiceCount + 1;
+        options = this.appendWeightedUniqueUpgrades(
+          options,
+          [pendingThirdPrepOption],
+          Math.max(0, desiredCount - options.length),
+          (opt) => this.getUpgradeOfferWeight(opt, weightContext)
+        );
+      }
+
+      options = options.map((option) => {
+        const currentLevel = skillTreeLevels[option.id] || 0;
+        return getUpgradeOfferPresentation(option, currentLevel, getMaxLevel(option.id));
+      });
 
       return options;
     },
@@ -1074,6 +1043,17 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       return result;
+    },
+
+    appendWeightedUniqueUpgrades(existingOptions, candidatePool, count, getWeight) {
+      if (count <= 0) return [...(existingOptions || [])];
+
+      const takenIds = new Set((existingOptions || []).map((option) => option?.id).filter(Boolean));
+      const uniquePool = (candidatePool || []).filter((option) => option?.id && !takenIds.has(option.id));
+      if (uniquePool.length === 0) return [...(existingOptions || [])];
+
+      const picks = this.pickWeightedUpgrades(uniquePool, count, getWeight);
+      return [...(existingOptions || []), ...picks];
     },
 
     enableDroneBuild() {

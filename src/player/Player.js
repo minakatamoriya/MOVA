@@ -1601,8 +1601,9 @@ export default class Player extends Phaser.GameObjects.Container {
    * 治疗
    */
   heal(amount) {
+    const scaledAmount = Math.max(0, Math.round((Number(amount) || 0) * (this.healingTakenMultiplier || 1)));
     const beforeHp = this.hp;
-    this.hp = Math.min(this.hp + amount, this.maxHp);
+    this.hp = Math.min(this.hp + scaledAmount, this.maxHp);
     this.updateDeathDuelState();
     this.scene.events.emit('updatePlayerInfo');
     const restored = Math.max(0, this.hp - beforeHp);
