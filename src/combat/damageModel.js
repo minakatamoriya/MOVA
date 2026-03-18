@@ -81,7 +81,8 @@ export function buildPlayerDerivedStats(player, options = {}) {
 
   const speedMult = equipmentMods.speedMult
     * lootMods.speedMult
-    * toMultiplier(player?.natureMoveSpeedMult, 1);
+    * toMultiplier(player?.natureMoveSpeedMult, 1)
+    * toMultiplier(player?.controlMoveSpeedMult, 1);
 
   const rangeMult = equipmentMods.rangeMult
     * lootMods.rangeMult

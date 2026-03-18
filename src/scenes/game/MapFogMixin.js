@@ -373,6 +373,9 @@ export function applyMapFogMixin(GameScene) {
         else this.blockedCells = new Set();
       }
 
+      // 精英词缀的临时墙体阻挡层：与地图固有 blockedCells 分开，便于战斗中动态增删。
+      this.eliteAffixBlockedCells = new Set();
+
       this.worldBoundsRect = new Phaser.Geom.Rectangle(0, 0, worldSize, worldSize);
 
       // 自定义底图（例如试炼之地 map1.png）
@@ -470,7 +473,8 @@ export function applyMapFogMixin(GameScene) {
       const set = this.blockedCells instanceof Set
         ? this.blockedCells
         : (this.debugBlockedCells instanceof Set ? this.debugBlockedCells : null);
-      return !!set?.has?.(idx);
+      if (set?.has?.(idx)) return true;
+      return !!this.eliteAffixBlockedCells?.has?.(idx);
     },
 
     isWorldPointBlocked(x, y) {

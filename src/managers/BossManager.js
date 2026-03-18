@@ -4,6 +4,221 @@ import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
 import { TUTORIAL_EXP_REWARDS, getStageBalance } from '../data/balanceConfig';
 
+function getTargetPoint(target) {
+  if (!target) return { x: 0, y: 0, radius: 0 };
+  if (typeof target.getHitboxPosition === 'function') {
+    const hp = target.getHitboxPosition();
+    if (hp && Number.isFinite(hp.x) && Number.isFinite(hp.y)) {
+      return {
+        x: hp.x,
+        y: hp.y,
+        radius: Math.max(0, Number(hp.radius || 0))
+      };
+    }
+  }
+  return {
+    x: Number(target.x || 0),
+    y: Number(target.y || 0),
+    radius: Math.max(0, Number(target.hitRadius || target.visualRadius || 0))
+  };
+}
+
+function playBossShowcaseFan(scene, boss, targetPoint) {
+  if (!scene || !boss?.isAlive) return;
+
+  scene.vfxSystem?.playCastFlash?.(boss.x, boss.y - Math.max(8, (boss.bossSize || 50) * 0.18), {
+    color: 0xffd580,
+    radius: 30,
+    durationMs: 140
+  });
+
+  scene.patternSystem?.emitFan?.({
+    side: 'boss',
+    x: boss.x,
+    y: boss.y,
+    target: { x: targetPoint.x, y: targetPoint.y },
+    count: 7,
+    spreadRad: Phaser.Math.DegToRad(10),
+    speed: 170,
+    color: 0xff9b54,
+    radius: 9,
+    damage: 10,
+    tags: ['boss_showcase_fan'],
+    options: {
+      type: 'diamond',
+      hasTrail: true,
+      trailColor: 0xffc27a,
+      hasGlow: false
+    }
+  });
+}
+
+function playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius) {
+  if (!scene || !boss?.isAlive) return;
+
+  scene.vfxSystem?.playBurst?.(targetPoint.x, targetPoint.y, {
+    radius: telegraphRadius,
+    color: 0xffcf8a,
+    durationMs: 220
+  });
+
+  scene.patternSystem?.emitRing?.({
+    side: 'boss',
+    x: targetPoint.x,
+    y: targetPoint.y,
+    count: 10,
+    offsetRad: Phaser.Math.DegToRad(18),
+    speed: 145,
+    color: 0xffd580,
+    radius: 8,
+    damage: 10,
+    tags: ['boss_showcase_burst'],
+    options: {
+      type: 'circle',
+      hasTrail: true,
+      trailColor: 0xffd580,
+      hasGlow: false
+    }
+  });
+
+  const blast = scene.bulletCore?.createBossBullet?.({
+    x: targetPoint.x,
+    y: targetPoint.y,
+    angle: 0,
+    speed: 0,
+    color: 0xffd580,
+    radius: Math.max(22, Math.round(telegraphRadius * 0.78)),
+    damage: 10,
+    tags: ['boss_showcase_ground_blast'],
+    options: {
+      type: 'ring',
+      hasTrail: false,
+      hasGlow: false
+    }
+  });
+
+  if (blast) {
+    blast.alpha = 0.22;
+    boss._trackHazardObject?.(blast);
+    const blastCleanupTimer = scene.time?.delayedCall?.(110, () => {
+      scene.bulletCore?.destroyBullet?.(blast, { side: 'boss', reason: 'expire' });
+    });
+    if (blastCleanupTimer) boss._trackHazardTimer?.(blastCleanupTimer);
+  }
+}
+
+function scheduleBossShowcasePattern(boss, targetPoint, telegraphRadius, telegraphMs) {
+  const scene = boss?.scene;
+  if (!scene) return;
+
+  // 优先走 AttackTimeline，让 Boss 攻击节奏真正归入今天新增的 system/bullets 模块。
+  if (scene.attackTimeline?.startTimeline) {
+    scene.attackTimeline.stopOwnerTimelines?.(boss);
+    scene.attackTimeline.startTimeline({
+      prefix: 'boss_showcase',
+      owner: boss,
+      phases: [
+        {
+          durationMs: telegraphMs + 120,
+          onEnter: () => {
+            const telegraph = scene.patternSystem?.emitGroundTelegraph?.({
+              x: targetPoint.x,
+              y: targetPoint.y,
+              telegraphRadius,
+              telegraphColor: 0xff7a66,
+              durationMs: telegraphMs
+            });
+            if (telegraph) boss._trackHazardObject?.(telegraph);
+          },
+          events: [
+            {
+              atMs: 420,
+              run: () => {
+                const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
+                if (!boss.isAlive || !target?.active || target.isAlive === false) return;
+                playBossShowcaseFan(scene, boss, targetPoint);
+              }
+            },
+            {
+              atMs: telegraphMs,
+              run: () => {
+                playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius);
+              }
+            }
+          ]
+        }
+      ]
+    });
+    return;
+  }
+
+  // 兜底：如果时间轴系统不可用，仍然保持旧的 delayedCall 调度方式。
+  const telegraph = scene.patternSystem?.emitGroundTelegraph?.({
+    x: targetPoint.x,
+    y: targetPoint.y,
+    telegraphRadius,
+    telegraphColor: 0xff7a66,
+    durationMs: telegraphMs
+  });
+  if (telegraph) boss._trackHazardObject?.(telegraph);
+
+  const fanTimer = scene.time?.delayedCall?.(420, () => {
+    const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
+    if (!boss.isAlive || !target?.active || target.isAlive === false) return;
+    playBossShowcaseFan(scene, boss, targetPoint);
+  });
+  if (fanTimer) boss._trackHazardTimer?.(fanTimer);
+
+  const burstTimer = scene.time?.delayedCall?.(telegraphMs, () => {
+    playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius);
+  });
+  if (burstTimer) boss._trackHazardTimer?.(burstTimer);
+}
+
+function executeBossPatternShowcase(boss) {
+  if (!boss || !boss.isAlive) return;
+
+  const scene = boss.scene;
+  const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
+  if (!scene || !target || !target.active || target.isAlive === false) return;
+
+  const targetPoint = getTargetPoint(target);
+  const dx = targetPoint.x - boss.x;
+  const dy = targetPoint.y - boss.y;
+  const dist = Math.hypot(dx, dy);
+
+  const padding = boss?.scene?.bossNoGoPadding ?? 0;
+  const minReach = (boss.bossSize || 50) + padding + (targetPoint.radius || 0) + 8;
+  const meleeRange = Math.max(150, Math.round(minReach));
+
+  if (dist <= meleeRange) {
+    boss.castCrescentSlashAtPlayer?.({
+      range: meleeRange,
+      arcDeg: 150,
+      windupMs: 560,
+      slashMs: 680,
+      lingerMs: 420,
+      color: 0xffffff,
+      damage: 10
+    });
+    return;
+  }
+
+  // 首个正式示例：地面预警 + 扇形弹幕 + 延迟爆发。
+  // 使用新系统做表现与模式编排，同时沿用现有 Boss attackPatterns 调度。
+  const telegraphRadius = Math.max(54, Math.round((boss.bossSize || 50) * 1.35));
+  const telegraphMs = 900;
+
+  boss.showAlertIcon?.(900);
+  scene.vfxSystem?.playCharge?.(boss.x, boss.y - Math.max(10, (boss.bossSize || 50) * 0.28), {
+    radius: 18,
+    color: 0xffb86b,
+    durationMs: 240
+  });
+
+  scheduleBossShowcasePattern(boss, targetPoint, telegraphRadius, telegraphMs);
+}
+
 /**
  * Boss 管理器
  * 负责 Boss 的生成、战斗流程管理
@@ -56,43 +271,12 @@ export default class BossManager {
     // 因此地图 Boss 统一采用 tracking。
     const resolvedMovePattern = 'tracking';
 
-    // 默认攻击模式：近战为主（半月斩，带起手闪光）。
-    // 注：BaseBoss 内置支持 attackPatterns；若未来 mapMonsters 为 Boss 提供自定义 patterns，可在此替换。
+    // 默认攻击模式：近身半月斩；中距离时展示新弹幕系统示例。
+    // 首个正式示例：地面预警 + 扇形弹幕 + 延迟爆发。
     const defaultAttackPatterns = [
       {
-        interval: 1350,
-        execute: (boss) => {
-          if (!boss || !boss.isAlive) return;
-
-          const target = (typeof boss.getPrimaryTarget === 'function') ? boss.getPrimaryTarget() : null;
-          if (!target || !target.active || target.isAlive === false) return;
-
-          const dx = target.x - boss.x;
-          const dy = target.y - boss.y;
-          const dist = Math.hypot(dx, dy);
-
-          // 玩家有“Boss 禁入圈”，距离过近会被推开；因此近战判定要覆盖这个最小距离
-          const padding = boss?.scene?.bossNoGoPadding ?? 0;
-          const hitbox = (typeof target.getHitboxPosition === 'function')
-            ? target.getHitboxPosition()
-            : { radius: Math.max(10, target.visualRadius || 16) };
-          const minReach = (boss.bossSize || 50) + padding + (hitbox.radius || 0) + 8;
-          const meleeRange = Math.max(150, Math.round(minReach));
-
-          if (dist <= meleeRange) {
-            if (typeof boss.castCrescentSlashAtPlayer === 'function') {
-              boss.castCrescentSlashAtPlayer({
-                range: meleeRange,
-                arcDeg: 150,
-                windupMs: 560,
-                slashMs: 680,
-                lingerMs: 420,
-                color: 0xffffff,
-                damage: 10
-              });
-            }
-          }
-        }
+        interval: 2800,
+        execute: executeBossPatternShowcase
       }
     ];
 

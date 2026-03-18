@@ -164,6 +164,8 @@ export default class Player extends Phaser.GameObjects.Container {
     // 移动属性
     this.baseMoveSpeed = 250;
     this.moveSpeed = this.baseMoveSpeed; // 移动速度
+    this.controlMoveSpeedMult = 1;
+    this._controlMoveSlowUntil = 0;
     this.canMove = true;
     this.hitboxRadius = 8; // 核心判定半径（小型圆形）
     this.visualRadius = 15; // 视觉大小
@@ -956,6 +958,8 @@ export default class Player extends Phaser.GameObjects.Container {
     const combatPaused = !!this.scene?.isCombatBehaviorPaused?.();
     const gameplayNow = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? time ?? 0;
 
+    this.updateExternalSpeedModifiers(gameplayNow);
+
     this.updateEmergencyStatusEffects(time, delta, gameplayNow);
     
     // 更新移动
@@ -1660,6 +1664,33 @@ export default class Player extends Phaser.GameObjects.Container {
   upgradeSpeed() {
     this.moveSpeed += 30;
     console.log(`移动速度提升！当前速度: ${this.moveSpeed}`);
+  }
+
+  applyMoveSpeedSlow(percent, durationMs = 0) {
+    const pct = Phaser.Math.Clamp(Number(percent || 0), 0, 0.9);
+    if (pct <= 0) return;
+
+    const now = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, Math.round(Number(durationMs || 0)));
+    const nextMult = Math.max(0.1, 1 - pct);
+
+    this.controlMoveSpeedMult = Math.min(Number(this.controlMoveSpeedMult || 1), nextMult);
+    this._controlMoveSlowUntil = Math.max(Number(this._controlMoveSlowUntil || 0), until);
+    this.applyStatMultipliers(this.equipmentMods);
+  }
+
+  clearMoveSpeedSlow() {
+    if (Number(this.controlMoveSpeedMult || 1) >= 0.999 && Number(this._controlMoveSlowUntil || 0) <= 0) return;
+    this.controlMoveSpeedMult = 1;
+    this._controlMoveSlowUntil = 0;
+    this.applyStatMultipliers(this.equipmentMods);
+  }
+
+  updateExternalSpeedModifiers(now) {
+    const current = Number(now || 0);
+    if (Number(this._controlMoveSlowUntil || 0) > current) return;
+    if (Number(this.controlMoveSpeedMult || 1) >= 0.999) return;
+    this.clearMoveSpeedSlow();
   }
 
   /**

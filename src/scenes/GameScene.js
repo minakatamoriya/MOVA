@@ -11,6 +11,7 @@ import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
 import CooldownHud from '../ui/CooldownHud';
 import { START_ROOM } from '../data/mapPool';
+import { BulletCore, PatternSystem, VfxSystem, AttackTimeline, DebugOverlay } from '../systems/bullets';
 
 const EMERGENCY_COOLDOWN_DEFS = {
   paladin: {
@@ -1370,6 +1371,8 @@ class GameScene extends Phaser.Scene {
       this.cooldownHud = null;
     }
     this.cooldownSkills = Object.create(null);
+
+    this.destroyBulletSystems();
   }
 
   setupCooldownSystem() {
@@ -1387,6 +1390,115 @@ class GameScene extends Phaser.Scene {
       labelGap: 8,
       longPressMs: 420
     });
+  }
+
+  setupBulletSystems() {
+    this.destroyBulletSystems();
+
+    // 统一接线顺序：BulletCore 作为底层适配，Pattern/Vfx/Timeline/Overlay 基于它往上叠。
+    this.bulletCore = new BulletCore(this, {
+      bulletManager: this.bulletManager,
+      collisionManager: this.collisionManager
+    });
+    this.vfxSystem = new VfxSystem(this, { depth: 2400 });
+    this.patternSystem = new PatternSystem(this, {
+      bulletCore: this.bulletCore,
+      vfxSystem: this.vfxSystem
+    });
+    this.attackTimeline = new AttackTimeline(this, {
+      patternSystem: this.patternSystem,
+      vfxSystem: this.vfxSystem
+    });
+    this.debugOverlay = new DebugOverlay(this, {
+      bulletCore: this.bulletCore,
+      attackTimeline: this.attackTimeline
+    }, {
+      depth: 2550
+    });
+
+    if (this.input?.keyboard) {
+      try {
+        if (this._bulletDebugOverlayKey && this._bulletDebugOverlayKeyHandler) {
+          this._bulletDebugOverlayKey.off('down', this._bulletDebugOverlayKeyHandler);
+        }
+      } catch (_) { /* ignore */ }
+
+      this._bulletDebugOverlayKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F3);
+      // F3 只负责切换 system/bullets 的调试覆盖层，不影响原有 HUD。
+      this._bulletDebugOverlayKeyHandler = () => {
+        this.debugOverlay?.toggle?.();
+      };
+      this._bulletDebugOverlayKey.on('down', this._bulletDebugOverlayKeyHandler);
+    }
+  }
+
+  destroyBulletSystems() {
+    if (this._bulletDebugOverlayKey && this._bulletDebugOverlayKeyHandler) {
+      try { this._bulletDebugOverlayKey.off('down', this._bulletDebugOverlayKeyHandler); } catch (_) { /* ignore */ }
+    }
+    this._bulletDebugOverlayKey = null;
+    this._bulletDebugOverlayKeyHandler = null;
+
+    if (this.attackTimeline) {
+      try {
+        const items = this.attackTimeline.getMetrics?.() || [];
+        items.forEach((item) => this.attackTimeline.stopTimeline?.(item.id));
+      } catch (_) { /* ignore */ }
+    }
+
+    if (this.debugOverlay) {
+      try { this.debugOverlay.destroy(); } catch (_) { /* ignore */ }
+      this.debugOverlay = null;
+    }
+
+    this.attackTimeline = null;
+    this.patternSystem = null;
+    this.vfxSystem = null;
+    this.bulletCore = null;
+  }
+
+  updateBulletSystemsDebugOverlay() {
+    if (!this.debugOverlay) return;
+
+    const descriptors = [];
+    const hp = this.player?.getHitboxPosition?.();
+    const centerX = Number(hp?.x ?? this.player?.x ?? 0);
+    const centerY = Number(hp?.y ?? this.player?.y ?? 0);
+
+    const pushCircle = (radius, color) => {
+      const resolvedRadius = Number(radius || 0);
+      if (!(resolvedRadius > 0)) return;
+      descriptors.push({
+        x: centerX,
+        y: centerY,
+        radius: resolvedRadius,
+        color,
+        alpha: 0.05,
+        lineAlpha: 0.8
+      });
+    };
+
+    pushCircle(this.player?.warriorRange, 0xf87171);
+    pushCircle(this.player?.paladinRange, 0xfbbf24);
+    pushCircle(this.player?.archerRange, 0x34d399);
+    pushCircle(this.player?.mageRange, 0x7dd3fc);
+    pushCircle(this.player?.druidRange, 0x22c55e);
+    pushCircle(this.player?.warlockRange, 0xa3e635);
+
+    const boss = this.bossManager?.getCurrentBoss?.();
+    if (boss?.isAlive && boss.aggroRadius > 0) {
+      descriptors.push({
+        x: Number(boss.x || 0),
+        y: Number(boss.y || 0),
+        radius: Number(boss.aggroRadius || 0),
+        color: 0xff6666,
+        alpha: 0.04,
+        lineAlpha: 0.7
+      });
+    }
+
+    this.debugOverlay.setRanges(descriptors);
+    this.debugOverlay.update();
   }
 
   registerCooldownSkill(config = {}) {
@@ -1934,6 +2046,9 @@ class GameScene extends Phaser.Scene {
     this.collisionManager = new CollisionManager(this);
     this.collisionManager.setPlayer(this.player);
     this.collisionManager.setBossManager(this.bossManager);
+
+    // 弹幕系统模块最小接线：先作为统一入口层挂上，不改现有战斗分发。
+    this.setupBulletSystems();
     
     // 监听玩家信息更新
     if (this._updatePlayerInfoHandler) {
@@ -2318,6 +2433,7 @@ class GameScene extends Phaser.Scene {
       if (this.viewMenuOpen) {
         this.updateViewMenuUiAnimations(time, delta);
       }
+      this.updateBulletSystemsDebugOverlay();
       return;
     }
 
@@ -2385,6 +2501,7 @@ class GameScene extends Phaser.Scene {
           }
         }
       }
+      this.updateBulletSystemsDebugOverlay();
       return;
     }
 
@@ -2409,6 +2526,7 @@ class GameScene extends Phaser.Scene {
       if (this._postBossRewardChoiceMade && this._arenaContinueKey && Phaser.Input.Keyboard.JustDown(this._arenaContinueKey)) {
         this.confirmPostBossRewardAndContinue?.();
       }
+      this.updateBulletSystemsDebugOverlay();
       return;
     }
     
@@ -2598,6 +2716,8 @@ class GameScene extends Phaser.Scene {
       }
     }
 
+    this.updateBulletSystemsDebugOverlay();
+
   }
 
   /**
@@ -2605,6 +2725,8 @@ class GameScene extends Phaser.Scene {
    */
   onSceneShutdown() {
     console.log('GameScene: 清理游戏资源');
+
+    this.destroyBulletSystems();
 
     // 清理移动端隐藏摇杆
     this.destroyTouchJoystick();

@@ -1402,6 +1402,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   }
 
   clearHazards() {
+    // 若当前 Boss 使用了 AttackTimeline，这里也一并停掉，避免死亡后仍有后续 phase/event 触发。
+    try { this.scene?.attackTimeline?.stopOwnerTimelines?.(this); } catch (_) { /* ignore */ }
+
     // 取消所有已排队的延迟事件（未来陷阱）
     if (Array.isArray(this._hazardTimers) && this._hazardTimers.length > 0) {
       this._hazardTimers.forEach((t) => {

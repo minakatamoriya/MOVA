@@ -335,7 +335,9 @@ export default class BulletManager {
       hasTrail = true,
       trailColor = null,
       damage = 15,
-      type = 'circle'
+      type = 'circle',
+      ringStrokeWidth = null,
+      ringFillAlpha = 0.16
     } = options;
 
     const shapeType = (type || 'circle').toLowerCase();
@@ -361,8 +363,12 @@ export default class BulletManager {
       bullet.radius = Math.round(radius * 1.2);
     } else if (shapeType === 'ring') {
       // ring 类多用于“范围伤害/爆炸区”，若只画描边会出现“被打到了但看不见覆盖面积”的问题
-      bullet = this.scene.add.circle(x, y, radius, color, 0.16);
-      bullet.setStrokeStyle(Math.max(2, Math.round(radius * 0.22)), color, 0.85);
+      const strokeWidth = Number.isFinite(Number(ringStrokeWidth))
+        ? Math.max(2, Math.round(Number(ringStrokeWidth)))
+        : Math.max(2, Math.round(radius * 0.22));
+      const fillAlpha = Phaser.Math.Clamp(Number(ringFillAlpha ?? 0.16), 0, 1);
+      bullet = this.scene.add.circle(x, y, radius, color, fillAlpha);
+      bullet.setStrokeStyle(strokeWidth, color, 0.92);
       bullet.radius = Math.round(radius);
     } else if (shapeType === 'rectangle') {
       // 向后兼容：旧矩形弹
