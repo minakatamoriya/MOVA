@@ -39,9 +39,11 @@ export default class BulletCore {
     this.metrics = {
       created: 0,
       destroyed: 0,
+      destroyedByReason: Object.create(null),
       hits: 0,
       lastHitAt: 0,
-      lastSpawnAt: 0
+      lastSpawnAt: 0,
+      lastDestroyAt: 0
     };
   }
 
@@ -123,6 +125,9 @@ export default class BulletCore {
     }
 
     this.metrics.destroyed += 1;
+    this.metrics.lastDestroyAt = Number(this.scene?.time?.now || 0);
+    const reason = String(opts.reason || 'unknown');
+    this.metrics.destroyedByReason[reason] = Number(this.metrics.destroyedByReason[reason] || 0) + 1;
     this.hooks.onDestroy(bullet, opts, this);
     return true;
   }
@@ -141,7 +146,18 @@ export default class BulletCore {
   }
 
   clearAll() {
-    this.bulletManager?.clearAll?.();
+    if (this.bulletManager?.destroyAllBullets) {
+      this.bulletManager.destroyAllBullets();
+      return;
+    }
+
+    if (this.bulletManager?.clearAll) {
+      this.bulletManager.clearAll();
+      return;
+    }
+
+    this.bulletManager?.clearPlayerBullets?.();
+    this.bulletManager?.clearBossBullets?.();
   }
 
   clearSide(side = 'player') {
@@ -183,6 +199,8 @@ export default class BulletCore {
       hitCount: this.metrics.hits,
       lastHitAt: this.metrics.lastHitAt,
       lastSpawnAt: this.metrics.lastSpawnAt,
+      lastDestroyAt: this.metrics.lastDestroyAt,
+      destroyedByReason: { ...(this.metrics.destroyedByReason || {}) },
       activePlayerBullets: playerBullets.length,
       activeBossBullets: bossBullets.length,
       managerCreated: Number(managerStats.totalCreated || 0),

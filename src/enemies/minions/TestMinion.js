@@ -640,6 +640,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       });
     }
 
+    // BulletCore 不可用时的最后兜底（正常不应触发）
+    console.warn('[TestMinion] createManagedBossBullet unavailable, falling back to raw bulletManager');
     if (this.scene?.bulletManager?.createBossBullet) {
       return this.scene.bulletManager.createBossBullet(x, y, angle, speed, color, {
         radius,

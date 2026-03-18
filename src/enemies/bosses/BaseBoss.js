@@ -241,6 +241,8 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       });
     }
 
+    // BulletCore 不可用时的最后兜底（正常不应触发）
+    console.warn('[BaseBoss] createManagedBossBullet unavailable, falling back to raw bulletManager');
     if (!scene.bulletManager?.createBossBullet) return null;
     return scene.bulletManager.createBossBullet(x, y, angle, speed, color, {
       radius,
@@ -1455,13 +1457,12 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 清理预警圈/短命环等对象（已生成但还没销毁）
     if (Array.isArray(this._hazardObjects) && this._hazardObjects.length > 0) {
       const scene = this.scene;
-      const bm = scene?.bulletManager || null;
 
       this._hazardObjects.forEach((o) => {
         if (!o) return;
-        // Boss 子弹走 BulletManager，确保 trail/glow 正确清理
-        if (bm && o.isPlayerBullet === false && (o.active || o.markedForRemoval === false)) {
-          try { bm.destroyBullet(o, false); } catch (_) { /* ignore */ }
+        // hazard 也走场景统一销毁口，避免绕过 BulletCore 的统计和生命周期钩子。
+        if (o.isPlayerBullet === false && (o.active || o.markedForRemoval === false)) {
+          try { scene?.destroyManagedBullet?.(o, 'boss', 'cleanup'); } catch (_) { /* ignore */ }
           return;
         }
         try { if (o.active && o.destroy) o.destroy(); } catch (_) { /* ignore */ }

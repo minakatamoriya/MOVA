@@ -1,6 +1,4 @@
 import Phaser from 'phaser';
-
-import { getBaseColorForCoreKey, lerpColor } from '../classes/visual/basicSkillColors';
 import { calculateResolvedDamage } from '../combat/damageModel';
 
 /**
@@ -111,6 +109,116 @@ export default class CollisionManager {
     bullet.destroy?.();
   }
 
+  // ═══════════════════════════════════════════════════════════
+  //  伤害结算：从碰撞检测中解耦的统一结算入口
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * 玩家子弹命中敌方目标的统一结算
+   * @param {{ bullet, target, targetType, hitX, hitY, now }} hit
+   */
+  resolvePlayerBulletHit({ bullet, target, targetType, hitX, hitY, now }) {
+    const damageResult = calculateResolvedDamage({
+      attacker: this.player,
+      target,
+      baseDamage: Math.max(1, Math.round(bullet.damage || 1)),
+      now,
+      canCrit: !bullet.noCrit
+    });
+
+    target.takeDamage(damageResult.amount, {
+      attacker: this.player,
+      bullet,
+      hitX,
+      hitY,
+      isCrit: damageResult.isCrit,
+      fromPlayer: true
+    });
+
+    this.notifyBulletHit({
+      bullet,
+      side: 'player',
+      attacker: this.player,
+      target,
+      targetType,
+      hitX,
+      hitY,
+      damage: damageResult.amount,
+      isCrit: damageResult.isCrit,
+      killed: !target.isAlive
+    });
+
+    return damageResult;
+  }
+
+  /**
+   * Boss 子弹命中宠物/召唤物的统一结算
+   * @param {{ bullet, pet, boss, bossDamageMult }} hit
+   */
+  resolveBossBulletHitAlly({ bullet, pet, boss, bossDamageMult }) {
+    const rawDmg = Math.max(0, Math.round(10 * bossDamageMult));
+    const dmgMult = Math.max(0.1, Number(pet.damageTakenMult || 1));
+    const dmg = Math.max(1, Math.round(rawDmg * dmgMult));
+    pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
+
+    this.notifyBulletHit({
+      bullet,
+      side: 'boss',
+      attacker: boss,
+      target: pet,
+      targetType: pet.isUndeadSummon ? 'summon' : 'pet',
+      hitX: pet.x,
+      hitY: pet.y,
+      damage: dmg,
+      isCrit: false,
+      killed: (pet.currentHp || 0) <= 0
+    });
+
+    return { amount: dmg, killed: (pet.currentHp || 0) <= 0 };
+  }
+
+  /**
+   * Boss 子弹命中玩家的统一结算（含熊灵分摊）
+   * @param {{ bullet, boss, bossDamageMult, playerPos }} hit
+   * @returns {{ isDead: boolean, incoming: number }}
+   */
+  resolveBossBulletHitPlayer({ bullet, boss, bossDamageMult, playerPos }) {
+    let incoming = Math.max(0, Math.round(10 * bossDamageMult));
+
+    // 自然伙伴（熊系）：共担（玩家受击时分摊给熊灵）
+    const splitPct = this.player?.natureBearSplit || 0;
+    if (splitPct > 0 && this.scene?.petManager?.getTankPet) {
+      const bear = this.scene.petManager.getTankPet();
+      if (bear && bear.active && (bear.currentHp || 0) > 0) {
+        const split = Math.max(0, Math.round(incoming * splitPct));
+        if (split > 0) {
+          incoming = Math.max(0, incoming - split);
+          bear.currentHp = Math.max(0, (bear.currentHp || 0) - split);
+          if (this.scene?.petManager?.onPetDamaged) this.scene.petManager.onPetDamaged(bear, split);
+          if (bear.currentHp <= 0 && this.scene?.petManager?.onPetKilled) {
+            this.scene.petManager.onPetKilled(bear.petType);
+          }
+        }
+      }
+    }
+
+    const isDead = this.player.takeDamage(incoming);
+    this.notifyBulletHit({
+      bullet,
+      side: 'boss',
+      attacker: boss,
+      target: this.player,
+      targetType: 'player',
+      hitX: playerPos.x,
+      hitY: playerPos.y,
+      damage: incoming,
+      isCrit: false,
+      killed: !!isDead
+    });
+
+    return { isDead: !!isDead, incoming };
+  }
+
   /**
    * 更新碰撞检测（每帧调用）
    */
@@ -215,49 +323,10 @@ export default class CollisionManager {
           bullet._hitAtByEnemy.set(enemy.__enemyId, now);
         }
 
-        // 小怪命中统一走同一套结算：攻击者状态、暴击、目标承伤都在这里收口
-        const damageResult = calculateResolvedDamage({
-          attacker: this.player,
-          target: enemy,
-          baseDamage: Math.max(1, Math.round(bullet.damage || 1)),
-          now,
-          canCrit: !bullet.noCrit
+        // 小怪命中统一走 resolvePlayerBulletHit
+        const damageResult = this.resolvePlayerBulletHit({
+          bullet, target: enemy, targetType: 'minion', hitX, hitY, now
         });
-
-        enemy.takeDamage(damageResult.amount, {
-          attacker: this.player,
-          bullet,
-          hitX,
-          hitY,
-          isCrit: damageResult.isCrit,
-          fromPlayer: true
-        });
-        this.player.onDealDamage(damageResult.amount);
-        this.notifyBulletHit({
-          bullet,
-          side: 'player',
-          attacker: this.player,
-          target: enemy,
-          targetType: 'minion',
-          hitX,
-          hitY,
-          damage: damageResult.amount,
-          isCrit: damageResult.isCrit
-        });
-
-        // 命中特效与数字
-        const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (damageResult.isCrit ? 0xff3333 : 0xffff00));
-        const damageAnchorX = bullet.damageNumberAtTarget ? enemy.x : hitX;
-        const damageAnchorY = bullet.damageNumberAtTarget
-          ? (enemy.y - Math.max(22, (enemy.radius || enemy.bossSize || 18) + 8))
-          : (hitY - 24);
-        this.createHitEffect(hitX, hitY, hitColor);
-        this.showDamageNumber(damageAnchorX, damageAnchorY, damageResult.amount, damageResult.isCrit ? '#ff3333' : '#ffee00');
-
-        // 爆破散射
-        if (bullet.explode) {
-          this.createHitEffect(hitX, hitY, 0xffaa66);
-        }
 
         // 弹射：命中后不立刻销毁，改为跳向另一个最近敌人
         const canBounce = bullet.motionType === 'moonfire' || bullet.shadowBase || bullet.canBounce;
@@ -379,216 +448,12 @@ export default class CollisionManager {
         }
         bullet.lastHitAt = now;
 
-        // Boss 命中与小怪保持同源，避免某些增伤只对其中一类目标生效
-        const damageResult = calculateResolvedDamage({
-          attacker: this.player,
-          target: boss,
-          baseDamage: Math.max(1, Math.round(bullet.damage || 1)),
-          now,
-          canCrit: !bullet.noCrit
+        // Boss 命中走 resolvePlayerBulletHit
+        const damageResult = this.resolvePlayerBulletHit({
+          bullet, target: boss, targetType: 'boss', hitX, hitY, now
         });
 
-        // 造成伤害
-        const isDead = boss.takeDamage(damageResult.amount, {
-          attacker: this.player,
-          bullet,
-          hitX,
-          hitY,
-          isCrit: damageResult.isCrit,
-          fromPlayer: true
-        });
-        this.notifyBulletHit({
-          bullet,
-          side: 'player',
-          attacker: this.player,
-          target: boss,
-          targetType: 'boss',
-          hitX,
-          hitY,
-          damage: damageResult.amount,
-          isCrit: damageResult.isCrit,
-          killed: !!isDead
-        });
-
-        // 圣骑：制裁（眩晕）- 仅对 Boss 生效
-        if (!isDead && (bullet?.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
-          const chance = Phaser.Math.Clamp(bullet.stunChance || 0, 0, 0.95);
-          if (Math.random() < chance) {
-            const stunMs = Math.max(120, bullet.stunMs || 650);
-            boss.applyStun(stunMs);
-            this.showDamageNumber(boss.x, boss.y - 70, '眩晕', { color: '#ffd26a', fontSize: 18, whisper: true });
-          }
-        }
-
-        // 传染：毒圈内敌人死亡时留下小毒圈（Boss 死亡时触发；后续若有小怪系统可扩展）
-        if (isDead && bullet.isPoisonZone && this.player?.warlockPoisonContagion && this.scene?.bulletManager?.createPlayerBullet) {
-          const poisonCore = bullet?.visualCoreColor ?? getBaseColorForCoreKey('warlock');
-          const poisonStroke = lerpColor(poisonCore, 0xffffff, 0.45);
-          const small = this.scene.createManagedPlayerAreaBullet(
-            hitX,
-            hitY,
-            poisonCore,
-            {
-              radius: Math.max(28, Math.round((bullet.radius || 96) * 0.55)),
-              damage: Math.max(1, Math.round((bullet.damage || 1) * 0.65)),
-              hasGlow: true,
-              glowRadius: Math.max(42, Math.round((bullet.radius || 96) * 0.55) + 14),
-              glowColor: poisonCore,
-              strokeColor: poisonStroke,
-              maxLifeMs: 3000,
-              hitCooldownMs: 1000,
-              fillAlpha: 0.06,
-              strokeWidth: 2,
-              strokeAlpha: 0.55,
-              tags: ['player_poison_contagion_zone']
-            }
-          );
-          if (small) {
-            small.isPoisonZone = true;
-            small.hitEffectType = 'poison_zone';
-            this.player.bullets.push(small);
-          }
-        }
-
-        // 圣骑专精：圣焰（命中后留持续伤害区域）
-        if (bullet?.holyfire && this.scene?.bulletManager?.createPlayerBullet) {
-          const paladinColor = getBaseColorForCoreKey('paladin');
-          const fire = this.scene.createManagedPlayerAreaBullet(
-            hitX,
-            hitY,
-            paladinColor,
-            {
-              radius: 54,
-              damage: Math.max(1, Math.round(this.player.bulletDamage * 0.18)),
-              alpha: 0.001,
-              maxLifeMs: 850,
-              noCrit: true,
-              hitCooldownMs: Math.max(60, Math.round((this.player?.fireRate || 320) * (220 / 320))),
-              tags: ['player_paladin_holyfire_zone']
-            }
-          );
-          if (fire) {
-            fire.isHolyfire = true;
-            this.player.bullets.push(fire);
-
-            const ring = this.scene.add.circle(hitX, hitY, 54, paladinColor, 0.06);
-            ring.setStrokeStyle(2, paladinColor, 0.65);
-            this.scene.tweens.add({ targets: ring, alpha: 0, duration: 850, onComplete: () => ring.destroy() });
-          }
-        }
-
-        // 术士专精：回响（命中后留法阵）
-        if (this.player?.warlockEcho && this.scene?.bulletManager?.createPlayerBullet) {
-          const warlockColor = getBaseColorForCoreKey('warlock');
-          const rune = this.scene.createManagedPlayerAreaBullet(
-            hitX,
-            hitY,
-            warlockColor,
-            {
-              radius: 46,
-              damage: Math.max(1, Math.round(this.player.bulletDamage * 0.22)),
-              alpha: 0.001,
-              maxLifeMs: 650,
-              noCrit: true,
-              hitCooldownMs: 220,
-              tags: ['player_warlock_echo_rune']
-            }
-          );
-          if (rune) {
-            rune.isRune = true;
-            this.player.bullets.push(rune);
-          }
-        }
-
-        // 副职业强化：命中触发
-        const enh = bullet.basicEnh;
-        if (enh) {
-          // 1) 微量护盾（累积到 1.0 变成一层）
-          if (enh.shieldOnHit && this.player) {
-            this.player.shieldChargeProgress = (this.player.shieldChargeProgress || 0) + enh.shieldOnHit;
-            while (this.player.shieldChargeProgress >= 1) {
-              this.player.shieldChargeProgress -= 1;
-              this.player.shieldCharges = (this.player.shieldCharges || 0) + 1;
-              if (this.player.updateShieldIndicator) this.player.updateShieldIndicator();
-            }
-          }
-
-          // 2) 小范围爆炸（此处只有 Boss，表现为额外伤害+特效）
-          if (enh.explodeOnHit) {
-            const extra = Math.max(1, Math.round(damageResult.amount * enh.explodeOnHit));
-            if (!boss.isInvincible) {
-              boss.takeDamage(extra, { attacker: this.player, source: 'explodeOnHit', suppressHitReaction: true });
-              this.showDamageNumber(boss.x, boss.y - 22, extra, { color: '#66ccff', fontSize: 22, whisper: true });
-              this.createHitEffect(boss.x, boss.y, 0x66ccff);
-            }
-          }
-
-          // 3) 暗影印记叠层
-          if (enh.markOnHit) {
-            boss.shadowMarks = boss.shadowMarks || { stacks: 0, lastAt: 0 };
-            boss.shadowMarks.stacks = Math.min(12, (boss.shadowMarks.stacks || 0) + enh.markOnHit);
-            boss.shadowMarks.lastAt = now;
-            const markText = this.scene.add.text(boss.x, boss.y + boss.bossSize + 8, `印记 x${boss.shadowMarks.stacks}`, {
-              fontSize: '12px',
-              color: '#caa6ff'
-            }).setOrigin(0.5);
-            this.scene.tweens.add({
-              targets: markText,
-              alpha: 0,
-              y: markText.y + 18,
-              duration: 420,
-              onComplete: () => markText.destroy()
-            });
-          }
-
-          // 4) 召唤物集火指令
-          if (enh.petFocusOnHit && this.scene?.petManager?.commandFocus) {
-            this.scene.petManager.commandFocus(boss);
-          }
-        }
-
-        // 吸血
-        this.player.onDealDamage(damageResult.amount);
-
-        // 显示伤害数字（暴击固定红色；普通默认亮黄；毒弹可用绿色）
-        const dmgOptions = { isCrit: damageResult.isCrit };
-        if (bullet.hitEffectType === 'moonfire') {
-          dmgOptions.color = '#88ffcc';
-          dmgOptions.fontSize = 24;
-          dmgOptions.whisper = true;
-        } else if (bullet.poison) {
-          dmgOptions.color = '#66ff99';
-        }
-        this.showDamageNumber(hitX, hitY, damageResult.amount, dmgOptions);
-
-        // Warlock debuff on hit：仅在明确启用时触发
-        // - bullet.poison: 来自毒性附加/宠物减益等来源
-        // - scene.warlockDebuffEnabled: 场景侧显式开启“命中自动附加术士效果”
-        if (this.scene && this.scene.applyWarlockOnHit) {
-          if (bullet.poison || this.scene.warlockDebuffEnabled) {
-            this.scene.applyWarlockOnHit(boss, true);
-          }
-        }
-
-        // 创建命中特效
-        if (bullet.hitEffectType === 'moonfire') {
-          this.createMoonfireRippleEffect(hitX, hitY);
-        } else {
-          const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (damageResult.isCrit ? 0xff3333 : 0xffff00));
-          this.createHitEffect(hitX, hitY, hitColor);
-        }
-
-        // 爆破散射
-        if (bullet.explode) {
-          this.createHitEffect(hitX, hitY, 0xffaa66);
-        }
-
-        // 击退（投枪/盾击风味）
-        if (bullet.knockback && boss && boss.isAlive) {
-          const a = Phaser.Math.Angle.Between(bullet.x, bullet.y, boss.x, boss.y);
-          boss.x += Math.cos(a) * bullet.knockback;
-          boss.y += Math.sin(a) * bullet.knockback;
-        }
+        const isDead = !boss.isAlive;
 
         // 弹射：命中后不立刻销毁，重新朝向 Boss 再来一次
         // - 月火术：motionType === 'moonfire'
@@ -621,9 +486,6 @@ export default class CollisionManager {
             this.destroyManagedBullet(bullet, 'player', 'hit');
           }
         }
-
-        // 统计
-        this.stats.bossHits++;
 
         if (isDead) {
           console.log('Boss 被击败！');
@@ -694,66 +556,10 @@ export default class CollisionManager {
           )) {
             handledByPet = true;
 
-            // 统一使用 10 点作为 Boss 子弹基础伤害（与玩家一致）
-            const rawDmg = Math.max(0, Math.round(10 * bossDamageMult));
-            const dmgMult = Math.max(0.1, Number(pet.damageTakenMult || 1));
-            const dmg = Math.max(1, Math.round(rawDmg * dmgMult));
-            pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
-
-            if (pet.isUndeadSummon) {
-              this.scene?.undeadSummonManager?.onSummonDamaged?.(pet, dmg);
-            } else if (this.scene?.petManager?.onPetDamaged) {
-              this.scene.petManager.onPetDamaged(pet, dmg);
-            }
-
-            // 自然伙伴（熊系）：受击触发自然之怒 / 震地
-            if (pet.petType === 'bear') {
-              const rageLvl = this.player?.natureRageLevel || 0;
-              if (rageLvl > 0) {
-                const mult = 1.10 + 0.05 * (rageLvl - 1);
-                this.player.natureRageUntil = now + 3000;
-                this.player.natureRageMult = mult;
-              }
-
-              const quakeLvl = this.player?.natureEarthquakeLevel || 0;
-              if (quakeLvl > 0 && boss && boss.isAlive && typeof boss.applyStun === 'function') {
-                const chance = Math.min(0.45, 0.15 + 0.05 * (quakeLvl - 1));
-                if (Math.random() < chance) {
-                  boss.applyStun(1000);
-                  this.showDamageNumber(boss.x, boss.y - 70, '眩晕', { color: '#88ffcc', fontSize: 18, whisper: true });
-                }
-              }
-            }
-
-            // 命中特效与数字
-            this.createBossBulletHitEffect(pet.x, pet.y, bullet);
-            this.showDamageNumber(pet.x, pet.y - 30, dmg, { color: '#ffd6a5', fontSize: 20, whisper: true });
-            this.notifyBulletHit({
-              bullet,
-              side: 'boss',
-              attacker: boss,
-              target: pet,
-              targetType: pet.isUndeadSummon ? 'summon' : 'pet',
-              hitX: pet.x,
-              hitY: pet.y,
-              damage: dmg,
-              isCrit: false,
-              killed: (pet.currentHp || 0) <= 0
-            });
+            this.resolveBossBulletHitAlly({ bullet, pet, boss, bossDamageMult });
 
             // 销毁子弹
             this.destroyManagedBullet(bullet, 'boss', 'hit');
-
-            // 宠物死亡：交给 PetManager 进入冷却并销毁
-            if (pet.currentHp <= 0) {
-              if (pet.isUndeadSummon) {
-                this.scene?.undeadSummonManager?.onSummonKilled?.(pet);
-              } else if (this.scene?.petManager?.onPetKilled) {
-                this.scene.petManager.onPetKilled(pet.petType);
-              } else if (pet.active) {
-                pet.destroy();
-              }
-            }
 
             break;
           }
@@ -771,79 +577,10 @@ export default class CollisionManager {
       )) {
         console.log('[碰撞检测] 子弹命中玩家！触发伤害');
         
-        // 玩家被击中
-        let incoming = Math.max(0, Math.round(10 * bossDamageMult)); // Boss 子弹伤害
+        const { isDead } = this.resolveBossBulletHitPlayer({ bullet, boss, bossDamageMult, playerPos });
 
-        // 自然伙伴（熊系）：共担（玩家受击时分摊给熊灵）
-        const splitPct = this.player?.natureBearSplit || 0;
-        if (splitPct > 0 && this.scene?.petManager?.getTankPet) {
-          const bear = this.scene.petManager.getTankPet();
-          if (bear && bear.active && (bear.currentHp || 0) > 0) {
-            const split = Math.max(0, Math.round(incoming * splitPct));
-            if (split > 0) {
-              incoming = Math.max(0, incoming - split);
-              bear.currentHp = Math.max(0, (bear.currentHp || 0) - split);
-              if (this.scene?.petManager?.onPetDamaged) this.scene.petManager.onPetDamaged(bear, split);
-              if (bear.currentHp <= 0 && this.scene?.petManager?.onPetKilled) {
-                this.scene.petManager.onPetKilled(bear.petType);
-              }
-            }
-          }
-        }
-
-        const isDead = this.player.takeDamage(incoming);
-        this.notifyBulletHit({
-          bullet,
-          side: 'boss',
-          attacker: boss,
-          target: this.player,
-          targetType: 'player',
-          hitX: playerPos.x,
-          hitY: playerPos.y,
-          damage: incoming,
-          isCrit: false,
-          killed: !!isDead
-        });
-
-        // 守护：反制（格挡成功后反击）
-        if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
-          const b = this.bossManager?.getCurrentBoss?.();
-          if (b && b.isAlive && !b.isInvincible) {
-            // 反制属于“玩家对 Boss 的直接伤害”，也走统一承伤链，但关闭暴击
-            const counterResult = calculateResolvedDamage({ attacker: this.player, target: b, baseDamage: Math.max(1, Math.round(this.player.bulletDamage || 1)), now, canCrit: false });
-            b.takeDamage(counterResult.amount, { attacker: this.player, source: 'counterOnBlock', suppressHitReaction: true });
-            this.showDamageNumber(b.x, b.y - 44, counterResult.amount, { color: '#88ccff', fontSize: 22, whisper: true });
-            this.createHitEffect(b.x, b.y, 0x88ccff);
-          }
-        }
-
-        // 战士反伤
-        if (this.scene && this.scene.thornsPercent) {
-          const boss = this.bossManager?.getCurrentBoss();
-          if (boss && boss.isAlive) {
-            const reflectBaseDamage = Math.round(incoming * this.scene.thornsPercent);
-            if (!boss.isInvincible) {
-              // 反伤同样视为玩家造成的直接伤害，保持与普通命中的 debuff 结算一致
-              const reflectResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: reflectBaseDamage, now, canCrit: false });
-              boss.takeDamage(reflectResult.amount, { attacker: this.player, source: 'thorns', suppressHitReaction: true });
-              this.showDamageNumber(boss.x, boss.y - 40, reflectResult.amount, '#ff9999');
-            }
-          }
-        }
-        
-        // 创建命中特效（与子弹形状关联：尖锐=火花，圆钝=粉尘爆）
-        this.createBossBulletHitEffect(playerPos.x, playerPos.y, bullet);
-        
         // 通过统一出口销毁子弹，避免新旧系统各记各的生命周期。
         this.destroyManagedBullet(bullet, 'boss', 'hit');
-        
-        // 统计
-        this.stats.playerHits++;
-        
-        if (isDead) {
-          console.log('玩家死亡！');
-          this.onPlayerDeath();
-        }
         
         // 被击中后进入无敌状态，不再检测其他子弹
         return;

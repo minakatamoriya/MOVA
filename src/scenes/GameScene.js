@@ -7,6 +7,7 @@ import Player from '../player/Player';
 import { ITEM_DEFS, getItemById } from '../data/items';
 import PetManager from '../classes/pets/PetManager';
 import UndeadSummonManager from '../classes/pets/UndeadSummonManager';
+import SummonRegistry from '../classes/pets/SummonRegistry';
 import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
 import CooldownHud from '../ui/CooldownHud';
@@ -15,6 +16,8 @@ import { BulletCore, PatternSystem, VfxSystem, AttackTimeline, DebugOverlay } fr
 import { normalizeCoreKey } from '../classes/classDefs';
 import { normalizeSkillId } from '../classes/talentTrees';
 import { migrateLegacyProgressionRegistry } from '../classes/progression';
+import { getBaseColorForCoreKey, lerpColor } from '../classes/visual/basicSkillColors';
+import { calculateResolvedDamage } from '../combat/damageModel';
 
 const EMERGENCY_COOLDOWN_DEFS = {
   paladin: {
@@ -1453,6 +1456,408 @@ class GameScene extends Phaser.Scene {
     return bullet;
   }
 
+  getManagedBullets(side) {
+    if (this.bulletCore?.getActiveBullets) {
+      return this.bulletCore.getActiveBullets(side) || [];
+    }
+
+    if (side === 'boss') {
+      return this.bulletManager?.getBossBullets?.() || [];
+    }
+    if (side === 'player') {
+      return this.bulletManager?.getPlayerBullets?.() || [];
+    }
+
+    return [];
+  }
+
+  destroyManagedBullet(bullet, side, reason = 'cleanup') {
+    if (!bullet) return false;
+
+    if (this.bulletCore?.destroyBullet) {
+      return this.bulletCore.destroyBullet(bullet, { side, reason });
+    }
+
+    if (this.bulletManager?.destroyBullet) {
+      this.bulletManager.destroyBullet(bullet, side === 'player');
+      return true;
+    }
+
+    bullet.destroy?.();
+    return true;
+  }
+
+  clearManagedBullets(side) {
+    if (side === 'boss') {
+      if (this.bulletCore?.clearSide) {
+        this.bulletCore.clearSide('boss');
+        return;
+      }
+      this.bulletManager?.clearBossBullets?.();
+      return;
+    }
+
+    if (side === 'player') {
+      if (this.bulletCore?.clearSide) {
+        this.bulletCore.clearSide('player');
+        return;
+      }
+      this.bulletManager?.clearPlayerBullets?.();
+      return;
+    }
+
+    if (this.bulletCore?.clearAll) {
+      this.bulletCore.clearAll();
+      return;
+    }
+
+    if (this.bulletManager?.destroyAllBullets) {
+      this.bulletManager.destroyAllBullets();
+      return;
+    }
+
+    this.bulletManager?.clearAll?.();
+  }
+
+  handleManagedBulletHit(payload = {}) {
+    const side = payload.side === 'boss' ? 'boss' : 'player';
+    const targetType = payload.targetType || '';
+
+    if (side === 'player' && targetType === 'boss') {
+      this.collisionManager.stats.bossHits += 1;
+      this.applyManagedPlayerBossHitEffects(payload);
+      return payload;
+    }
+
+    if (side === 'player' && targetType === 'minion') {
+      this.applyManagedPlayerMinionHitEffects(payload);
+      return payload;
+    }
+
+    if (side === 'boss' && targetType === 'player') {
+      this.applyManagedBossPlayerHitEffects(payload);
+      return payload;
+    }
+
+    if (side === 'boss' && (targetType === 'pet' || targetType === 'summon')) {
+      this.applyManagedBossAllyHitEffects(payload);
+      return payload;
+    }
+
+    return payload;
+  }
+
+  applyManagedBossAllyHitEffects(payload = {}) {
+    const bullet = payload.bullet;
+    const ally = payload.target;
+    const boss = payload.attacker;
+    const damage = Math.max(0, Math.round(Number(payload.damage || 0)));
+    const killed = !!payload.killed;
+    const hitX = Number(payload.hitX ?? ally?.x ?? bullet?.x ?? 0);
+    const hitY = Number(payload.hitY ?? ally?.y ?? bullet?.y ?? 0);
+
+    if (!bullet || !ally) return;
+
+    if (ally.isUndeadSummon) {
+      this.undeadSummonManager?.onSummonDamaged?.(ally, damage);
+    } else if (this.petManager?.onPetDamaged) {
+      this.petManager.onPetDamaged(ally, damage);
+    }
+
+    if (ally.petType === 'bear') {
+      const rageLvl = this.player?.natureRageLevel || 0;
+      if (rageLvl > 0) {
+        const mult = 1.10 + 0.05 * (rageLvl - 1);
+        this.player.natureRageUntil = (this.time?.now ?? 0) + 3000;
+        this.player.natureRageMult = mult;
+      }
+
+      const quakeLvl = this.player?.natureEarthquakeLevel || 0;
+      if (quakeLvl > 0 && boss && boss.isAlive && typeof boss.applyStun === 'function') {
+        const chance = Math.min(0.45, 0.15 + 0.05 * (quakeLvl - 1));
+        if (Math.random() < chance) {
+          boss.applyStun(1000);
+          this.showDamageNumber(boss.x, boss.y - 70, '眩晕', { color: '#88ffcc', fontSize: 18, whisper: true });
+        }
+      }
+    }
+
+    this.collisionManager?.createBossBulletHitEffect?.(hitX, hitY, bullet);
+    this.showDamageNumber(hitX, hitY - 30, damage, { color: '#ffd6a5', fontSize: 20, whisper: true });
+
+    if (killed) {
+      if (ally.isUndeadSummon) {
+        this.undeadSummonManager?.onSummonKilled?.(ally);
+      } else if (this.petManager?.onPetKilled) {
+        this.petManager.onPetKilled(ally.petType);
+      } else if (ally.active) {
+        ally.destroy?.();
+      }
+    }
+  }
+
+  applyManagedBossPlayerHitEffects(payload = {}) {
+    const bullet = payload.bullet;
+    const boss = payload.attacker;
+    const damage = Math.max(0, Math.round(Number(payload.damage || 0)));
+    const killed = !!payload.killed;
+    const hitX = Number(payload.hitX ?? this.player?.x ?? bullet?.x ?? 0);
+    const hitY = Number(payload.hitY ?? this.player?.y ?? bullet?.y ?? 0);
+
+    if (!bullet) return;
+
+    this.collisionManager.stats.playerHits += 1;
+
+    if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
+      const currentBoss = this.bossManager?.getCurrentBoss?.();
+      if (currentBoss && currentBoss.isAlive && !currentBoss.isInvincible) {
+        const counterResult = calculateResolvedDamage({
+          attacker: this.player,
+          target: currentBoss,
+          baseDamage: Math.max(1, Math.round(this.player.bulletDamage || 1)),
+          now: this.time?.now ?? 0,
+          canCrit: false
+        });
+        currentBoss.takeDamage(counterResult.amount, { attacker: this.player, source: 'counterOnBlock', suppressHitReaction: true });
+        this.showDamageNumber(currentBoss.x, currentBoss.y - 44, counterResult.amount, { color: '#88ccff', fontSize: 22, whisper: true });
+        this.collisionManager?.createHitEffect?.(currentBoss.x, currentBoss.y, 0x88ccff);
+      }
+    }
+
+    if (this.thornsPercent && boss && boss.isAlive && !boss.isInvincible) {
+      const reflectBaseDamage = Math.round(damage * this.thornsPercent);
+      const reflectResult = calculateResolvedDamage({
+        attacker: this.player,
+        target: boss,
+        baseDamage: reflectBaseDamage,
+        now: this.time?.now ?? 0,
+        canCrit: false
+      });
+      boss.takeDamage(reflectResult.amount, { attacker: this.player, source: 'thorns', suppressHitReaction: true });
+      this.showDamageNumber(boss.x, boss.y - 40, reflectResult.amount, '#ff9999');
+    }
+
+    this.collisionManager?.createBossBulletHitEffect?.(hitX, hitY, bullet);
+
+    if (killed) {
+      this.collisionManager?.onPlayerDeath?.();
+    }
+  }
+
+  applyManagedPlayerBossHitEffects(payload = {}) {
+    const bullet = payload.bullet;
+    const boss = payload.target;
+    const damage = Math.max(0, Math.round(Number(payload.damage || 0)));
+    const now = Number(payload.at || this.time?.now || 0);
+    const hitX = Number(payload.hitX ?? bullet?.x ?? boss?.x ?? 0);
+    const hitY = Number(payload.hitY ?? bullet?.y ?? boss?.y ?? 0);
+    const killed = !!payload.killed;
+    const isCrit = !!payload.isCrit;
+
+    if (!bullet || !boss || boss.isAlive === false) return;
+
+    this.player?.onDealDamage?.(damage);
+
+    if (!killed && (bullet.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
+      const chance = Phaser.Math.Clamp(Number(bullet.stunChance || 0), 0, 0.95);
+      if (Math.random() < chance) {
+        const stunMs = Math.max(120, Number(bullet.stunMs || 650));
+        boss.applyStun(stunMs);
+        this.showDamageNumber(boss.x, boss.y - 70, '眩晕', { color: '#ffd26a', fontSize: 18, whisper: true });
+      }
+    }
+
+    const enh = bullet.basicEnh;
+    if (enh) {
+      if (enh.shieldOnHit && this.player) {
+        this.player.shieldChargeProgress = (this.player.shieldChargeProgress || 0) + enh.shieldOnHit;
+        while (this.player.shieldChargeProgress >= 1) {
+          this.player.shieldChargeProgress -= 1;
+          this.player.shieldCharges = (this.player.shieldCharges || 0) + 1;
+          if (this.player.updateShieldIndicator) this.player.updateShieldIndicator();
+        }
+      }
+
+      if (enh.explodeOnHit && !boss.isInvincible) {
+        const extra = Math.max(1, Math.round(damage * enh.explodeOnHit));
+        boss.takeDamage(extra, { attacker: this.player, source: 'explodeOnHit', suppressHitReaction: true });
+        this.showDamageNumber(boss.x, boss.y - 22, extra, { color: '#66ccff', fontSize: 22, whisper: true });
+        this.createHitEffect(boss.x, boss.y, 0x66ccff);
+      }
+
+      if (enh.markOnHit) {
+        boss.shadowMarks = boss.shadowMarks || { stacks: 0, lastAt: 0 };
+        boss.shadowMarks.stacks = Math.min(12, (boss.shadowMarks.stacks || 0) + enh.markOnHit);
+        boss.shadowMarks.lastAt = now;
+        const markText = this.add.text(boss.x, boss.y + boss.bossSize + 8, `印记 x${boss.shadowMarks.stacks}`, {
+          fontSize: '12px',
+          color: '#caa6ff'
+        }).setOrigin(0.5);
+        this.tweens.add({
+          targets: markText,
+          alpha: 0,
+          y: markText.y + 18,
+          duration: 420,
+          onComplete: () => markText.destroy()
+        });
+      }
+
+      if (enh.petFocusOnHit && this.petManager?.commandFocus) {
+        this.petManager.commandFocus(boss);
+      }
+    }
+
+    if (this.applyWarlockOnHit && (bullet.poison || this.warlockDebuffEnabled)) {
+      this.applyWarlockOnHit(boss, true);
+    }
+
+    this.presentManagedPlayerBossHit({ bullet, boss, hitX, hitY, damage, isCrit });
+    this.spawnManagedPlayerBossHitZones({ bullet, boss, hitX, hitY, killed });
+  }
+
+  applyManagedPlayerMinionHitEffects(payload = {}) {
+    const bullet = payload.bullet;
+    const enemy = payload.target;
+    const damage = Math.max(0, Math.round(Number(payload.damage || 0)));
+    const hitX = Number(payload.hitX ?? bullet?.x ?? enemy?.x ?? 0);
+    const hitY = Number(payload.hitY ?? bullet?.y ?? enemy?.y ?? 0);
+    const isCrit = !!payload.isCrit;
+
+    if (!bullet || !enemy) return;
+
+    this.player?.onDealDamage?.(damage);
+    this.presentManagedPlayerMinionHit({ bullet, enemy, hitX, hitY, damage, isCrit });
+  }
+
+  presentManagedPlayerMinionHit({ bullet, enemy, hitX, hitY, damage, isCrit } = {}) {
+    if (!bullet || !enemy) return;
+
+    const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (isCrit ? 0xff3333 : 0xffff00));
+    const damageAnchorX = bullet.damageNumberAtTarget ? enemy.x : hitX;
+    const damageAnchorY = bullet.damageNumberAtTarget
+      ? (enemy.y - Math.max(22, (enemy.radius || enemy.bossSize || 18) + 8))
+      : (hitY - 24);
+
+    this.collisionManager?.createHitEffect?.(hitX, hitY, hitColor);
+    this.showDamageNumber(damageAnchorX, damageAnchorY, damage, isCrit ? '#ff3333' : '#ffee00');
+
+    if (bullet.explode) {
+      this.collisionManager?.createHitEffect?.(hitX, hitY, 0xffaa66);
+    }
+  }
+
+  presentManagedPlayerBossHit({ bullet, boss, hitX, hitY, damage, isCrit } = {}) {
+    if (!bullet || !boss) return;
+
+    const dmgOptions = { isCrit: !!isCrit };
+    if (bullet.hitEffectType === 'moonfire') {
+      dmgOptions.color = '#88ffcc';
+      dmgOptions.fontSize = 24;
+      dmgOptions.whisper = true;
+    } else if (bullet.poison) {
+      dmgOptions.color = '#66ff99';
+    }
+    this.showDamageNumber(hitX, hitY, damage, dmgOptions);
+
+    if (bullet.hitEffectType === 'moonfire') {
+      this.collisionManager?.createMoonfireRippleEffect?.(hitX, hitY);
+    } else {
+      const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (isCrit ? 0xff3333 : 0xffff00));
+      this.collisionManager?.createHitEffect?.(hitX, hitY, hitColor);
+    }
+
+    if (bullet.explode) {
+      this.collisionManager?.createHitEffect?.(hitX, hitY, 0xffaa66);
+    }
+
+    if (bullet.knockback && boss.isAlive) {
+      const angle = Phaser.Math.Angle.Between(bullet.x, bullet.y, boss.x, boss.y);
+      boss.x += Math.cos(angle) * bullet.knockback;
+      boss.y += Math.sin(angle) * bullet.knockback;
+    }
+  }
+
+  spawnManagedPlayerBossHitZones({ bullet, boss, hitX, hitY, killed } = {}) {
+    if (!bullet || !boss) return;
+
+    if (killed && bullet.isPoisonZone && this.player?.warlockPoisonContagion) {
+      const poisonCore = bullet.visualCoreColor ?? getBaseColorForCoreKey('warlock');
+      const poisonStroke = lerpColor(poisonCore, 0xffffff, 0.45);
+      const contagionZone = this.createManagedPlayerAreaBullet(
+        hitX,
+        hitY,
+        poisonCore,
+        {
+          radius: Math.max(28, Math.round((bullet.radius || 96) * 0.55)),
+          damage: Math.max(1, Math.round((bullet.damage || 1) * 0.65)),
+          hasGlow: true,
+          glowRadius: Math.max(42, Math.round((bullet.radius || 96) * 0.55) + 14),
+          glowColor: poisonCore,
+          strokeColor: poisonStroke,
+          maxLifeMs: 3000,
+          hitCooldownMs: 1000,
+          fillAlpha: 0.06,
+          strokeWidth: 2,
+          strokeAlpha: 0.55,
+          tags: ['player_poison_contagion_zone']
+        }
+      );
+      if (contagionZone) {
+        contagionZone.isPoisonZone = true;
+        contagionZone.hitEffectType = 'poison_zone';
+        this.player?.bullets?.push?.(contagionZone);
+      }
+    }
+
+    if (bullet.holyfire) {
+      const paladinColor = getBaseColorForCoreKey('paladin');
+      const holyfireZone = this.createManagedPlayerAreaBullet(
+        hitX,
+        hitY,
+        paladinColor,
+        {
+          radius: 54,
+          damage: Math.max(1, Math.round((this.player?.bulletDamage || 1) * 0.18)),
+          alpha: 0.001,
+          maxLifeMs: 850,
+          noCrit: true,
+          hitCooldownMs: Math.max(60, Math.round((this.player?.fireRate || 320) * (220 / 320))),
+          tags: ['player_paladin_holyfire_zone']
+        }
+      );
+      if (holyfireZone) {
+        holyfireZone.isHolyfire = true;
+        this.player?.bullets?.push?.(holyfireZone);
+
+        const ring = this.add.circle(hitX, hitY, 54, paladinColor, 0.06);
+        ring.setStrokeStyle(2, paladinColor, 0.65);
+        this.tweens.add({ targets: ring, alpha: 0, duration: 850, onComplete: () => ring.destroy() });
+      }
+    }
+
+    if (this.player?.warlockEcho) {
+      const warlockColor = getBaseColorForCoreKey('warlock');
+      const echoRune = this.createManagedPlayerAreaBullet(
+        hitX,
+        hitY,
+        warlockColor,
+        {
+          radius: 46,
+          damage: Math.max(1, Math.round((this.player?.bulletDamage || 1) * 0.22)),
+          alpha: 0.001,
+          maxLifeMs: 650,
+          noCrit: true,
+          hitCooldownMs: 220,
+          tags: ['player_warlock_echo_rune']
+        }
+      );
+      if (echoRune) {
+        echoRune.isRune = true;
+        this.player?.bullets?.push?.(echoRune);
+      }
+    }
+  }
+
   // 特殊弹统一配置：AoE、法阵、不可见 hitbox 等都经由这里写通用后处理。
   configureManagedBullet(bullet, config = {}) {
     if (!bullet) return null;
@@ -1541,7 +1946,8 @@ class GameScene extends Phaser.Scene {
     // 统一接线顺序：BulletCore 作为底层适配，Pattern/Vfx/Timeline/Overlay 基于它往上叠。
     this.bulletCore = new BulletCore(this, {
       bulletManager: this.bulletManager,
-      collisionManager: this.collisionManager
+      collisionManager: this.collisionManager,
+      onHit: (payload) => this.handleManagedBulletHit(payload)
     });
     this.vfxSystem = new VfxSystem(this, { depth: 2400 });
     this.patternSystem = new PatternSystem(this, {
@@ -2171,6 +2577,9 @@ class GameScene extends Phaser.Scene {
 
     // 新流程：开局不启用散射自动射击；必须先选择地上的武器
     this.player.canFire = false;
+
+    // 初始化召唤物统一注册表
+    this.summonRegistry = new SummonRegistry();
 
     // 初始化宠物管理器（真实宠物：熊/鹰/树精）
     this.petManager = new PetManager(this);

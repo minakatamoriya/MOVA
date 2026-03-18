@@ -1,7 +1,15 @@
 /**
- * 地图池 & 分支系统（完整版）
+ * [DEPRECATED] 地图池 & 分支系统
  * ════════════════════════════════════════════
- * 三条主线 × 8 张地图 = 24 张 + 6 张中立/特殊 = 30 张
+ * 2024-03 起项目已切换为混沌竞技场单地图模式。
+ * 本文件中的三路线数据（HUNT/ARCANE/WAR_MAPS）仅作为地图元数据池保留，
+ * 供 LevelProgressionMixin 的竞技场关卡随机选图使用。
+ * 旧的路线选择流程（getLayerChoices / showPathChoiceUI）已弃用。
+ *
+ * 仍在使用的导出：ALL_MAPS, NEUTRAL, getMapById, START_ROOM
+ * 已弃用：STAGE_FLOW, LINE_META, getLayerChoices, HUNT_MAPS, ARCANE_MAPS, WAR_MAPS
+ *
+ * 原设计：三条主线 × 8 张地图 = 24 张 + 6 张中立/特殊 = 30 张
  *
  * 流程：10 层（不含起点）
  *   起点  → 命运十字（选武器）

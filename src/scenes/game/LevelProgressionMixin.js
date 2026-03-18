@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ALL_MAPS, STAGE_FLOW, LINE_META, NEUTRAL, getLayerChoices, getMapById } from '../../data/mapPool';
+import { ALL_MAPS, NEUTRAL, getMapById } from '../../data/mapPool';
 import { getMapBoss, getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
 import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { rollEliteAffixes } from '../../data/eliteAffixes';
@@ -340,9 +340,7 @@ export function applyLevelProgressionMixin(GameScene) {
 
       this.cleanupRoundTransitionObjects();
 
-      if (this.bulletManager?.destroyAllBullets) {
-        this.bulletManager.destroyAllBullets();
-      }
+      this.clearManagedBullets?.();
 
       if (Array.isArray(this.drops)) {
         this.drops.forEach(d => {
@@ -877,7 +875,7 @@ export function applyLevelProgressionMixin(GameScene) {
       if (!this.mapConfig) return;
       if (this._pathChoiceActive) return;
 
-      try { this.bulletManager?.clearBossBullets?.(); } catch (_) { /* ignore */ }
+      try { this.clearManagedBullets?.('boss'); } catch (_) { /* ignore */ }
 
       if (this.player?.fireTimer) {
         this.player.fireTimer.paused = false;
@@ -1014,103 +1012,10 @@ export function applyLevelProgressionMixin(GameScene) {
       });
     },
 
+    // [DEPRECATED] 旧三路线系统 —— 混沌竞技场模式下不再调用
     showPathChoiceUI() {
       if (this._pathChoiceActive) return;
-      this._pathChoiceActive = true;
-      this.cleanupPathChoiceObjects();
-      try { this.bulletManager?.destroyAllBullets?.(); } catch (_) { /* ignore */ }
-
-      const { choices: rawChoices } = getLayerChoices(
-        this.currentStage,
-        this.currentLine,
-        this.runState
-      );
-      const choices = rawChoices || [];
-      while (choices.length < 3) {
-        choices.push({ id: 'unknown', name: '未知路径', subtitle: '???', line: NEUTRAL, layers: [] });
-      }
-
-      const cfg = this.mapConfig;
-      const worldSize = cfg.gridSize * cfg.cellSize;
-      const cell = cfg.cellSize;
-
-      const doorW = Math.floor(cell * 1.3);
-      const doorH = Math.floor(cell * 0.9);
-      const gap = Math.floor(cell * 0.6);
-      const totalW = doorW * 3 + gap * 2;
-      const startX = Math.floor((worldSize - totalW) / 2 + doorW / 2);
-      // 不贴最顶端：沿用出口门的“世界高度比例”位置
-      const yFrac = (BALANCE_CONSTANTS?.exitDoor?.yFrac != null) ? BALANCE_CONSTANTS.exitDoor.yFrac : 0.14;
-      const doorY = Math.floor(worldSize * yFrac);
-
-      this._pathDoorZones = [];
-
-      choices.forEach((choice, i) => {
-        const cx = startX + i * (doorW + gap);
-        const cy = doorY;
-
-        const doorColor = (LINE_META[choice.line] || LINE_META[NEUTRAL])?.color || 0x888888;
-
-        const portal = createRiftPortal(this, cx, cy, {
-          width: doorW,
-          height: doorH,
-          depth: 210,
-          label: '',
-        });
-
-        // 用一条细色条保留“线路颜色”语义（不增加额外 UI 结构）
-        const colorBar = this.add.rectangle(cx, cy - doorH / 2 - 6, Math.max(10, doorW - 10), 5, doorColor, 0.9);
-        colorBar.setDepth(211);
-
-        const nameText = this.add.text(cx, cy - doorH * 0.70, choice.name, {
-          fontSize: '16px',
-          fontFamily: 'Arial, sans-serif',
-          color: '#ffffff',
-          stroke: '#000000',
-          strokeThickness: 4,
-          align: 'center',
-          wordWrap: { width: doorW - 10 }
-        }).setOrigin(0.5);
-        nameText.setDepth(212);
-
-        const subText = this.add.text(cx, cy - doorH * 0.70 + 22, choice.subtitle, {
-          fontSize: '13px',
-          fontFamily: 'Arial, sans-serif',
-          color: '#ccddaa',
-          stroke: '#000000',
-          strokeThickness: 3,
-          align: 'center',
-          wordWrap: { width: doorW - 10 }
-        }).setOrigin(0.5);
-        subText.setDepth(212);
-
-        const zone = this.add.zone(cx, cy, doorW, doorH);
-
-        this._pathDoorZones.push({
-          zone,
-          choice,
-          rift: {
-            x: cx,
-            y: cy,
-            a: portal.a,
-            b: portal.b,
-            touchPadPx: getDefaultRiftTouchPadPx(cell)
-          }
-        });
-        this._pathChoiceObjects.push(portal.root, colorBar, nameText, subText, zone);
-      });
-
-      if (this.systemMessage) {
-        this.systemMessage.show('Boss 已被击败！地图上方出现了三条路径，走入选择下一关。', {
-          key: 'boss_defeated_path_choice',
-          durationMs: 4500
-        });
-      }
-    },
-
-    getMapLineLabel(line) {
-      const meta = LINE_META[line] || LINE_META[NEUTRAL];
-      return meta ? `${meta.emoji} ${meta.label}` : line;
+      console.warn('[DEPRECATED] showPathChoiceUI: path-choice flow disabled in chaos arena mode');
     },
 
     selectPathChoice(choice) {

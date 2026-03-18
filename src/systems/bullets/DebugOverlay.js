@@ -2,12 +2,19 @@ import Phaser from 'phaser';
 
 function makeMetricLines(coreMetrics = {}, timelineMetrics = []) {
   const firstTimeline = timelineMetrics[0] || null;
+  const destroyReasons = coreMetrics.destroyedByReason || {};
+  const reasonSummary = Object.keys(destroyReasons)
+    .sort((a, b) => Number(destroyReasons[b] || 0) - Number(destroyReasons[a] || 0))
+    .slice(0, 2)
+    .map((key) => `${key}:${Number(destroyReasons[key] || 0)}`)
+    .join(' ');
   return [
     `player bullets: ${Number(coreMetrics.activePlayerBullets || 0)}`,
     `boss bullets: ${Number(coreMetrics.activeBossBullets || 0)}`,
     `hit count: ${Number(coreMetrics.hitCount || 0)}`,
     `pooled bullets: ${Number(coreMetrics.pooledBullets || 0)}`,
     `created/destroyed: ${Number(coreMetrics.managerCreated || 0)}/${Number(coreMetrics.managerDestroyed || 0)}`,
+    `destroy reasons: ${reasonSummary || 'none'}`,
     firstTimeline ? `timeline: ${firstTimeline.id} phase ${firstTimeline.currentPhaseIndex}` : 'timeline: none'
   ];
 }

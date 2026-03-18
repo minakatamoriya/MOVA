@@ -3,6 +3,8 @@ import { calculateResolvedDamage } from '../../combat/damageModel';
 import { clearPendingMeleeWindup, hasPendingMeleeWindup, startMeleeWindup } from './meleeWindup';
 import { clampPointToPlayerVision, collectCombatEnemies, isPointInPlayerVision } from './playerVision';
 
+const REGISTRY_ID = 'pet';
+
 const PET_TYPES = /** @type {const} */ ({
   bear: 'bear',
   hawk: 'hawk',
@@ -17,6 +19,7 @@ export default class PetManager {
   constructor(scene) {
     this.scene = scene;
     this.player = null;
+    this.summonRegistry = scene?.summonRegistry || null;
 
     this.owned = new Set();
     this.active = new Map(); // type -> container
@@ -226,7 +229,10 @@ export default class PetManager {
     if (type === PET_TYPES.hawk) pet = this.createHawk();
     if (type === PET_TYPES.treant) pet = this.createTreant();
 
-    if (pet) this.active.set(type, pet);
+    if (pet) {
+      this.active.set(type, pet);
+      this.summonRegistry?.register(REGISTRY_ID, pet);
+    }
   }
 
   createBear() {
@@ -399,6 +405,7 @@ export default class PetManager {
     const existing = this.active.get(type);
     if (existing && existing.active) {
       clearPendingMeleeWindup(existing);
+      this.summonRegistry?.unregister(REGISTRY_ID, existing);
       existing.destroy();
     }
     this.active.delete(type);

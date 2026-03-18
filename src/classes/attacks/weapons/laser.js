@@ -46,8 +46,8 @@ function destroyGraphicsObject(obj) {
 
 function destroyHitbox(scene, hitbox) {
   if (!hitbox) return;
-  if (scene?.bulletManager) {
-    scene.bulletManager.destroyBullet(hitbox, true);
+  if (scene?.destroyManagedBullet) {
+    scene.destroyManagedBullet(hitbox, 'player', 'cleanup');
   } else if (hitbox.destroy) {
     hitbox.destroy();
   }

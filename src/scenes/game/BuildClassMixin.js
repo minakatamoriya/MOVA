@@ -19,6 +19,7 @@ import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel,
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
+import { spawnWarriorMeleeHit as _spawnWarriorMeleeHit, spawnWarriorCrescentProjectile as _spawnWarriorCrescentProjectile } from '../../classes/attacks/weapons/warriorSlash';
 
 /**
  * 职业构建 / 升级 / 近战 / 法师 / 圣骑 / 术士 / 德鲁伊宠物 相关方法
@@ -374,6 +375,170 @@ export function applyBuildClassMixin(GameScene) {
         case 'guardian_counter':
           this.player.counterOnBlock = true;
           break;
+
+        // === 紧急冷却天赋（记录 player 属性，实际触发由 installPassiveCooldownSkills 管理） ===
+        case 'paladin_divine_shelter':
+          this.player.paladinDivineShelterLevel = Math.min(3, (this.player.paladinDivineShelterLevel || 0) + 1);
+          break;
+        case 'paladin_shelter_extension':
+          this.player.paladinShelterExtensionLevel = Math.min(3, (this.player.paladinShelterExtensionLevel || 0) + 1);
+          break;
+        case 'archer_nimble_evade':
+          this.player.archerNimbleEvadeLevel = Math.min(3, (this.player.archerNimbleEvadeLevel || 0) + 1);
+          break;
+        case 'archer_evade_mastery':
+          this.player.archerEvadeMasteryLevel = Math.min(3, (this.player.archerEvadeMasteryLevel || 0) + 1);
+          break;
+        case 'warrior_blood_conversion':
+          this.player.warriorBloodConversionLevel = Math.min(3, (this.player.warriorBloodConversionLevel || 0) + 1);
+          break;
+        case 'warrior_bloodlust_mastery':
+          this.player.warriorBloodlustMasteryLevel = Math.min(3, (this.player.warriorBloodlustMasteryLevel || 0) + 1);
+          break;
+        case 'mage_frost_domain':
+          this.player.mageFrostDomainLevel = Math.min(3, (this.player.mageFrostDomainLevel || 0) + 1);
+          break;
+        case 'druid_nourish':
+          this.player.druidNourishLevel = Math.min(3, (this.player.druidNourishLevel || 0) + 1);
+          break;
+        case 'druid_nourish_growth':
+          this.player.druidNourishGrowthLevel = Math.min(3, (this.player.druidNourishGrowthLevel || 0) + 1);
+          break;
+        case 'warlock_infernal':
+          this.player.warlockInfernalLevel = Math.min(3, (this.player.warlockInfernalLevel || 0) + 1);
+          break;
+        case 'warlock_infernal_contract':
+          this.player.warlockInfernalContractLevel = Math.min(3, (this.player.warlockInfernalContractLevel || 0) + 1);
+          break;
+
+        // === 第三天赋：准备节点 ===
+        case 'third_depth_prep':
+          this.player.thirdDepthPrepUnlocked = true;
+          break;
+        case 'third_dual_prep':
+          this.player.thirdDualPrepUnlocked = true;
+          break;
+
+        // === 第三天赋：深度专精 ===
+        case 'mage_dualcaster':
+          this.player.mageDualcaster = true;
+          break;
+        case 'mage_trilaser':
+          this.player.mageTrilaser = true;
+          break;
+        case 'mage_arcanomorph':
+          this.player.mageArcanomorphLevel = Math.min(3, (this.player.mageArcanomorphLevel || 0) + 1);
+          break;
+        case 'archer_hundred':
+          this.player.archerHundredLevel = Math.min(3, (this.player.archerHundredLevel || 0) + 1);
+          break;
+        case 'archer_windfury':
+          this.player.archerWindfury = true;
+          break;
+        case 'archer_eagleeye':
+          this.player.archerEagleeye = true;
+          break;
+        case 'warrior_bladestorm':
+          this.player.warriorBladestorm = true;
+          break;
+        case 'warrior_berserkgod':
+          this.player.warriorBerserkgodLevel = Math.min(3, (this.player.warriorBerserkgodLevel || 0) + 1);
+          break;
+        case 'warrior_unyielding':
+          this.player.warriorUnyielding = true;
+          break;
+        case 'warlock_infinite':
+          this.player.warlockInfinite = true;
+          break;
+        case 'warlock_souleater':
+          this.player.warlockSouleaterLevel = Math.min(3, (this.player.warlockSouleaterLevel || 0) + 1);
+          break;
+        case 'warlock_netherlord':
+          this.player.warlockNetherlord = true;
+          break;
+        case 'paladin_avenger':
+          this.player.paladinAvengerLevel = Math.min(3, (this.player.paladinAvengerLevel || 0) + 1);
+          break;
+        case 'paladin_sacredshield':
+          this.player.paladinSacredshield = true;
+          break;
+        case 'paladin_divine':
+          this.player.paladinDivine = true;
+          break;
+        case 'druid_kingofbeasts':
+          this.player.druidKingofbeasts = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'druid_naturefusion':
+          this.player.druidNaturefusion = true;
+          break;
+        case 'druid_astralstorm':
+          this.player.druidAstralstormLevel = Math.min(3, (this.player.druidAstralstormLevel || 0) + 1);
+          break;
+
+        // === 第三天赋：双职业专精 ===
+        case 'dual_mage_drone_arcanebear':
+          this.player.dualArcanebear = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_mage_drone_starwisdom':
+          this.player.dualStarwisdomLevel = Math.min(3, (this.player.dualStarwisdomLevel || 0) + 1);
+          break;
+        case 'dual_mage_drone_natureoverflow':
+          this.player.dualNatureoverflow = true;
+          break;
+        case 'dual_scatter_mage_enchantedarrow':
+          this.player.dualEnchantedarrow = true;
+          break;
+        case 'dual_scatter_mage_hastefocus':
+          this.player.dualHastefocusLevel = Math.min(3, (this.player.dualHastefocusLevel || 0) + 1);
+          break;
+        case 'dual_scatter_mage_archercircle':
+          this.player.dualArchercircle = true;
+          break;
+        case 'dual_warrior_paladin_crusade':
+          this.player.dualCrusade = true;
+          break;
+        case 'dual_warrior_paladin_righteousrage':
+          this.player.dualRighteousrageLevel = Math.min(3, (this.player.dualRighteousrageLevel || 0) + 1);
+          break;
+        case 'dual_warrior_paladin_sacredspin':
+          this.player.dualSacredspin = true;
+          break;
+        case 'dual_warlock_drone_decay':
+          this.player.dualDecay = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_warlock_drone_witheringroar':
+          this.player.dualWitheringroar = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_warlock_drone_soulbloom':
+          this.player.dualSoulbloomLevel = Math.min(3, (this.player.dualSoulbloomLevel || 0) + 1);
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_paladin_scatter_holyrain':
+          this.player.dualHolyrain = true;
+          break;
+        case 'dual_paladin_scatter_blessedquiver':
+          this.player.dualBlessedquiverLevel = Math.min(3, (this.player.dualBlessedquiverLevel || 0) + 1);
+          break;
+        case 'dual_paladin_scatter_retribution':
+          this.player.dualRetribution = true;
+          break;
+        case 'dual_drone_warrior_ironbark':
+          this.player.dualIronbark = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_drone_warrior_predator':
+          this.player.dualPredatorLevel = Math.min(3, (this.player.dualPredatorLevel || 0) + 1);
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'dual_drone_warrior_ancestral':
+          this.player.dualAncestral = true;
+          this.petManager?.refreshPetStats?.();
+          break;
+
         default:
           break;
       }
@@ -1496,286 +1661,11 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     spawnWarriorMeleeHit(facingAngle) {
-      if (!this.player || !this.bulletManager) return;
-
-      const angle = (typeof facingAngle === 'number') ? facingAngle : -Math.PI / 2;
-
-      const scheme0 = getBasicSkillColorScheme('warrior', this.player.offCoreKey);
-      const redCore = 0xff3a3a;
-      const redBright = 0xff7777;
-      const redGlow = 0xffb3b3;
-      const scheme = {
-        ...scheme0,
-        coreColor: redCore,
-        coreBright: redBright,
-        accentColor: redCore,
-        glowColor: redGlow,
-        trailColor: redCore
-      };
-
-      const enh = getBasicAttackEnhancements(this.player.mainCoreKey, this.player.offCoreKey);
-
-      const arcSpan = this.player.warriorSpin ? Math.PI * 2 : (Math.PI * 1.12);
-      const start = -arcSpan / 2;
-      const end = arcSpan / 2;
-      const yScale = Phaser.Math.Clamp(this.slashEllipseYScale ?? 0.78, 0.55, 0.95);
-
-      // 旋风斩（360°）：期望“敌人中心点进 meleeRange 就能开始稳定吃到伤害”
-      // 因此把命中采样半径对齐到 meleeRange（避免出现“进圈开始转但打不到”的体感）
-      const rawRange = (this.meleeRange || 220);
-      const hitRange = this.player.warriorSpin ? rawRange : (rawRange * 0.60);
-      const spinMax = Phaser.Math.Clamp(rawRange, 90, 420);
-      const halfMoonMax = 260;
-      const radius = Phaser.Math.Clamp(Math.floor(hitRange), 46, this.player.warriorSpin ? spinMax : halfMoonMax);
-
-      const ellipsePoint = (phi, r) => ({
-        x: Math.cos(phi) * r,
-        y: Math.sin(phi) * r * yScale
-      });
-
-      const g = this.add.graphics({ x: this.player.x, y: this.player.y });
-      g.setDepth(4);
-      g.setVisible(false);
-
-      g.isPlayerBullet = true;
-      g.active = true;
-      g.markedForRemoval = false;
-      g.followPlayer = true;
-
-      g.damage = Math.max(1, Math.round((this.player.bulletDamage || 34) * 1.05));
-      g.speed = 0;
-
-      g.radius = 14;
-      g.hitShape = 'arcSamples';
-      // 半月斩需要更“连续”的命中覆盖：提高采样圆半径，避免只在非常近/踩点才命中
-      g.arcSampleRadius = this.player.warriorSpin ? 14 : 18;
-      g.arcSamples = [];
-
-      const ringRadii = this.player.warriorSpin
-        ? [radius * 0.35, radius * 0.70, radius]
-        : [radius * 0.45, radius * 0.72, radius];
-
-      const sampleCount = this.player.warriorSpin ? 20 : 18;
-      for (let r = 0; r < ringRadii.length; r++) {
-        const rr = ringRadii[r];
-        for (let s = 0; s < sampleCount; s++) {
-          const t = sampleCount === 1 ? 0.5 : (s / (sampleCount - 1));
-          const phi = Phaser.Math.Linear(start, end, t);
-          const p = ellipsePoint(phi, rr);
-          g.arcSamples.push({ x: p.x, y: p.y });
-        }
-      }
-
-      g.rotation = angle;
-      g.angleOffset = angle;
-      g.isAbsoluteAngle = true;
-      g.homing = false;
-      g.explode = false;
-      g.skipUpdate = false;
-
-      g.maxLifeMs = 140;
-      g.pierce = true;
-      g.maxHits = 99;
-      g.hitCooldownMs = 9999;
-
-      g.visualCoreColor = scheme.coreBright;
-      g.visualAccentColor = scheme.coreColor;
-
-      this.bulletManager.playerBulletGroup.add(g);
-      if (enh) {
-        applyEnhancementsToBullet(g, enh, scheme);
-      }
-
-      this.player.bullets.push(g);
+      _spawnWarriorMeleeHit(this, facingAngle);
     },
 
     spawnWarriorCrescentProjectile(facingAngle, swingDir) {
-      if (!this.player || !this.bulletManager) return;
-
-      const angle = (typeof facingAngle === 'number') ? facingAngle : -Math.PI / 2;
-
-      const forward = this.player.visualRadius + 14;
-      const lateral = 14;
-      const perp = angle + Math.PI / 2;
-      const spawnX = this.player.x + Math.cos(angle) * forward + Math.cos(perp) * lateral * (swingDir > 0 ? 1 : -1);
-      const spawnY = this.player.y + Math.sin(angle) * forward + Math.sin(perp) * lateral * (swingDir > 0 ? 1 : -1);
-
-      const scheme0 = getBasicSkillColorScheme('warrior', this.player.offCoreKey);
-      const redCore = 0xff3a3a;
-      const redBright = 0xff7777;
-      const redGlow = 0xffb3b3;
-      const scheme = {
-        ...scheme0,
-        coreColor: redCore,
-        coreBright: redBright,
-        accentColor: redCore,
-        glowColor: redGlow,
-        trailColor: redCore
-      };
-
-      const enh = getBasicAttackEnhancements(this.player.mainCoreKey, this.player.offCoreKey);
-
-      const g = this.add.graphics({ x: spawnX, y: spawnY });
-      g.setDepth(5);
-      g.setBlendMode(Phaser.BlendModes.ADD);
-
-      const baseRange = (this.meleeRange || 220) * 0.48;
-      const arcSpan = this.slashArcSpan || Math.PI;
-      const start = -arcSpan / 2;
-      const end = arcSpan / 2;
-      const yScale = Phaser.Math.Clamp(this.slashEllipseYScale ?? 0.78, 0.55, 0.95);
-
-      g.scaleX = 1;
-      g.scaleY = 1;
-
-      const crescentR = Phaser.Math.Clamp(Math.floor(baseRange), 34, 78);
-      const thickness = Phaser.Math.Clamp(Math.floor(crescentR * 0.26), 10, 22);
-      const outerR = crescentR + Math.floor(thickness * 0.55);
-      const innerR = Math.max(8, crescentR - Math.floor(thickness * 0.55));
-      const segments = 72;
-
-      const ellipsePoint = (phi, r) => ({
-        x: Math.cos(phi) * r,
-        y: Math.sin(phi) * r * yScale
-      });
-
-      g.fillStyle(scheme.coreBright, 0.40);
-      g.beginPath();
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const phi = Phaser.Math.Linear(start, end, t);
-        const p = ellipsePoint(phi, outerR);
-        if (i === 0) g.moveTo(p.x, p.y);
-        else g.lineTo(p.x, p.y);
-      }
-      for (let i = segments; i >= 0; i--) {
-        const t = i / segments;
-        const phi = Phaser.Math.Linear(start, end, t);
-        const p = ellipsePoint(phi, innerR);
-        g.lineTo(p.x, p.y);
-      }
-      g.closePath();
-      g.fillPath();
-
-      g.lineStyle(18, scheme.coreColor, 0.14);
-      g.beginPath();
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const phi = Phaser.Math.Linear(start, end, t);
-        const p = ellipsePoint(phi, outerR);
-        if (i === 0) g.moveTo(p.x, p.y);
-        else g.lineTo(p.x, p.y);
-      }
-      g.strokePath();
-
-      g.lineStyle(10, scheme.coreBright, 0.92);
-      g.beginPath();
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const phi = Phaser.Math.Linear(start, end, t);
-        const p = ellipsePoint(phi, crescentR);
-        if (i === 0) g.moveTo(p.x, p.y);
-        else g.lineTo(p.x, p.y);
-      }
-      g.strokePath();
-
-      g.lineStyle(5, 0xffffff, 0.30);
-      g.beginPath();
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
-        const phi = Phaser.Math.Linear(start + 0.03, end - 0.03, t);
-        const p = ellipsePoint(phi, innerR + 2);
-        if (i === 0) g.moveTo(p.x, p.y);
-        else g.lineTo(p.x, p.y);
-      }
-      g.strokePath();
-
-      g.rotation = angle;
-
-      g.damage = Math.max(1, Math.round((this.player.bulletDamage || 34) * 1.05));
-      g.speed = 640;
-      g.radius = Math.max(8, Math.floor(thickness * 0.55));
-      g.hitShape = 'arcSamples';
-      g.arcSampleRadius = g.radius;
-      g.arcSamples = [];
-      const sampleCount = 9;
-      for (let s = 0; s < sampleCount; s++) {
-        const tt = sampleCount === 1 ? 0.5 : (s / (sampleCount - 1));
-        const phi = Phaser.Math.Linear(start, end, tt);
-        const p = ellipsePoint(phi, crescentR);
-        g.arcSamples.push({ x: p.x, y: p.y });
-      }
-      g.angleOffset = angle;
-      g.isAbsoluteAngle = true;
-      g.homing = !!this.player.warriorSwordQi;
-      if (g.homing) {
-        g.homingTurn = 0.08;
-      }
-      g.explode = false;
-      g.skipUpdate = false;
-      g.isPlayerBullet = true;
-      g.active = true;
-      g.markedForRemoval = false;
-
-      g.maxLifeMs = this.player.warriorSwordQi ? 720 : 520;
-
-      g.pierce = true;
-      g.maxHits = 99;
-      g.hitCooldownMs = 9999;
-
-      g.visualCoreColor = scheme.coreBright;
-      g.visualAccentColor = scheme.coreColor;
-
-      const glow = this.add.circle(spawnX, spawnY, 26, scheme.glowColor, 0.10);
-      glow.setStrokeStyle(2, scheme.coreColor, 0.12);
-      glow.depth = -1;
-      g.glow = glow;
-
-      g.trailTimer = this.time.addEvent({
-        delay: 70,
-        repeat: -1,
-        callback: () => {
-          if (!g.active || g.markedForRemoval) {
-            if (g.trailTimer) g.trailTimer.remove();
-            g.trailTimer = null;
-            return;
-          }
-
-          const emitAt = (lx, ly) => {
-            const cosR = Math.cos(g.rotation || 0);
-            const sinR = Math.sin(g.rotation || 0);
-            const ex = g.x + (lx * cosR - ly * sinR);
-            const ey = g.y + (lx * sinR + ly * cosR);
-            const p = this.add.circle(
-              ex + Phaser.Math.Between(-2, 2),
-              ey + Phaser.Math.Between(-2, 2),
-              Phaser.Math.Between(2, 3),
-              scheme.trailColor,
-              0.75
-            );
-            this.tweens.add({
-              targets: p,
-              alpha: 0,
-              scale: 0.15,
-              duration: 240,
-              onComplete: () => p.destroy()
-            });
-          };
-
-          const p0 = ellipsePoint(start, outerR);
-          const p1 = ellipsePoint(end, outerR);
-          emitAt(p0.x, p0.y);
-          emitAt(p1.x, p1.y);
-        }
-      });
-
-      this.bulletManager.playerBulletGroup.add(g);
-
-      if (enh) {
-        applyEnhancementsToBullet(g, enh, scheme);
-      }
-
-      this.player.bullets.push(g);
+      _spawnWarriorCrescentProjectile(this, facingAngle, swingDir);
     },
 
     isInSlashFan(targetX, targetY, centerX, centerY, range, facing) {
@@ -2305,12 +2195,12 @@ export function applyBuildClassMixin(GameScene) {
 
       this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
 
-      if (clearExistingZones && this.bulletManager?.getPlayerBullets && this.bulletManager?.destroyBullet) {
-        const poisonZones = this.bulletManager.getPlayerBullets()
+      if (clearExistingZones) {
+        const poisonZones = (this.getManagedBullets?.('player') || [])
           .filter((bullet) => bullet && bullet.active && !bullet.markedForRemoval && bullet.isPoisonZone);
 
         for (let i = 0; i < poisonZones.length; i++) {
-          this.bulletManager.destroyBullet(poisonZones[i], true);
+          this.destroyManagedBullet?.(poisonZones[i], 'player', 'cleanup');
         }
 
         if (Array.isArray(this.player.bullets)) {
@@ -2364,7 +2254,7 @@ export function applyBuildClassMixin(GameScene) {
       const targets = [boss, ...(Array.isArray(minions) ? minions : [])].filter(t => t && t.isAlive);
       if (targets.length === 0) return;
 
-      const poisonZones = this.bulletManager?.getPlayerBullets?.()
+      const poisonZones = this.getManagedBullets?.('player')
         ?.filter((b) => b && b.active && !b.markedForRemoval && b.isPoisonZone)
         || [];
 

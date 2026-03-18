@@ -33,7 +33,7 @@ function clampToWorldBounds(scene, x, y, pad = 72) {
 }
 
 export function fireWarlockPoisonNova(player) {
-  if (!player?.scene?.bulletManager) return;
+  if (!player?.scene?.createManagedPlayerBullet) return;
   const scene = player.scene;
 
   // 兜底：毒圈体系依赖 GameScene.updateWarlockDebuff 驱动。

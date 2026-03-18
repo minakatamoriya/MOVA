@@ -3,6 +3,8 @@ import { calculateResolvedDamage } from '../../combat/damageModel';
 import { clearPendingMeleeWindup, hasPendingMeleeWindup, startMeleeWindup } from './meleeWindup';
 import { clampPointToPlayerVision, collectCombatEnemies, isPointInPlayerVision } from './playerVision';
 
+const REGISTRY_ID = 'undead';
+
 const SUMMON_TYPES = /** @type {const} */ ({
   guard: 'guard',
   mage: 'mage'
@@ -23,6 +25,7 @@ export default class UndeadSummonManager {
   constructor(scene) {
     this.scene = scene;
     this.player = null;
+    this.summonRegistry = scene?.summonRegistry || null;
     this.infernals = [];
     this.units = new Map([
       [SUMMON_TYPES.guard, []],
@@ -107,6 +110,7 @@ export default class UndeadSummonManager {
         const unit = this.spawnUnit(type, list.length, desired);
         if (!unit) break;
         list.push(unit);
+        this.summonRegistry?.register(REGISTRY_ID, unit);
       }
 
       while (list.length > desired) {
@@ -334,6 +338,7 @@ export default class UndeadSummonManager {
     if (!unit) return null;
 
     this.infernals.push(unit);
+    this.summonRegistry?.register(REGISTRY_ID, unit);
     return unit;
   }
 
@@ -495,6 +500,7 @@ export default class UndeadSummonManager {
       const unit = this.spawnUnit(type, list.length, desired);
       if (!unit) continue;
       list.push(unit);
+      this.summonRegistry?.register(REGISTRY_ID, unit);
       this.units.set(type, list);
 
       this.respawnAt.set(type, list.length < desired ? time + this.respawnDelayMs : 0);
@@ -726,6 +732,7 @@ export default class UndeadSummonManager {
   destroyUnit(unit) {
     if (unit?.active) {
       clearPendingMeleeWindup(unit);
+      this.summonRegistry?.unregister(REGISTRY_ID, unit);
       unit.destroy();
     }
   }
