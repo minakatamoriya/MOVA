@@ -509,7 +509,7 @@ export function applyLevelProgressionMixin(GameScene) {
       const items = [
         { id: 'warrior_core', coreKey: 'warrior', label: '战士', glyph: '⚔' },
         { id: 'paladin_core', coreKey: 'paladin', label: '圣骑士', glyph: '⛨' },
-        { id: 'scatter_core', coreKey: 'scatter', label: '猎人', glyph: '➶' },
+        { id: 'archer_core', coreKey: 'archer', label: '猎人', glyph: '➶' },
         { id: 'mage_core', coreKey: 'mage', label: '法师', glyph: '✦' },
         { id: 'warlock_core', coreKey: 'warlock', label: '术士', glyph: '☠' },
         { id: 'drone_core', coreKey: 'drone', label: '德鲁伊', glyph: '✺' }
@@ -662,8 +662,8 @@ export function applyLevelProgressionMixin(GameScene) {
           switch (coreUpgradeId) {
             case 'warrior_core':
               return '月牙斩';
-            case 'scatter_core':
-              return '散射射击';
+            case 'archer_core':
+              return '箭矢连射';
             case 'mage_core':
               return '奥术射线';
             case 'paladin_core':

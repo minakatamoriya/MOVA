@@ -3,7 +3,7 @@ import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey, getBasicSkillColorScheme } from '../../classes/visual/basicSkillColors';
 import { resolveClassColor } from '../../classes/visual/classColors';
 import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../../classes/attacks/basicAttackMods';
-import { CORE_OPTIONS } from '../../classes/classDefs';
+import { CORE_OPTIONS, normalizeCoreKey } from '../../classes/classDefs';
 import {
   UPGRADE_POOLS,
   OFF_FACTION_ENTRY_OPTIONS,
@@ -15,7 +15,7 @@ import {
 } from '../../classes/upgradePools';
 import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
-import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill } from '../../classes/talentTrees';
+import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill, normalizeSkillId } from '../../classes/talentTrees';
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
@@ -72,6 +72,8 @@ export function applyBuildClassMixin(GameScene) {
     applyUpgrade(upgrade) {
       if (!upgrade || !this.player) return;
 
+      const normalizedUpgradeId = normalizeSkillId(upgrade.id);
+
       const existingOffFaction = this.registry.get('offFaction') || null;
       if (!existingOffFaction) {
         const entryUpgradeToFaction = {
@@ -90,7 +92,7 @@ export function applyBuildClassMixin(GameScene) {
           off_nature: 'nature'
         };
 
-        const inferredFaction = entryUpgradeToFaction[upgrade.id] || null;
+        const inferredFaction = entryUpgradeToFaction[normalizedUpgradeId] || null;
         if (inferredFaction) {
           this.registry.set('offFaction', inferredFaction);
 
@@ -105,7 +107,7 @@ export function applyBuildClassMixin(GameScene) {
 
       this.recordSkillTreeProgress(upgrade);
 
-      switch (upgrade.id) {
+      switch (normalizedUpgradeId) {
         case 'off_arcane':
         case 'off_ranger':
         case 'off_unyielding':
@@ -114,22 +116,22 @@ export function applyBuildClassMixin(GameScene) {
         case 'off_nature': {
           const map = {
             off_arcane: { faction: 'arcane', accentCore: 'mage' },
-            off_ranger: { faction: 'ranger', accentCore: 'scatter' },
+            off_ranger: { faction: 'ranger', accentCore: 'archer' },
             off_unyielding: { faction: 'unyielding', accentCore: 'warrior' },
             off_curse: { faction: 'curse', accentCore: 'warlock' },
             off_guardian: { faction: 'guardian', accentCore: 'paladin' },
             off_nature: { faction: 'nature', accentCore: 'drone' }
           };
-          const picked = map[upgrade.id];
+          const picked = map[normalizedUpgradeId];
           if (picked) {
             this.registry.set('offFaction', picked.faction);
             if (this.player?.setOffCore) this.player.setOffCore(picked.accentCore);
 
-            if (upgrade.id === 'off_nature') {
+            if (normalizedUpgradeId === 'off_nature') {
               this.player.healingTakenMultiplier = Math.min(2.0, (this.player.healingTakenMultiplier || 1) * 1.12);
             }
 
-            if (upgrade.id === 'off_curse') {
+            if (normalizedUpgradeId === 'off_curse') {
               this.player.summonDamageMultiplier = Math.min(2.0, (this.player.summonDamageMultiplier || 1) * 1.12);
               this.player.summonHealthMultiplier = Math.min(2.0, (this.player.summonHealthMultiplier || 1) * 1.10);
               this.undeadSummonManager?.refreshFromPlayer?.();
@@ -143,7 +145,7 @@ export function applyBuildClassMixin(GameScene) {
           break;
         }
 
-        case 'scatter_core':
+        case 'archer_core':
           applyCoreUpgrade(this, upgrade.id);
           break;
         case 'archer_rapidfire':
@@ -165,26 +167,26 @@ export function applyBuildClassMixin(GameScene) {
         case 'archer_damage':
           this.player.upgradeArcherDamage();
           break;
-        case 'archer_scatter':
-          this.player.upgradeArcherScatter();
+        case 'archer_volley':
+          this.player.upgradeArcherVolley();
           break;
-        case 'scatter_range':
-          this.player.upgradeScatterRange();
+        case 'archer_volley_spread':
+          this.player.upgradeArcherVolleySpread();
           break;
-        case 'scatter_rate':
-          this.player.upgradeScatterRate();
+        case 'archer_volley_rate':
+          this.player.upgradeArcherVolleyRate();
           break;
-        case 'scatter_count':
-          this.player.upgradeScatterCount();
+        case 'archer_volley_count':
+          this.player.upgradeArcherVolleyCount();
           break;
-        case 'scatter_ring':
-          this.player.enableScatterRing();
+        case 'archer_volley_ring':
+          this.player.enableArcherVolleyRing();
           break;
-        case 'scatter_homing':
-          this.player.enableScatterHoming();
+        case 'archer_volley_homing':
+          this.player.enableArcherVolleyHoming();
           break;
-        case 'scatter_explode':
-          this.player.enableScatterExplode();
+        case 'archer_volley_explode':
+          this.player.enableArcherVolleyExplode();
           break;
         case 'drone_core':
           applyCoreUpgrade(this, upgrade.id);
@@ -404,12 +406,12 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     disableBuildCore(core) {
-      switch (core) {
+      switch (normalizeCoreKey(core)) {
         case 'warrior':
           this.disableWarriorBuild();
           break;
-        case 'scatter':
-          if (this.player?.disableScatterBuild) this.player.disableScatterBuild();
+        case 'archer':
+          if (this.player?.disableArcherBuild) this.player.disableArcherBuild();
           break;
         case 'mage':
           this.laserEnabled = false;
@@ -858,11 +860,15 @@ export function applyBuildClassMixin(GameScene) {
       const offFactionEntryIds = new Set(OFF_FACTION_ENTRY_OPTIONS.map((opt) => opt.id));
 
       const skillTreeLevels = this.registry.get('skillTreeLevels') || {};
-      const isMaxed = (id) => (skillTreeLevels[id] || 0) >= getMaxLevel(id);
+      const getSkillLevelValue = (id) => {
+        const normalizedId = normalizeSkillId(id);
+        return skillTreeLevels[normalizedId] || skillTreeLevels[id] || 0;
+      };
+      const isMaxed = (id) => getSkillLevelValue(id) >= getMaxLevel(id);
       // 这里按“升级次数阶段”控制候选池，而不是继续固定第二次升级只出副职业。
       const stage = getTalentOfferStage(this.buildState.levelUps);
 
-      const mainCore = this.registry.get('mainCore') || this.buildState.core;
+      const mainCore = normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core);
       const offFaction = this.registry.get('offFaction') || null;
 
       let thirdSpecType = this.registry.get('thirdSpecType') || null;
@@ -890,7 +896,7 @@ export function applyBuildClassMixin(GameScene) {
         pendingThirdPrepOption = thirdSpecType === 'depth'
           ? THIRD_SPEC_PREP_OPTIONS.depth
           : THIRD_SPEC_PREP_OPTIONS.dual;
-        hasThirdPrep = !!pendingThirdPrepOption && (skillTreeLevels[pendingThirdPrepOption.id] || 0) >= getMaxLevel(pendingThirdPrepOption.id);
+        hasThirdPrep = !!pendingThirdPrepOption && getSkillLevelValue(pendingThirdPrepOption.id) >= getMaxLevel(pendingThirdPrepOption.id);
 
         if (thirdSpecType === 'depth') {
           if (hasThirdPrep) {
@@ -905,7 +911,7 @@ export function applyBuildClassMixin(GameScene) {
 
       combinedPool = combinedPool.filter((opt) => {
         if (!opt?.requiredSkillId) return true;
-        return (skillTreeLevels[opt.requiredSkillId] || 0) >= getMaxLevel(opt.requiredSkillId);
+        return getSkillLevelValue(opt.requiredSkillId) >= getMaxLevel(opt.requiredSkillId);
       });
 
       combinedPool = combinedPool.filter(opt => !isMaxed(opt.id));
@@ -942,7 +948,7 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       options = options.map((option) => {
-        const currentLevel = skillTreeLevels[option.id] || 0;
+        const currentLevel = getSkillLevelValue(option.id);
         return getUpgradeOfferPresentation(option, currentLevel, getMaxLevel(option.id));
       });
 
@@ -958,7 +964,7 @@ export function applyBuildClassMixin(GameScene) {
       const offFaction = context.offFaction || null;
       const skillTreeLevels = context.skillTreeLevels || {};
       const offFactionEntryIds = context.offFactionEntryIds || new Set();
-      const currentLevel = skillTreeLevels[option.id] || 0;
+      const currentLevel = skillTreeLevels[normalizeSkillId(option.id)] || skillTreeLevels[option.id] || 0;
       const maxLevel = getMaxLevel(option.id);
       const isRepeatableTalent = maxLevel > 1;
       const treeId = getTreeIdForSkill(option.id) || null;
@@ -1212,7 +1218,7 @@ export function applyBuildClassMixin(GameScene) {
             if (!unit || !unit.active) continue;
 
             const shotAngle = Phaser.Math.Angle.Between(unit.x, unit.y, boss.x, boss.y);
-            const bullet = this.bulletManager?.createPlayerBullet(
+            const bullet = this.createManagedPlayerBullet?.(
               unit.x,
               unit.y,
               0x88ffcc,
@@ -2015,7 +2021,7 @@ export function applyBuildClassMixin(GameScene) {
     enableMageBuild() {
       this.laserEnabled = true;
       this.player.canFire = true;
-      this.player.scatterEnabled = false;
+      this.player.archerEnabled = false;
       this.player.setWeapon('laser');
       this.player.laserDamageMult = 2.0;
       this.player.baseFireRate = 320;
@@ -2033,9 +2039,9 @@ export function applyBuildClassMixin(GameScene) {
     enablePaladinBuild() {
       this.paladinEnabled = true;
       this.player.canFire = true;
-      this.player.scatterEnabled = true;
-      this.player.scatterBulletCount = 1;
-      this.player.scatterSpread = 0;
+      this.player.archerEnabled = true;
+      this.player.archerVolleyCount = 1;
+      this.player.archerVolleySpread = 0;
 
       if (this._paladinTargetRing) this._paladinTargetRing.destroy();
       const paladinColor = getBaseColorForCoreKey('paladin');
@@ -2096,8 +2102,9 @@ export function applyBuildClassMixin(GameScene) {
         return;
       }
 
-      const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
-      const active = mainCore === 'scatter' || this.player.mainCoreKey === 'scatter';
+      const mainCore = normalizeCoreKey(this.registry?.get?.('mainCore') || this.buildState?.core);
+      const playerMainCore = normalizeCoreKey(this.player.mainCoreKey);
+      const active = mainCore === 'archer' || playerMainCore === 'archer' || this.player.weaponType === 'archer_arrow';
       if (!active) {
         if (this._archerRangeRing) this._archerRangeRing.setVisible(false);
         return;
@@ -2132,8 +2139,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'mage' || this.player.mainCoreKey === 'mage'
-        || this.player.weaponType === 'laser'
-        || this.player.weaponType === 'mage_missile';
+        || this.player.weaponType === 'laser';
       if (!active) {
         if (this._mageRangeRing) this._mageRangeRing.setVisible(false);
         return;
@@ -2141,16 +2147,8 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_mageRangeRing', 'mage');
 
-      // 法师范围圈严格对齐“当前武器”的实际索敌/生效范围
-      // - laser: updateArcaneRay() 使用 arcaneRayRange || arcaneRayBaseRange || 220
-      // - mage_missile: fireMageMissile() 使用 mageMissileRange || 480，并且最小 120
-      const ray = Math.max(60, Math.round(this.player.arcaneRayRange || this.player.arcaneRayBaseRange || 220));
-      const missile = Math.max(120, Math.round(this.player.mageMissileRange || 480));
-
-      let r = ray;
-      if (this.player.weaponType === 'mage_missile') r = missile;
-      else if (this.player.weaponType === 'laser') r = ray;
-      else r = Math.max(ray, missile);
+      // 法师基础技能已经统一为激光，范围圈直接对齐激光索敌/生效范围
+      const r = Math.max(60, Math.round(this.player.arcaneRayRange || this.player.arcaneRayBaseRange || 220));
 
       this._mageRangeRing.setRadius(r);
       const hp = this.player.getHitboxPosition?.();
@@ -2173,8 +2171,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'drone' || this.player.mainCoreKey === 'drone'
-        || this.player.weaponType === 'starfall'
-        || this.player.weaponType === 'moonfire';
+        || this.player.weaponType === 'starfall';
       if (!active) {
         if (this._druidRangeRing) this._druidRangeRing.setVisible(false);
         return;
@@ -2182,10 +2179,9 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_druidRangeRing', 'druid');
 
-      // 德鲁伊：星落/月火索敌范围（不再无限距离）
+      // 德鲁伊基础技能已经统一为星落，范围圈只反映星落索敌范围
       const starfall = Math.round(this.player.druidStarfallRange || this.player.druidStarfallRangeBase || 310);
-      const moonfire = Math.round(this.player.moonfireRange || this.player.moonfireRangeBase || 300);
-      const range = Math.max(120, Math.max(starfall, moonfire));
+      const range = Math.max(120, starfall);
       const r = Phaser.Math.Clamp(range, 200, 980);
 
       this._druidRangeRing.setRadius(r);
@@ -2209,8 +2205,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'warlock' || this.player.mainCoreKey === 'warlock'
-        || this.player.weaponType === 'warlock_poisonnova'
-        || this.player.weaponType === 'warlock_shadow';
+        || this.player.weaponType === 'warlock_poisonnova';
       if (!active) {
         if (this._warlockRangeRing) this._warlockRangeRing.setVisible(false);
         return;

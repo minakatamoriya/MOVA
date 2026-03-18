@@ -39,6 +39,8 @@ export default class BulletCore {
     this.metrics = {
       created: 0,
       destroyed: 0,
+      hits: 0,
+      lastHitAt: 0,
       lastSpawnAt: 0
     };
   }
@@ -84,6 +86,7 @@ export default class BulletCore {
 
     if (!bullet) return null;
 
+    // 统一挂载 core 元信息，后续命中/调试/统计都从这里读，避免各层自己推断。
     bullet.bulletCoreSide = resolved.side;
     bullet.bulletCoreTags = resolved.tags;
     bullet.bulletDescriptor = resolved;
@@ -125,7 +128,16 @@ export default class BulletCore {
   }
 
   notifyHit(payload = {}) {
-    this.hooks.onHit(payload, this);
+    const resolvedPayload = {
+      ...payload,
+      side: normalizeSide(payload.side || payload.bullet?.bulletCoreSide || (payload.bullet?.isPlayerBullet ? 'player' : 'boss')),
+      at: Number(this.scene?.time?.now || 0)
+    };
+
+    this.metrics.hits += 1;
+    this.metrics.lastHitAt = resolvedPayload.at;
+    this.hooks.onHit(resolvedPayload, this);
+    return resolvedPayload;
   }
 
   clearAll() {
@@ -168,6 +180,8 @@ export default class BulletCore {
     return {
       createdByCore: this.metrics.created,
       destroyedByCore: this.metrics.destroyed,
+      hitCount: this.metrics.hits,
+      lastHitAt: this.metrics.lastHitAt,
       lastSpawnAt: this.metrics.lastSpawnAt,
       activePlayerBullets: playerBullets.length,
       activeBossBullets: bossBullets.length,

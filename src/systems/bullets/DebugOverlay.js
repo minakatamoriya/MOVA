@@ -5,6 +5,7 @@ function makeMetricLines(coreMetrics = {}, timelineMetrics = []) {
   return [
     `player bullets: ${Number(coreMetrics.activePlayerBullets || 0)}`,
     `boss bullets: ${Number(coreMetrics.activeBossBullets || 0)}`,
+    `hit count: ${Number(coreMetrics.hitCount || 0)}`,
     `pooled bullets: ${Number(coreMetrics.pooledBullets || 0)}`,
     `created/destroyed: ${Number(coreMetrics.managerCreated || 0)}/${Number(coreMetrics.managerDestroyed || 0)}`,
     firstTimeline ? `timeline: ${firstTimeline.id} phase ${firstTimeline.currentPhaseIndex}` : 'timeline: none'

@@ -78,7 +78,7 @@ export function fireWarlockPoisonNova(player) {
   const radiusStart = Math.max(26, Math.round(radiusFinal * 0.35));
   const tickDamage = Math.max(1, Math.round((player.bulletDamage || 1) * baseDamagePctPerSec * damageMult));
 
-  const bullet = scene.bulletManager.createPlayerBullet(
+  const bullet = scene.createManagedPlayerBullet(
     spawn.x,
     spawn.y,
     core,
@@ -97,7 +97,8 @@ export function fireWarlockPoisonNova(player) {
       homing: Boolean(player.warlockPoisonAutoSeek),
       homingTurn: player.warlockPoisonAutoSeek ? 0.035 : 0.04,
       explode: false,
-      skipUpdate: false
+      skipUpdate: false,
+      tags: ['player_warlock_poison_nova']
     }
   );
 

@@ -631,17 +631,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const tags = Array.isArray(descriptor.tags) ? descriptor.tags : [];
     const options = { ...(descriptor.options || {}) };
 
-    if (this.scene?.bulletCore?.createBossBullet) {
-      return this.scene.bulletCore.createBossBullet({
-        x,
-        y,
-        angle,
-        speed,
-        color,
+    if (this.scene?.createManagedBossBullet) {
+      return this.scene.createManagedBossBullet(x, y, angle, speed, color, {
         radius,
         damage,
         tags,
-        options
+        ...options
       });
     }
 

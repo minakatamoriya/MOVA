@@ -3,17 +3,12 @@ import {
   fireLaser,
   updateArcaneRay,
   destroyArcaneRay,
-  fireMoonfire,
   fireStarfall,
-  fireScatter,
-  fireWarriorWave,
   fireArcherArrow,
-  fireMageMissile,
-  firePaladinSpear,
   firePaladinHammer,
-  fireWarlockShadow,
   fireWarlockPoisonNova
 } from '../classes/attacks/weapons';
+import { normalizeCoreKey } from '../classes/classDefs';
 
 import { getOffCorePassive } from '../classes/attacks/basicAttackMods';
 import { getBaseColorForCoreKey, lerpColor } from '../classes/visual/basicSkillColors';
@@ -192,7 +187,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // 统一下调初始攻速：让早期战斗更可读（伤害/数字从个位数起步）
     this.baseFireRate = 420;
     // 猎人基础射击：起步更慢，后续靠升级提速
-    this.baseFireRateScatter = 560;
+    this.baseFireRateArcher = 560;
     this.baseFireRateMoonfire = 760;
     this.fireRate = this.baseFireRate; // 射击间隔（毫秒）
     this.bulletSpeed = 380; // 子弹速度
@@ -200,7 +195,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.baseBulletDamage = 6;
     this.bulletDamage = this.baseBulletDamage; // 子弹伤害
     this.canFire = true;
-    this.weaponType = 'scatter'; // scatter | laser | moonfire
+    this.weaponType = 'archer_arrow'; // archer_arrow | laser | warrior_melee | paladin_hammer | starfall | warlock_poisonnova
     this.archerAttackWindupRatio = 0.23;
     this.archerAttackWindupMinMs = 74;
     this.archerAttackWindupMaxMs = 138;
@@ -283,18 +278,16 @@ export default class Player extends Phaser.GameObjects.Container {
     // 术士：剧毒新星半径（范围圈提示脚下 AoE）
     this.warlockPoisonNovaRadiusBase = 96;
 
-    // Build 流派属性（散射）
-    this.scatterEnabled = true;
-    // 猎人基础：默认单列
-    this.scatterSpread = 0;
-    this.scatterBulletCount = 1;
-    this.scatterMode = 'fan'; // fan | ring
-    this.scatterRingCount = 10;
-    // 多列会天然放大输出，因此单箭倍率略低，靠升级补
-    this.scatterDamageMult = 0.55;
-    this.scatterHoming = false;
-    this.scatterHomingTurn = 0.04;
-    this.scatterExplode = false;
+    // 猎人基础技能（箭矢连射）
+    this.archerEnabled = true;
+    this.archerVolleySpread = 0;
+    this.archerVolleyCount = 1;
+    this.archerVolleyMode = 'fan'; // fan | ring
+    this.archerVolleyRingCount = 10;
+    this.archerVolleyDamageMult = 0.55;
+    this.archerVolleyHoming = false;
+    this.archerVolleyHomingTurn = 0.04;
+    this.archerVolleyExplode = false;
     this.buildFireRateMult = 1;
 
     // 猎人基础技能（箭矢）专属升级参数
@@ -581,25 +574,17 @@ export default class Player extends Phaser.GameObjects.Container {
   fire() {
     if (!this.isAlive || !this.canFire) return;
 
-    const activeCoreKey = this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'scatter';
-    const useArcherWindup = this.weaponType === 'scatter' && activeCoreKey === 'scatter';
+    const activeCoreKey = normalizeCoreKey(this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'archer');
+    const useArcherWindup = this.weaponType === 'archer_arrow' && activeCoreKey === 'archer';
     if (useArcherWindup) {
       if (!this.getArcherTargetInRange()) return;
-      this.queueArcherScatterShot();
+      this.queueArcherArrowShot();
       return;
     }
 
     // 战士（月牙斩近战）由 GameScene.updateMelee 驱动；此处不发射投射物
     if (this.weaponType === 'warrior_melee') {
       this.playAttackAnimation();
-      return;
-    }
-
-    // 月火术：自动逐发（无需按住鼠标；按住时可用鼠标引导方向）
-    if (this.weaponType === 'moonfire') {
-      const pointer = this.scene?.input?.activePointer;
-      this.playAttackAnimation();
-      fireMoonfire(this, pointer);
       return;
     }
 
@@ -610,39 +595,15 @@ export default class Player extends Phaser.GameObjects.Container {
       return;
     }
 
-    if (this.weaponType === 'warrior_wave') {
-      this.playAttackAnimation();
-      fireWarriorWave(this);
-      return;
-    }
-
     if (this.weaponType === 'archer_arrow') {
       this.playAttackAnimation();
       fireArcherArrow(this);
       return;
     }
 
-    if (this.weaponType === 'mage_missile') {
-      this.playAttackAnimation();
-      fireMageMissile(this);
-      return;
-    }
-
-    if (this.weaponType === 'paladin_spear') {
-      this.playAttackAnimation();
-      firePaladinSpear(this);
-      return;
-    }
-
     if (this.weaponType === 'paladin_hammer') {
       const didFire = firePaladinHammer(this);
       if (didFire) this.playAttackAnimation();
-      return;
-    }
-
-    if (this.weaponType === 'warlock_shadow') {
-      this.playAttackAnimation();
-      fireWarlockShadow(this);
       return;
     }
 
@@ -657,7 +618,7 @@ export default class Player extends Phaser.GameObjects.Container {
       return;
     }
 
-    const didFire = fireScatter(this);
+    const didFire = fireArcherArrow(this);
     if (didFire) {
       this.playAttackAnimation();
     }
@@ -703,7 +664,7 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   getArcherWindupMs() {
-    const fromFireRate = Math.round((this.fireRate || this.baseFireRateScatter || 560) * (this.archerAttackWindupRatio || 0.2));
+    const fromFireRate = Math.round((this.fireRate || this.baseFireRateArcher || 560) * (this.archerAttackWindupRatio || 0.2));
     return Phaser.Math.Clamp(
       fromFireRate,
       this.archerAttackWindupMinMs || 60,
@@ -844,7 +805,7 @@ export default class Player extends Phaser.GameObjects.Container {
     }
   }
 
-  queueArcherScatterShot() {
+  queueArcherArrowShot() {
     const target = this.getArcherTargetInRange();
     if (!target) return;
     const windupMs = this.getArcherWindupMs();
@@ -856,7 +817,7 @@ export default class Player extends Phaser.GameObjects.Container {
       if (!this.scene?.sys?.isActive?.()) return;
       if (!this.isAlive || !this.canFire || this.scene?.isCombatBehaviorPaused?.()) return;
 
-      const didFire = fireScatter(this);
+      const didFire = fireArcherArrow(this);
       if (didFire) {
         this.playArcherShotKick(fireAngle);
         this.playAttackAnimation();
@@ -871,8 +832,8 @@ export default class Player extends Phaser.GameObjects.Container {
    * 青绿色玩家子弹，具有粒子尾迹效果
    */
   createBulletAtAngle(angleOffset, isAbsoluteAngle = false) {
-    const coreKey = this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'scatter';
-    const isArcher = coreKey === 'scatter';
+    const coreKey = normalizeCoreKey(this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'archer');
+    const isArcher = coreKey === 'archer';
     const fireAngle = isAbsoluteAngle ? angleOffset : (-Math.PI / 2 + angleOffset);
     // 猎人箭矢：固定亮绿色（短细条形 + 中心荧光）
     const archerCore = 0x30ff52;
@@ -891,15 +852,15 @@ export default class Player extends Phaser.GameObjects.Container {
     const spawnX = this.x + Math.cos(fireAngle) * muzzleDistance;
     const spawnY = muzzleBaseY + Math.sin(fireAngle) * muzzleDistance;
 
-    // 通过 BulletManager 创建子弹
-    const bullet = this.scene.bulletManager.createPlayerBullet(
+    // 玩家本体也统一走场景发弹入口，避免武器层关心底层实现。
+    const bullet = this.scene.createManagedPlayerBullet(
       spawnX,
       spawnY,
       coreColor,
       {
         radius: isArcher ? 5 : 5,
         speed: this.bulletSpeed,
-        damage: Math.max(1, Math.round(this.bulletDamage * this.scatterDamageMult * (isArcher ? (this.archerArrowDamageMult || 1) : 1))),
+        damage: Math.max(1, Math.round(this.bulletDamage * this.archerVolleyDamageMult * (isArcher ? (this.archerArrowDamageMult || 1) : 1))),
         angleOffset: angleOffset,
         isAbsoluteAngle: isAbsoluteAngle,
         type: isArcher ? 'arrow' : 'circle',
@@ -923,16 +884,19 @@ export default class Player extends Phaser.GameObjects.Container {
         speedStartMult: isArcher ? 0.32 : undefined,
         speedEndMult: isArcher ? 1.35 : undefined,
         speedRampMs: isArcher ? 240 : undefined,
-        homing: this.scatterHoming,
-        homingTurn: this.scatterHomingTurn,
-        explode: this.scatterExplode,
+        homing: this.archerVolleyHoming,
+        homingTurn: this.archerVolleyHomingTurn,
+        explode: this.archerVolleyExplode,
         skipUpdate: false,
-        maxLifeMs
+        maxLifeMs,
+        tags: [isArcher ? 'player_archer_arrow' : `player_basic_${coreKey}`]
       }
     );
 
+    if (!bullet) return null;
+
     // 猎人深度专精：弹射
-    if (isArcher && (this.archerArrowBounce || 0) > 0 && bullet) {
+    if (isArcher && (this.archerArrowBounce || 0) > 0) {
       bullet.basicEnh = bullet.basicEnh || {};
       bullet.basicEnh.bounce = Math.max(bullet.basicEnh.bounce || 0, this.archerArrowBounce);
       bullet.canBounce = true;
@@ -1749,11 +1713,11 @@ export default class Player extends Phaser.GameObjects.Container {
   /**
    * 启用散射流派
    */
-  enableScatterBuild() {
-    this.scatterEnabled = true;
-    this.weaponType = 'scatter';
-    this.baseFireRate = this.baseFireRateScatter;
-    this.scatterDamageMult = 0.55;
+  enableArcherBuild() {
+    this.archerEnabled = true;
+    this.weaponType = 'archer_arrow';
+    this.baseFireRate = this.baseFireRateArcher;
+    this.archerVolleyDamageMult = 0.55;
     // 箭矢需要更快的弹速与明确射程
     this.bulletSpeed = 720;
     this.applyStatMultipliers(this.equipmentMods);
@@ -1778,36 +1742,24 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerArrowDamageMult = 1 + 0.12 * (this.archerArrowDamageLevel || 0);
   }
 
-  upgradeArcherScatter() {
+  upgradeArcherVolley() {
 
     this.archerArrowScatterLevel = Math.min(3, (this.archerArrowScatterLevel || 0) + 1);
     // L1: 3 列；L2: 5 列；L3: 7 列。奇数列保证中心列仍然正对目标。
     if (this.archerArrowScatterLevel === 1) {
-      this.scatterBulletCount = 3;
-      this.scatterSpread = Phaser.Math.DegToRad(8.2);
+      this.archerVolleyCount = 3;
+      this.archerVolleySpread = Phaser.Math.DegToRad(8.2);
     } else if (this.archerArrowScatterLevel === 2) {
-      this.scatterBulletCount = 5;
-      this.scatterSpread = Phaser.Math.DegToRad(7.4);
+      this.archerVolleyCount = 5;
+      this.archerVolleySpread = Phaser.Math.DegToRad(7.4);
     } else {
-      this.scatterBulletCount = 7;
-      this.scatterSpread = Phaser.Math.DegToRad(6.85);
+      this.archerVolleyCount = 7;
+      this.archerVolleySpread = Phaser.Math.DegToRad(6.85);
     }
   }
 
-  /**
-   * 启用德鲁伊（月火术）基础攻击
-   */
-  enableDruidMoonfire() {
-    this.disableScatterBuild();
-    this.disableLaserBuild();
-    this.weaponType = 'moonfire';
-
-    this.baseFireRate = this.baseFireRateMoonfire;
-    this.buildFireRateMult = 1;
-    this.applyStatMultipliers(this.equipmentMods);
-  }
-
   setMainCoreAttack(coreKey) {
+    coreKey = normalizeCoreKey(coreKey);
     if (this.weaponType === 'laser' && coreKey !== 'mage') {
       destroyArcaneRay(this);
     }
@@ -1823,9 +1775,9 @@ export default class Player extends Phaser.GameObjects.Container {
       // 圣骑主普攻：重锤砸地（近身 AoE，不空挥）
       this.weaponType = 'paladin_hammer';
       this.baseFireRate = 1160;
-    } else if (coreKey === 'scatter') {
+    } else if (coreKey === 'archer') {
       // 猎人
-      this.enableScatterBuild();
+      this.enableArcherBuild();
     } else if (coreKey === 'mage') {
       // 法师主普攻：恢复激光
       this.weaponType = 'laser';
@@ -1846,53 +1798,53 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   setOffCore(coreKey) {
-    this.offCoreKey = coreKey;
+    this.offCoreKey = normalizeCoreKey(coreKey);
     this.offFireRateMult = getOffCorePassive(this.mainCoreKey, this.offCoreKey).fireRateMult || 1;
     this.applyStatMultipliers(this.equipmentMods);
   }
 
-  disableScatterBuild() {
-    this.scatterEnabled = false;
-    this.scatterMode = 'fan';
+  disableArcherBuild() {
+    this.archerEnabled = false;
+    this.archerVolleyMode = 'fan';
   }
 
   disableLaserBuild() {
     if (this.weaponType === 'laser') {
       destroyArcaneRay(this);
-      this.weaponType = 'scatter';
+      this.weaponType = 'archer_arrow';
     }
   }
 
   /**
    * 散射范围提升
    */
-  upgradeScatterRange() {
-    this.scatterSpread = Math.min(0.5, this.scatterSpread + 0.06);
+  upgradeArcherVolleySpread() {
+    this.archerVolleySpread = Math.min(0.5, this.archerVolleySpread + 0.06);
   }
 
   /**
    * 散射频率提升
    */
-  upgradeScatterRate() {
+  upgradeArcherVolleyRate() {
     this.buildFireRateMult = Math.max(0.7, this.buildFireRateMult * 0.92);
     this.applyStatMultipliers(this.equipmentMods);
   }
 
-  upgradeScatterCount() {
-    this.scatterBulletCount = Math.min(6, this.scatterBulletCount + 1);
+  upgradeArcherVolleyCount() {
+    this.archerVolleyCount = Math.min(6, this.archerVolleyCount + 1);
   }
 
-  enableScatterRing() {
-    this.scatterMode = 'ring';
-    this.scatterRingCount = Math.min(20, this.scatterRingCount + 2);
+  enableArcherVolleyRing() {
+    this.archerVolleyMode = 'ring';
+    this.archerVolleyRingCount = Math.min(20, this.archerVolleyRingCount + 2);
   }
 
-  enableScatterHoming() {
-    this.scatterHoming = true;
+  enableArcherVolleyHoming() {
+    this.archerVolleyHoming = true;
   }
 
-  enableScatterExplode() {
-    this.scatterExplode = true;
+  enableArcherVolleyExplode() {
+    this.archerVolleyExplode = true;
   }
 
   /**

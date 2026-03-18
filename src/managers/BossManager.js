@@ -242,9 +242,11 @@ export default class BossManager {
   }
 
   setupEvents() {
-    this.scene.events.on('bossDefeated', (data) => {
+    // 保存稳定 handler，避免 destroy 时误伤其它 bossDefeated 监听器。
+    this._bossDefeatedHandler = (data) => {
       this.onBossDefeated(data);
-    });
+    };
+    this.scene.events.on('bossDefeated', this._bossDefeatedHandler);
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -516,7 +518,10 @@ export default class BossManager {
   }
 
   destroy() {
-    this.scene.events.off('bossDefeated');
+    if (this._bossDefeatedHandler) {
+      this.scene.events.off('bossDefeated', this._bossDefeatedHandler);
+      this._bossDefeatedHandler = null;
+    }
     if (this.currentBoss) {
       this.currentBoss.destroy();
     }

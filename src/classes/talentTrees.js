@@ -2,20 +2,21 @@
 
 import { DEPTH_SPEC_POOLS, DUAL_SPEC_POOLS, THIRD_SPEC_PREP_OPTIONS } from './upgradePools';
 import { resolveClassColor } from './visual/classColors';
+import { normalizeCoreKey } from './classDefs';
 
 export const TREE_DEFS = [
   {
     id: 'archer',
     name: '猎人-主',
     color: resolveClassColor('archer'),
-    core: { id: 'scatter_core', name: '初始：猎人', maxLevel: 1, desc: '解锁散射射击。' },
+    core: { id: 'archer_core', name: '初始：猎人', maxLevel: 1, desc: '解锁箭矢连射。' },
     nodes: [
       { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 3, desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒。' },
       { id: 'archer_evade_mastery', name: '残影步调', maxLevel: 3, desc: '强化灵巧回避：持续时间提高至5/8/10秒。' },
       { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+12%/+24%/+36%）。' },
-      { id: 'archer_scatter', name: '散射', maxLevel: 3, desc: '基础射击初始为1列；升级后变为3列→5列→7列，中心列始终锁定目标。' }
+      { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为1列；升级后变为3列→5列→7列，中心列始终锁定目标。' }
     ],
-    ultimate: { id: 'scatter_ultimate', name: '终极：弹幕风暴', maxLevel: 1, desc: '散射进化为高密度弹幕。' }
+    ultimate: { id: 'archer_ultimate', name: '终极：箭雨风暴', maxLevel: 1, desc: '箭矢连射进化为高密度箭雨。' }
   },
   {
     id: 'druid',
@@ -168,7 +169,7 @@ export const TREE_DEFS = [
 
 export const SKILL_TO_TREE = {
   // 猎人（散射流）
-  scatter_core: 'archer',
+  archer_core: 'archer',
   archer_rapidfire: 'archer',
   archer_pierce: 'archer',
   archer_arrowrain: 'archer',
@@ -177,8 +178,8 @@ export const SKILL_TO_TREE = {
   archer_range: 'archer',
   archer_rate: 'archer',
   archer_damage: 'archer',
-  archer_scatter: 'archer',
-  scatter_ultimate: 'archer',
+  archer_volley: 'archer',
+  archer_ultimate: 'archer',
 
   // 德鲁伊（星落）
   drone_core: 'druid',
@@ -327,11 +328,18 @@ export const SKILL_TO_TREE = {
   dual_drone_warrior_ancestral: 'third'
 };
 
+export const SKILL_ID_ALIASES = {};
+
+export function normalizeSkillId(skillId) {
+  if (!skillId) return skillId;
+  return SKILL_ID_ALIASES[skillId] || skillId;
+}
+
 // 副职业派系 -> 对应“职业主题”的核心 key（用于判断是否同职业 & 第三天赋树类型）
 // 注意：这里的 key 与 GameScene.registry 中的 offFaction 保持一致。
 export const OFF_FACTION_TO_ACCENT_CORE_KEY = {
   arcane: 'mage',
-  ranger: 'scatter',
+  ranger: 'archer',
   unyielding: 'warrior',
   curse: 'warlock',
   guardian: 'paladin',
@@ -345,8 +353,9 @@ export function getAccentCoreKeyForOffFaction(offFaction) {
 
 export function getThirdSpecTypeForMainOff({ mainCoreKey, offFaction }) {
   if (!mainCoreKey || !offFaction) return null;
-  const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
-  const sameTheme = !!accentCoreKey && accentCoreKey === mainCoreKey;
+  const normalizedMainCoreKey = normalizeCoreKey(mainCoreKey);
+  const accentCoreKey = normalizeCoreKey(getAccentCoreKeyForOffFaction(offFaction));
+  const sameTheme = !!accentCoreKey && accentCoreKey === normalizedMainCoreKey;
   return sameTheme ? 'depth' : 'dual';
 }
 
@@ -357,7 +366,9 @@ export function getThirdSpecTypeForMainOff({ mainCoreKey, offFaction }) {
 export function buildThirdTalentTreePlaceholder({ mainCoreKey, offFaction, mainTreeDef, offTreeDef }) {
   if (!mainCoreKey || !offFaction) return null;
 
-  const specType = getThirdSpecTypeForMainOff({ mainCoreKey, offFaction });
+  const normalizedMainCoreKey = normalizeCoreKey(mainCoreKey);
+
+  const specType = getThirdSpecTypeForMainOff({ mainCoreKey: normalizedMainCoreKey, offFaction });
   const sameTheme = specType === 'depth';
 
   const mainName = mainTreeDef?.name || '本职业';
@@ -386,12 +397,12 @@ export function buildThirdTalentTreePlaceholder({ mainCoreKey, offFaction, mainT
 
   const depthNodes = [
     { id: 'third_depth_prep', name: '深度专精（前置）', maxLevel: 1, desc: '占位：后续接入深度专精天赋。' },
-    ...((DEPTH_SPEC_POOLS[mainCoreKey] || []).map(toNode))
+    ...((DEPTH_SPEC_POOLS[normalizedMainCoreKey] || []).map(toNode))
   ];
 
-  const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
-  const dualPool = (accentCoreKey && DUAL_SPEC_POOLS[mainCoreKey] && DUAL_SPEC_POOLS[mainCoreKey][accentCoreKey])
-    ? DUAL_SPEC_POOLS[mainCoreKey][accentCoreKey]
+  const accentCoreKey = normalizeCoreKey(getAccentCoreKeyForOffFaction(offFaction));
+  const dualPool = (accentCoreKey && DUAL_SPEC_POOLS[normalizedMainCoreKey] && DUAL_SPEC_POOLS[normalizedMainCoreKey][accentCoreKey])
+    ? DUAL_SPEC_POOLS[normalizedMainCoreKey][accentCoreKey]
     : [];
   const dualNodes = [
     { id: 'third_dual_prep', name: '双职业专精（前置）', maxLevel: 1, desc: '占位：后续接入双职业天赋。' },
@@ -446,9 +457,10 @@ const THIRD_SPEC_MAX_LEVELS = (() => {
 })();
 
 export function getTreeIdForSkill(skillId) {
-  return SKILL_TO_TREE[skillId] || null;
+  return SKILL_TO_TREE[normalizeSkillId(skillId)] || null;
 }
 
 export function getMaxLevel(skillId) {
-  return THIRD_SPEC_MAX_LEVELS[skillId] || MAX_LEVELS[skillId] || 1;
+  const normalizedSkillId = normalizeSkillId(skillId);
+  return THIRD_SPEC_MAX_LEVELS[normalizedSkillId] || MAX_LEVELS[normalizedSkillId] || 1;
 }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TREE_DEFS, getMaxLevel } from '../classes/talentTrees';
+import { migrateLegacyProgressionRegistry } from '../classes/progression';
 import { uiBus } from '../ui/bus';
 
 export default class BuildTreeScene extends Phaser.Scene {
@@ -29,6 +30,8 @@ export default class BuildTreeScene extends Phaser.Scene {
   create() {
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
+
+    migrateLegacyProgressionRegistry(this.registry);
 
     // 读取状态（由升级系统写入；UI仅展示）
     this.selectedTrees = this.registry.get('selectedTrees') || [];

@@ -241,35 +241,23 @@ export function fireStarfall(player) {
         const aoeRadius = big ? 110 : 70;
         const damage = Math.max(1, Math.round(player.bulletDamage * 0.92 * damageMult));
 
-        const aoeBullet = scene.bulletManager?.createPlayerBullet(
+        const aoeBullet = scene.createManagedPlayerAreaBullet?.(
           impactX,
           impactY,
           scheme.coreColor,
           {
             radius: aoeRadius,
-            speed: 0,
             damage,
-            hasGlow: false,
-            hasTrail: false,
-            glowRadius: 0,
-            isAbsoluteAngle: true,
-            angleOffset: 0,
-            homing: false,
-            explode: false,
-            skipUpdate: false
+            alpha: 0.001,
+            maxLifeMs: 240,
+            pierce: true,
+            maxHits: 999,
+            hitCooldownMs: 250,
+            tags: ['player_starfall_impact']
           }
         );
 
         if (aoeBullet) {
-          aoeBullet.alpha = 0.001;
-          // 不能太短：否则掉帧时（delta 很大）会在 BulletManager.update 中先被寿命回收，
-          // 导致本帧 CollisionManager 还没检查就已经消失。
-          aoeBullet.maxLifeMs = 240;
-          // AOE：需要同时命中 Boss 与伴随怪；否则会先命中 Boss 被销毁，导致小怪不掉血。
-          aoeBullet.pierce = true;
-          aoeBullet.maxHits = 999;
-          aoeBullet.hitCooldownMs = 250;
-
           const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
           applyEnhancementsToBullet(aoeBullet, enh, scheme);
 

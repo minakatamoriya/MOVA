@@ -32,7 +32,7 @@ export const CORE_BASE_COLORS = {
 export const ACCENT_TOKEN_COLORS = {
   gold: CORE_BASE_COLORS.paladin,
   arcane: CORE_BASE_COLORS.mage,
-  nature: CORE_BASE_COLORS.scatter,
+  nature: CORE_BASE_COLORS.archer,
   shadow: CORE_BASE_COLORS.warlock,
   red: CORE_BASE_COLORS.warrior,
   feather: 0xe6fff6

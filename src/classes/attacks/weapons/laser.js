@@ -97,21 +97,21 @@ function destroyBeam(state) {
 
 function ensureBeamHitbox(scene, state, player, scheme, baseDamage) {
   if (!state.hitbox || !state.hitbox.active) {
-    const hb = scene.bulletManager?.createPlayerBullet
-      ? scene.bulletManager.createPlayerBullet(player.x, player.y, scheme.coreBright, {
+    const hb = scene.createManagedPlayerBullet
+      ? scene.createManagedPlayerAreaBullet(player.x, player.y, scheme.coreBright, {
           radius: 2,
-          speed: 0,
           damage: baseDamage,
-          angleOffset: 0,
-          isAbsoluteAngle: true,
-          hasGlow: false,
-          hasTrail: false,
-          glowRadius: 0,
-          skipUpdate: true
+          skipUpdate: true,
+          alpha: 0.001,
+          pierce: true,
+          maxHits: 999999,
+          hitCooldownMs: Math.max(60, Math.round(player.fireRate || 320)),
+          tags: ['player_laser_hitbox']
         })
       : scene.add.circle(player.x, player.y, 2, scheme.coreBright, 0);
 
-    hb.alpha = 0.001;
+    if (!hb) return;
+
     hb.isPlayerBullet = true;
     hb.active = true;
     hb.skipUpdate = true;
@@ -119,11 +119,6 @@ function ensureBeamHitbox(scene, state, player, scheme, baseDamage) {
     hb.radius = 2;
     hb.damage = baseDamage;
     hb.laserBeam = true;
-
-    // 持续光束：命中不销毁，但视觉上“截断到敌人身上”
-    hb.pierce = true;
-    hb.maxHits = 999999;
-    hb.hitCooldownMs = Math.max(60, Math.round(player.fireRate || 320));
 
     hb.visualCoreColor = scheme.coreBright;
     hb.visualAccentColor = scheme.accentColor;

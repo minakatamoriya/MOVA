@@ -14,16 +14,18 @@ export const CORE_KEYS = /** @type {const} */ ({
   warrior: 'warrior',
   paladin: 'paladin',
   mage: 'mage',
-  archer: 'scatter',
+  archer: 'archer',
   druid: 'drone',
   warlock: 'warlock'
 });
+
+export const CORE_KEY_ALIASES = /** @type {const} */ ({});
 
 export const CORE_UPGRADE_IDS = /** @type {const} */ ({
   warrior: 'warrior_core',
   paladin: 'paladin_core',
   mage: 'mage_core',
-  archer: 'scatter_core',
+  archer: 'archer_core',
   druid: 'drone_core',
   warlock: 'warlock_core'
 });
@@ -43,7 +45,7 @@ export const CLASSES = [
     icon: '猎主',
     coreUpgradeId: CORE_UPGRADE_IDS.archer,
     coreKey: CORE_KEYS.archer,
-    coreDesc: '基础攻击为散射箭，覆盖更广'
+    coreDesc: '基础攻击为箭矢连射，可继续强化为多列箭雨'
   },
   {
     id: CLASS_IDS.paladin,
@@ -94,4 +96,14 @@ export function getClassByCoreUpgradeId(coreUpgradeId) {
 export function coreUpgradeIdToCoreKey(coreUpgradeId) {
   const def = getClassByCoreUpgradeId(coreUpgradeId);
   return def ? def.coreKey : null;
+}
+
+export function normalizeCoreKey(coreKey) {
+  if (!coreKey) return coreKey;
+  return CORE_KEY_ALIASES[coreKey] || coreKey;
+}
+
+export function coreKeysEqual(left, right) {
+  if (!left || !right) return left === right;
+  return normalizeCoreKey(left) === normalizeCoreKey(right);
 }

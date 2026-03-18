@@ -1,3 +1,5 @@
+import { normalizeCoreKey } from '../classDefs';
+
 // 将“职业核心”启用逻辑集中管理（GameScene 只负责调用）
 
 export function applyCoreUpgrade(scene, coreUpgradeId) {
@@ -5,7 +7,7 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
 
   const toCoreKey = (id) => {
     if (!id) return null;
-    if (id === 'scatter_core') return 'scatter';
+    if (id === 'archer_core') return 'archer';
     if (id === 'drone_core') return 'drone';
     if (id === 'warrior_core') return 'warrior';
     if (id === 'mage_core') return 'mage';
@@ -14,12 +16,14 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
     return null;
   };
 
-  const pickedCore = toCoreKey(coreUpgradeId);
+  const pickedCore = normalizeCoreKey(toCoreKey(coreUpgradeId));
   if (!pickedCore) return false;
+
+  const currentMainCore = normalizeCoreKey(scene.buildState?.core);
 
   // 双职业原则：主职业锁定普攻形态；副职业只提供强化。
   // 已有主职业时，再选 core 视为副职业（不切换普攻形态）。
-  if (scene.buildState?.core && scene.buildState.core !== pickedCore) {
+  if (currentMainCore && currentMainCore !== pickedCore) {
     scene.buildState.offCore = pickedCore;
     if (scene.registry) scene.registry.set('offCore', pickedCore);
     if (scene.player?.setOffCore) scene.player.setOffCore(pickedCore);

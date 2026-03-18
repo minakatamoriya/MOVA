@@ -3,11 +3,13 @@ import { applyEnhancementsToBullet, getBasicAttackEnhancements } from '../basicA
 import { getBasicSkillColorScheme } from '../../visual/basicSkillColors';
 
 export function fireArcherArrow(player) {
-  if (!player?.scene) return;
+  if (!player?.scene) return false;
 
   const scene = player.scene;
   const boss = scene?.bossManager?.getCurrentBoss?.();
   const minions = scene?.bossManager?.getMinions?.() || scene?.bossManager?.minions || [];
+
+  if (!player.getArcherTargetInRange?.()) return false;
 
   const pickTarget = (x, y) => {
     const enemies = [];
@@ -42,11 +44,23 @@ export function fireArcherArrow(player) {
   const spawnX = player.x;
   const spawnY = player.y - player.visualRadius - 4;
 
-  const target = pickTarget(spawnX, spawnY);
+  const hp = (typeof player.getHitboxPosition === 'function') ? player.getHitboxPosition() : null;
+  const rangeX = (hp && Number.isFinite(hp.x)) ? hp.x : player.x;
+  const rangeY = (hp && Number.isFinite(hp.y)) ? hp.y : player.y;
+  const acquireRange = Phaser.Math.Clamp(
+    Math.round(player.archerArrowRange || player.archerArrowRangeBase || 330),
+    200,
+    player.archerArrowRangeMax || 420
+  );
 
-  const angle = target && target.isAlive
-    ? Phaser.Math.Angle.Between(spawnX, spawnY, target.x, target.y)
-    : -Math.PI / 2;
+  const target = pickTarget(spawnX, spawnY);
+  if (!target || !target.isAlive) return false;
+
+  const dx = target.x - rangeX;
+  const dy = target.y - rangeY;
+  if ((dx * dx + dy * dy) > acquireRange * acquireRange) return false;
+
+  const angle = Phaser.Math.Angle.Between(spawnX, spawnY, target.x, target.y);
 
   const now = scene.time?.now ?? 0;
 
@@ -68,29 +82,20 @@ export function fireArcherArrow(player) {
 
   if (shouldArrowRain && target && target.isAlive) {
     // AOE 判定（当前项目以 Boss 为主；用“短寿命大半径子弹”做范围伤害）
-    const aoe = scene.bulletManager.createPlayerBullet(
+    const aoe = scene.createManagedPlayerAreaBullet(
       target.x,
       target.y,
       scheme.coreColor,
       {
         radius: 110,
-        speed: 0,
         damage: Math.max(1, Math.round(player.bulletDamage * 1.8)),
-        angleOffset: 0,
-        isAbsoluteAngle: true,
-        hasGlow: false,
-        hasTrail: false,
-        glowRadius: 0,
-        homing: false,
-        explode: false,
-        skipUpdate: false
+        maxLifeMs: 90,
+        hitCooldownMs: 999999,
+        noCrit: false,
+        tags: ['player_archer_arrow_rain']
       }
     );
     if (aoe) {
-      aoe.alpha = 0.001;
-      aoe.maxLifeMs = 90;
-      aoe.hitCooldownMs = 999999;
-      aoe.noCrit = false;
       applyEnhancementsToBullet(aoe, enh, scheme);
       player.bullets.push(aoe);
     }
@@ -110,47 +115,38 @@ export function fireArcherArrow(player) {
         onComplete: () => p.destroy()
       });
     }
-    return;
+    return true;
   }
 
+  const applyArrowVisuals = (bullet) => {
+    if (!bullet) return;
+    bullet.visualCoreColor = arrowCore;
+    bullet.visualAccentColor = arrowAccent;
+    bullet.hitEffectColor = arrowGlow;
+    bullet.glowColor = arrowGlow;
+    bullet.strokeColor = arrowAccent;
+    bullet.trailColor = arrowCore;
+    applyEnhancementsToBullet(bullet, enh, scheme);
+  };
+
   const fireVolley = (allowRapidProc = true) => {
-    const spread = 0.16;
-    const offsets = [-spread, 0, spread];
-    offsets.forEach((off) => {
-      const b = scene.bulletManager.createPlayerBullet(
-        spawnX,
-        spawnY,
-        arrowCore,
-        {
-          radius: 4,
-          speed: 720,
-          damage: Math.max(1, Math.round(player.bulletDamage * 0.38)),
-          angleOffset: angle + off,
-          isAbsoluteAngle: true,
-          hasGlow: true,
-          hasTrail: true,
-          glowRadius: 9,
-          glowColor: arrowGlow,
-          strokeColor: arrowAccent,
-          trailColor: arrowCore,
-          type: 'arrow',
-          homing: false,
-          explode: false,
-          skipUpdate: false
-        }
-      );
-
-      if (!b) return;
-      b.hitCooldownMs = 120;
-
-      if (player.archerPierce) {
-        b.pierce = true;
-        b.maxHits = 2;
+    if (player.archerVolleyMode === 'ring') {
+      const count = Math.max(1, Math.round(player.archerVolleyRingCount || 8));
+      for (let i = 0; i < count; i++) {
+        const shotAngle = (Math.PI * 2 * i) / count;
+        const bullet = player.createBulletAtAngle(shotAngle, true);
+        applyArrowVisuals(bullet);
       }
-
-      applyEnhancementsToBullet(b, enh, scheme);
-      player.bullets.push(b);
-    });
+    } else {
+      const count = Math.max(1, Math.round(player.archerVolleyCount || 1));
+      const spread = Number(player.archerVolleySpread || 0);
+      const start = -spread * (count - 1) / 2;
+      for (let i = 0; i < count; i++) {
+        const shotAngle = angle + start + spread * i;
+        const bullet = player.createBulletAtAngle(shotAngle, true);
+        applyArrowVisuals(bullet);
+      }
+    }
 
     if (allowRapidProc && player.archerRapidfire && Math.random() < 0.1) {
       fireVolley(false);
@@ -158,4 +154,5 @@ export function fireArcherArrow(player) {
   };
 
   fireVolley(true);
+  return true;
 }

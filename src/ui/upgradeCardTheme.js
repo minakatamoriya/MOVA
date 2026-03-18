@@ -24,8 +24,7 @@ const TREE_DISPLAY_NAME = {
   curse: '术士',
   guardian: '圣骑士',
   nature: '德鲁伊',
-  drone: '德鲁伊',
-  scatter: '猎人'
+  drone: '德鲁伊'
 };
 
 const TREE_TO_COLOR_KEY = {

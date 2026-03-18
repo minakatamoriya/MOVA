@@ -177,7 +177,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
   fireSmartVolley(options = {}) {
     const scene = this.scene;
-    if (!scene?.bulletManager?.createBossBullet) return;
+    if (!scene?.bulletCore?.createBossBullet && !scene?.bulletManager?.createBossBullet) return;
     if (!this.isAlive || this.isDestroyed) return;
 
     const target = this.getPrimaryTarget();
@@ -199,21 +199,54 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     for (let i = 0; i < count; i++) {
       const t = (i - half);
       const angle = baseAngle + t * spreadRad;
-      scene.bulletManager.createBossBullet(
-        this.x,
-        this.y,
+      this.spawnManagedBossBullet({
+        x: this.x,
+        y: this.y,
         angle,
         speed,
         color,
-        {
-          radius,
-          damage,
+        radius,
+        damage,
+        tags: ['boss_smart_volley'],
+        options: {
           hasGlow: false,
           hasTrail: true,
           type: shapeType
         }
-      );
+      });
     }
+  }
+
+  // Boss 统一发弹出口：优先走 BulletCore，旧 BulletManager 只保留为兼容回退。
+  spawnManagedBossBullet(descriptor = {}) {
+    const scene = this.scene;
+    if (!scene) return null;
+
+    const x = Number(descriptor.x ?? this.x ?? 0);
+    const y = Number(descriptor.y ?? this.y ?? 0);
+    const angle = Number(descriptor.angle ?? 0);
+    const speed = Number(descriptor.speed ?? 0);
+    const color = descriptor.color ?? (this.bossColor || 0xff4444);
+    const radius = Math.max(1, Number(descriptor.radius ?? 7));
+    const damage = Math.max(0, Number(descriptor.damage ?? 15));
+    const tags = Array.isArray(descriptor.tags) ? descriptor.tags : [];
+    const options = { ...(descriptor.options || {}) };
+
+    if (scene.createManagedBossBullet) {
+      return scene.createManagedBossBullet(x, y, angle, speed, color, {
+        radius,
+        damage,
+        tags,
+        ...options
+      });
+    }
+
+    if (!scene.bulletManager?.createBossBullet) return null;
+    return scene.bulletManager.createBossBullet(x, y, angle, speed, color, {
+      radius,
+      damage,
+      ...options
+    });
   }
 
   setMoveBoundsRect(rect) {
@@ -790,6 +823,12 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
 
     if (this.attackTimer) {
       this.attackTimer.paused = !this.combatActive;
+    }
+
+    // 新时间轴也要与旧 attackTimer 一起冻结/恢复，否则会出现脱战后仍在出招。
+    if (this.scene?.attackTimeline) {
+      if (this.combatActive) this.scene.attackTimeline.resumeOwnerTimelines?.(this);
+      else this.scene.attackTimeline.pauseOwnerTimelines?.(this);
     }
   }
 
@@ -1539,6 +1578,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     if (this.moveTween && this.moveTween.isPlaying()) this.moveTween.pause();
     if (this.moveTimer) this.moveTimer.paused = true;
     if (this.attackTimer) this.attackTimer.paused = true;
+    this.scene?.attackTimeline?.pauseOwnerTimelines?.(this);
 
     // 轻量反馈：外圈闪一下
     if (this.scene?.add) {
@@ -1564,6 +1604,9 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       if (this.moveTween && this.moveTween.isPaused()) this.moveTween.resume();
       if (this.moveTimer) this.moveTimer.paused = false;
       if (this.attackTimer) this.attackTimer.paused = false;
+      if (this.combatActive !== false) {
+        this.scene?.attackTimeline?.resumeOwnerTimelines?.(this);
+      }
     });
   }
 
@@ -1851,18 +1894,23 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       type = 'circle'
     } = options;
 
-    // 通过 BulletManager 创建Boss子弹，确保被碰撞检测系统追踪到
-    const bullet = this.scene.bulletManager.createBossBullet(
-      x, y, angle, speed, color,
-      {
-        radius: radius,
-        glowRadius: glowRadius,
-        hasTrail: hasTrail,
-        trailColor: trailColor,
-        damage: 15,
-        type: type
+    // 统一走 BaseBoss 的发弹出口，保证新旧系统拿到相同的子弹元信息。
+    const bullet = this.spawnManagedBossBullet({
+      x,
+      y,
+      angle,
+      speed,
+      color,
+      radius,
+      damage: 15,
+      tags: ['boss_enhanced_bullet'],
+      options: {
+        glowRadius,
+        hasTrail,
+        trailColor,
+        type
       }
-    );
+    });
 
     return bullet;
   }

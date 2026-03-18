@@ -12,6 +12,9 @@ import ToastOverlay from '../ui/ToastOverlay';
 import CooldownHud from '../ui/CooldownHud';
 import { START_ROOM } from '../data/mapPool';
 import { BulletCore, PatternSystem, VfxSystem, AttackTimeline, DebugOverlay } from '../systems/bullets';
+import { normalizeCoreKey } from '../classes/classDefs';
+import { normalizeSkillId } from '../classes/talentTrees';
+import { migrateLegacyProgressionRegistry } from '../classes/progression';
 
 const EMERGENCY_COOLDOWN_DEFS = {
   paladin: {
@@ -32,7 +35,7 @@ const EMERGENCY_COOLDOWN_DEFS = {
       return `生命低于30%时自动触发：获得${Math.round((state.value || 0) * 100)}%减伤，持续${seconds}秒。冷却30秒。`;
     }
   },
-  scatter: {
+  archer: {
     talentId: 'archer_nimble_evade',
     enhancementTalentId: 'archer_evade_mastery',
     skillId: 'archer_nimble_evade',
@@ -611,6 +614,10 @@ class GameScene extends Phaser.Scene {
 
     // 初始化游戏系统
     this.initGameSystems();
+
+    // 兼容旧局内进度：把旧猎人技能/核心数据升级到 archer 语义，
+    // 后续流程就不需要继续暴露旧入口。
+    migrateLegacyProgressionRegistry(this.registry);
 
     // 新流程：先进入起始房间（小地图、无迷雾、无 Boss）
     this.enterStartRoom();
@@ -1392,6 +1399,142 @@ class GameScene extends Phaser.Scene {
     });
   }
 
+  // 场景级统一发弹入口：业务层不再直接依赖 BulletManager，
+  // 优先走 BulletCore，旧 manager 仅作为兼容回退。
+  createManagedPlayerBullet(x, y, color, options = {}) {
+    const tags = Array.isArray(options.tags) ? options.tags : [];
+    const { tags: _ignoredTags, ...bulletOptions } = options || {};
+
+    if (this.bulletCore?.createPlayerBullet) {
+      const angle = Number(bulletOptions.angleOffset ?? 0);
+      const bullet = this.bulletCore.createPlayerBullet({
+        x,
+        y,
+        angle,
+        speed: Number(bulletOptions.speed ?? 0),
+        color,
+        radius: Number(bulletOptions.radius ?? 6),
+        damage: Number(bulletOptions.damage ?? 0),
+        tags,
+        options: bulletOptions
+      });
+      if (bullet && tags.length > 0) bullet.bulletCoreTags = tags;
+      return bullet;
+    }
+
+    const bullet = this.bulletManager?.createPlayerBullet?.(x, y, color, bulletOptions) || null;
+    if (bullet && tags.length > 0) bullet.bulletCoreTags = tags;
+    return bullet;
+  }
+
+  // 敌方统一入口与 BaseBoss/TestMinion 共用，保证敌方弹幕也能拿到统一元信息。
+  createManagedBossBullet(x, y, angle, speed, color, options = {}) {
+    const tags = Array.isArray(options.tags) ? options.tags : [];
+    const { tags: _ignoredTags, ...bulletOptions } = options || {};
+
+    if (this.bulletCore?.createBossBullet) {
+      const bullet = this.bulletCore.createBossBullet({
+        x,
+        y,
+        angle,
+        speed,
+        color,
+        radius: Number(bulletOptions.radius ?? 7),
+        damage: Number(bulletOptions.damage ?? 0),
+        tags,
+        options: bulletOptions
+      });
+      if (bullet && tags.length > 0) bullet.bulletCoreTags = tags;
+      return bullet;
+    }
+
+    const bullet = this.bulletManager?.createBossBullet?.(x, y, angle, speed, color, bulletOptions) || null;
+    if (bullet && tags.length > 0) bullet.bulletCoreTags = tags;
+    return bullet;
+  }
+
+  // 特殊弹统一配置：AoE、法阵、不可见 hitbox 等都经由这里写通用后处理。
+  configureManagedBullet(bullet, config = {}) {
+    if (!bullet) return null;
+
+    if (config.alpha != null) bullet.alpha = Number(config.alpha);
+    if (config.maxLifeMs != null) bullet.maxLifeMs = Math.max(1, Math.round(Number(config.maxLifeMs)));
+    if (config.hitCooldownMs != null) bullet.hitCooldownMs = Math.max(0, Math.round(Number(config.hitCooldownMs)));
+    if (config.maxHits != null) bullet.maxHits = Math.max(1, Math.round(Number(config.maxHits)));
+    if (config.pierce != null) bullet.pierce = !!config.pierce;
+    if (config.noCrit != null) bullet.noCrit = !!config.noCrit;
+    if (config.damageNumberAtTarget != null) bullet.damageNumberAtTarget = !!config.damageNumberAtTarget;
+    if (config.depth != null) bullet.setDepth?.(Number(config.depth));
+    if (config.blendMode != null) bullet.setBlendMode?.(config.blendMode);
+    if (config.fillAlpha != null && bullet.setFillStyle) bullet.setFillStyle(config.fillColor ?? bullet.visualCoreColor ?? 0xffffff, Number(config.fillAlpha));
+    if (config.strokeWidth != null && bullet.setStrokeStyle) {
+      bullet.setStrokeStyle(
+        Math.max(0, Math.round(Number(config.strokeWidth))),
+        config.strokeColor ?? bullet.visualAccentColor ?? bullet.visualCoreColor ?? 0xffffff,
+        Number(config.strokeAlpha ?? 1)
+      );
+    }
+
+    const flags = config.flags || {};
+    Object.keys(flags).forEach((key) => {
+      bullet[key] = flags[key];
+    });
+
+    return bullet;
+  }
+
+  createManagedPlayerAreaBullet(x, y, color, config = {}) {
+    const {
+      alpha,
+      maxLifeMs,
+      hitCooldownMs,
+      maxHits,
+      pierce,
+      noCrit,
+      damageNumberAtTarget,
+      depth,
+      blendMode,
+      fillAlpha,
+      fillColor,
+      strokeWidth,
+      strokeColor,
+      strokeAlpha,
+      flags,
+      ...bulletOptions
+    } = config || {};
+
+    const bullet = this.createManagedPlayerBullet(x, y, color, {
+      speed: 0,
+      angleOffset: 0,
+      isAbsoluteAngle: true,
+      hasGlow: false,
+      hasTrail: false,
+      glowRadius: 0,
+      homing: false,
+      explode: false,
+      skipUpdate: false,
+      ...bulletOptions
+    });
+
+    return this.configureManagedBullet(bullet, {
+      alpha,
+      maxLifeMs,
+      hitCooldownMs,
+      maxHits,
+      pierce,
+      noCrit,
+      damageNumberAtTarget,
+      depth,
+      blendMode,
+      fillAlpha,
+      fillColor,
+      strokeWidth,
+      strokeColor,
+      strokeAlpha,
+      flags
+    });
+  }
+
   setupBulletSystems() {
     this.destroyBulletSystems();
 
@@ -1665,11 +1808,12 @@ class GameScene extends Phaser.Scene {
   getSkillLevel(skillId) {
     if (!skillId) return 0;
     const skillTreeLevels = this.registry?.get?.('skillTreeLevels') || {};
-    return clampTalentLevel(skillTreeLevels[skillId] || 0);
+    const normalizedSkillId = normalizeSkillId(skillId);
+    return clampTalentLevel(skillTreeLevels[normalizedSkillId] || skillTreeLevels[skillId] || 0);
   }
 
   getEmergencyCooldownTalentState(coreKey) {
-    const def = coreKey ? EMERGENCY_COOLDOWN_DEFS[coreKey] : null;
+    const def = coreKey ? EMERGENCY_COOLDOWN_DEFS[normalizeCoreKey(coreKey)] : null;
     if (!def) return null;
     const level = this.getSkillLevel(def.talentId);
     const enhancementLevel = this.getSkillLevel(def.enhancementTalentId);
@@ -1773,7 +1917,7 @@ class GameScene extends Phaser.Scene {
   installPassiveCooldownSkills() {
     const potionSmall = getItemById('potion_small');
 
-    ['paladin', 'scatter', 'warrior', 'mage', 'warlock', 'drone'].forEach((coreKey) => {
+    ['paladin', 'archer', 'warrior', 'mage', 'warlock', 'drone'].forEach((coreKey) => {
       const state = this.getEmergencyCooldownTalentState(coreKey);
       if (!state) return;
 
@@ -1803,7 +1947,7 @@ class GameScene extends Phaser.Scene {
             this.player.emergencyMitigationMult = Math.max(0, 1 - next.value);
             this.player.emergencyMitigationUntil = now + next.durationMs;
             this.player.playDivineShelterEffect?.(next.durationMs);
-          } else if (coreKey === 'scatter') {
+          } else if (coreKey === 'archer') {
             this.player.emergencyDodgeBonus = next.value;
             this.player.emergencyDodgeUntil = now + next.durationMs;
           } else if (coreKey === 'warrior') {

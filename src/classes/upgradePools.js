@@ -34,9 +34,9 @@ export const TALENT_OFFER_WEIGHT_CONFIG = {
 // 主职业专精（只从 mainCore 抽取）
 export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
-  scatter: [
+  archer: [
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+12%/+24%/+36%）', icon: '猎主', maxLevel: 3 },
-    { id: 'archer_scatter', category: 'build', name: '散射', desc: '基础射击初始为1列；升级后变为3列→5列→7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '基础射击初始为1列；升级后变为3列→5列→7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
     { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒', icon: '猎主', maxLevel: 3 },
     { id: 'archer_evade_mastery', category: 'build', name: '残影步调', desc: '强化灵巧回避：持续时间提高至5/8/10秒', icon: '猎主', maxLevel: 3, requiredSkillId: 'archer_nimble_evade' },
   ],
@@ -171,7 +171,7 @@ export const DEPTH_SPEC_POOLS = {
     { id: 'mage_trilaser', category: 'third_depth', name: '三重激光', desc: '激光分裂为 3 道，每道伤害为原伤害的 60%', icon: '法深', maxLevel: 1 },
     { id: 'mage_arcanomorph', category: 'third_depth', name: '奥术化身', desc: '每层使法阵效果翻倍，且法阵内移动不消失（上限3层）', icon: '法深', maxLevel: 3 }
   ],
-  scatter: [
+  archer: [
     { id: 'archer_hundred', category: 'third_depth', name: '百发百中', desc: '每层使暴击伤害 +30%', icon: '猎深', maxLevel: 3 },
     { id: 'archer_windfury', category: 'third_depth', name: '疾风连射', desc: '每次攻击有 15% 概率触发一次额外攻击（可触发自身）', icon: '猎深', maxLevel: 1 },
     { id: 'archer_eagleeye', category: 'third_depth', name: '鹰眼化身', desc: '攻击无视敌人 30% 防御，且猎手标记对任何血量生效', icon: '猎深', maxLevel: 1 },
@@ -209,7 +209,7 @@ export const DUAL_SPEC_POOLS = {
       { id: 'dual_mage_drone_natureoverflow', category: 'third_dual', name: '自然溢流', desc: '自然伙伴节点出现权重提高，且熊灵/战鹰/树精强化不会晚于对应宠物本体出现', icon: '法德', maxLevel: 1 }
     ]
   },
-  scatter: {
+  archer: {
     mage: [
       { id: 'dual_scatter_mage_enchantedarrow', category: 'third_dual', name: '附魔箭矢', desc: '你的箭矢有 20% 概率附加一次激光伤害（50% 攻击力）', icon: '猎法', maxLevel: 1 },
       { id: 'dual_scatter_mage_hastefocus', category: 'third_dual', name: '迅捷专注', desc: '每层使猎人攻速 +5%，同时法师迅捷效果 +2%', icon: '猎法', maxLevel: 3 },
@@ -231,7 +231,7 @@ export const DUAL_SPEC_POOLS = {
     ]
   },
   paladin: {
-    scatter: [
+    archer: [
       { id: 'dual_paladin_scatter_holyrain', category: 'third_dual', name: '圣光箭雨', desc: '你的箭雨变为神圣箭雨，对敌人造成额外 20% 神圣伤害并致盲 1 秒', icon: '骑猎', maxLevel: 1 },
       { id: 'dual_paladin_scatter_blessedquiver', category: 'third_dual', name: '祝福箭袋', desc: '每层使你的暴击率 +3%，且暴击时有 20% 概率为自己回复 2% 生命', icon: '骑猎', maxLevel: 3 },
       { id: 'dual_paladin_scatter_retribution', category: 'third_dual', name: '惩戒射击', desc: '对攻击你的敌人，你的下次攻击必定暴击且附加圣焰', icon: '骑猎', maxLevel: 1 }
@@ -248,7 +248,7 @@ export const DUAL_SPEC_POOLS = {
 
 // 技能树 id -> GameScene.buildState.core key
 export const TREE_TO_CORE_KEY = {
-  archer: 'scatter',
+  archer: 'archer',
   druid: 'drone',
   warrior: 'warrior',
   mage: 'mage',

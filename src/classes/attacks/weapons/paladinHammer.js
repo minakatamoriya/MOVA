@@ -317,35 +317,26 @@ export function firePaladinHammer(player) {
     });
 
     // 碰撞用 AoE 子弹（短命、静止、多目标）
-    const aoe = scene.bulletManager.createPlayerBullet(
+    const aoe = scene.createManagedPlayerAreaBullet(
       x,
       y,
       scheme.coreColor,
       {
         radius,
-        speed: 0,
         damage: Math.max(1, Math.round(player.bulletDamage * damageMultiplier * dmgMult)),
-        hasGlow: false,
-        hasTrail: false,
-        glowRadius: 0,
-        isAbsoluteAngle: true,
-        angleOffset: 0,
-        homing: false,
-        explode: false,
-        skipUpdate: false
+        alpha: 0.001,
+        maxLifeMs: 150,
+        pierce: true,
+        maxHits: 99,
+        hitCooldownMs: 9999,
+        damageNumberAtTarget: true,
+        fillAlpha: 0.001,
+        strokeWidth: 0,
+        tags: ['player_paladin_hammer_aoe']
       }
     );
 
     if (!aoe) return;
-
-    if (aoe.setFillStyle) aoe.setFillStyle(scheme.coreColor, 0.001);
-    if (aoe.setStrokeStyle) aoe.setStrokeStyle(0);
-
-    aoe.maxLifeMs = 150;
-    aoe.pierce = true;
-    aoe.maxHits = 99;
-    aoe.hitCooldownMs = 9999;
-    aoe.damageNumberAtTarget = true;
 
     // 圣焰：复用碰撞层的 holyfire 落地逻辑
     if (player.paladinHolyfire) {

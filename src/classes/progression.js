@@ -1,11 +1,49 @@
-import { getTreeIdForSkill, getMaxLevel } from './talentTrees';
+import { getTreeIdForSkill, getMaxLevel, normalizeSkillId } from './talentTrees';
+import { normalizeCoreKey } from './classDefs';
+
+export function migrateLegacyProgressionRegistry(registry) {
+  if (!registry?.get || !registry?.set) return false;
+
+  let changed = false;
+
+  const mainCore = registry.get('mainCore');
+  const normalizedMainCore = normalizeCoreKey(mainCore);
+  if (normalizedMainCore !== mainCore) {
+    registry.set('mainCore', normalizedMainCore || null);
+    changed = true;
+  }
+
+  const offCore = registry.get('offCore');
+  const normalizedOffCore = normalizeCoreKey(offCore);
+  if (normalizedOffCore !== offCore) {
+    registry.set('offCore', normalizedOffCore || null);
+    changed = true;
+  }
+
+  const skillTreeLevels = registry.get('skillTreeLevels') || {};
+  const migratedSkillTreeLevels = {};
+  let levelMapChanged = false;
+  Object.entries(skillTreeLevels).forEach(([skillId, level]) => {
+    const normalizedSkillId = normalizeSkillId(skillId);
+    if (normalizedSkillId !== skillId) levelMapChanged = true;
+    const current = migratedSkillTreeLevels[normalizedSkillId] || 0;
+    migratedSkillTreeLevels[normalizedSkillId] = Math.max(current, Number(level) || 0);
+  });
+  if (levelMapChanged) {
+    registry.set('skillTreeLevels', migratedSkillTreeLevels);
+    changed = true;
+  }
+
+  return changed;
+}
 
 // 由升级驱动写入 registry，供技能树 UI 展示 & 双修判断
 export function recordSkillTreeProgress(registry, upgrade) {
   if (!registry?.get || !registry?.set) return;
   if (!upgrade || (upgrade.category !== 'build' && upgrade.category !== 'mix' && upgrade.category !== 'third_depth' && upgrade.category !== 'third_dual')) return;
 
-  const treeId = getTreeIdForSkill(upgrade.id);
+  const skillId = normalizeSkillId(upgrade.id);
+  const treeId = getTreeIdForSkill(skillId);
   if (!treeId) return;
 
   const selectedTrees = registry.get('selectedTrees') || [];
@@ -22,9 +60,9 @@ export function recordSkillTreeProgress(registry, upgrade) {
     }
   }
 
-  const current = skillTreeLevels[upgrade.id] || 0;
-  const maxLevel = getMaxLevel(upgrade.id);
-  skillTreeLevels[upgrade.id] = Math.min(maxLevel, current + 1);
+  const current = skillTreeLevels[skillId] || skillTreeLevels[upgrade.id] || 0;
+  const maxLevel = getMaxLevel(skillId);
+  skillTreeLevels[skillId] = Math.min(maxLevel, current + 1);
 
   registry.set('selectedTrees', selectedTrees);
   registry.set('skillTreeLevels', skillTreeLevels);

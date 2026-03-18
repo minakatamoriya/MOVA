@@ -48,12 +48,17 @@ export default class AttackTimeline {
     const timeline = this.timelines.get(timelineId);
     if (!timeline || !timeline.running) return null;
 
+    if (this._shouldStopForOwner(timeline.owner)) {
+      this.stopTimeline(timeline.id);
+      return null;
+    }
+
     this._clearTimers(timeline);
     timeline.currentPhaseIndex = phaseIndex;
 
     const phase = timeline.phases[phaseIndex];
     if (!phase) {
-      timeline.running = false;
+      this.stopTimeline(timeline.id);
       return null;
     }
 
@@ -64,38 +69,69 @@ export default class AttackTimeline {
     const events = Array.isArray(phase.events) ? phase.events : [];
     events.forEach((event) => {
       const delayMs = Math.max(0, Math.round(Number(event.atMs || 0)));
-      const timer = this.scene?.time?.delayedCall?.(delayMs, () => {
-        if (!timeline.running) return;
+      this._scheduleTimelineTimer(timeline, delayMs, () => {
         this._runEvent(timeline, phase, event);
       });
-      if (timer) timeline.activeTimers.add(timer);
     });
 
     if (Number.isFinite(Number(phase.durationMs)) && phase.durationMs >= 0) {
-      const endTimer = this.scene?.time?.delayedCall?.(Number(phase.durationMs), () => {
-        if (!timeline.running) return;
+      this._scheduleTimelineTimer(timeline, Number(phase.durationMs), () => {
         if (typeof phase.onExit === 'function') {
           phase.onExit({ timeline, phase, patternSystem: this.patternSystem, vfxSystem: this.vfxSystem, scene: this.scene });
         }
         this.advancePhase(timeline.id, phaseIndex + 1);
       });
-      if (endTimer) timeline.activeTimers.add(endTimer);
     }
 
     return phase;
   }
 
-  stopTimeline(timelineId) {
+  stopTimeline(timelineId, opts = {}) {
     const timeline = this.timelines.get(timelineId);
     if (!timeline) return false;
+
+    const remove = opts.remove !== false;
     timeline.running = false;
     this._clearTimers(timeline);
+    if (remove) {
+      this.timelines.delete(timelineId);
+    }
     return true;
   }
 
-  stopOwnerTimelines(owner) {
+  pauseTimeline(timelineId) {
+    const timeline = this.timelines.get(timelineId);
+    if (!timeline || !timeline.running) return false;
+    timeline.activeTimers.forEach((timer) => {
+      if (timer) timer.paused = true;
+    });
+    return true;
+  }
+
+  resumeTimeline(timelineId) {
+    const timeline = this.timelines.get(timelineId);
+    if (!timeline || !timeline.running) return false;
+    timeline.activeTimers.forEach((timer) => {
+      if (timer) timer.paused = false;
+    });
+    return true;
+  }
+
+  stopOwnerTimelines(owner, opts = {}) {
     this.timelines.forEach((timeline) => {
-      if (timeline.owner === owner) this.stopTimeline(timeline.id);
+      if (timeline.owner === owner) this.stopTimeline(timeline.id, opts);
+    });
+  }
+
+  pauseOwnerTimelines(owner) {
+    this.timelines.forEach((timeline) => {
+      if (timeline.owner === owner) this.pauseTimeline(timeline.id);
+    });
+  }
+
+  resumeOwnerTimelines(owner) {
+    this.timelines.forEach((timeline) => {
+      if (timeline.owner === owner) this.resumeTimeline(timeline.id);
     });
   }
 
@@ -130,6 +166,52 @@ export default class AttackTimeline {
     if (type === 'flash' && this.vfxSystem) {
       this.vfxSystem.flashScreen(event.config || {});
     }
+  }
+
+  _scheduleTimelineTimer(timeline, delayMs, callback) {
+    if (!this.scene?.time?.delayedCall) return null;
+
+    let timer = null;
+    timer = this.scene.time.delayedCall(delayMs, () => {
+      if (timer) timeline.activeTimers.delete(timer);
+      if (!timeline.running) return;
+      this._runWhenOwnerReady(timeline, callback);
+    });
+
+    if (timer) timeline.activeTimers.add(timer);
+    return timer;
+  }
+
+  _runWhenOwnerReady(timeline, callback) {
+    if (!timeline?.running) return;
+
+    if (this._shouldStopForOwner(timeline.owner)) {
+      this.stopTimeline(timeline.id);
+      return;
+    }
+
+    if (this._shouldPauseForOwner(timeline.owner)) {
+      // 回调触发瞬间若刚好进入眩晕/脱战，这里补一个冻结重试，避免事件丢失。
+      const retryTimer = this._scheduleTimelineTimer(timeline, 90, callback);
+      if (retryTimer && timeline.owner) {
+        this.pauseOwnerTimelines(timeline.owner);
+      }
+      return;
+    }
+
+    callback();
+  }
+
+  _shouldStopForOwner(owner) {
+    if (!owner) return false;
+    return owner.isDestroyed || owner.isAlive === false || owner.active === false;
+  }
+
+  _shouldPauseForOwner(owner) {
+    if (!owner) return false;
+    if (owner.combatActive === false) return true;
+    if (typeof owner.isStunned === 'function' && owner.isStunned()) return true;
+    return false;
   }
 
   _clearTimers(timeline) {

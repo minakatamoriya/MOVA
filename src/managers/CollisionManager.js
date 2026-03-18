@@ -68,6 +68,49 @@ export default class CollisionManager {
     this.bossManager = bossManager;
   }
 
+  getBulletCore() {
+    return this.scene?.bulletCore || null;
+  }
+
+  getManagedBullets(side) {
+    const bulletCore = this.getBulletCore();
+    if (bulletCore?.getActiveBullets) {
+      return bulletCore.getActiveBullets(side) || [];
+    }
+
+    if (side === 'boss') {
+      return this.scene?.bulletManager?.getBossBullets?.() || [];
+    }
+    if (side === 'player') {
+      return this.scene?.bulletManager?.getPlayerBullets?.() || [];
+    }
+
+    return [];
+  }
+
+  // 统一命中上报出口：之后无论挂调试、统计还是 on-hit 被动，都从这里接。
+  notifyBulletHit(payload = {}) {
+    this.getBulletCore()?.notifyHit?.(payload);
+  }
+
+  // 统一销毁出口：CollisionManager 不再直接决定走哪套 manager。
+  destroyManagedBullet(bullet, side, reason = 'hit') {
+    if (!bullet) return;
+
+    const bulletCore = this.getBulletCore();
+    if (bulletCore?.destroyBullet) {
+      bulletCore.destroyBullet(bullet, { side, reason });
+      return;
+    }
+
+    if (this.scene?.bulletManager?.destroyBullet) {
+      this.scene.bulletManager.destroyBullet(bullet, side === 'player');
+      return;
+    }
+
+    bullet.destroy?.();
+  }
+
   /**
    * 更新碰撞检测（每帧调用）
    */
@@ -88,14 +131,7 @@ export default class CollisionManager {
     const minions = this.bossManager?.getMinions?.() || [];
     if (!Array.isArray(minions) || minions.length === 0) return;
 
-    let playerBullets = [];
-    if (this.scene?.bulletManager?.getPlayerBullets) {
-      playerBullets = this.scene.bulletManager.getPlayerBullets() || [];
-    } else {
-      this.scene.children.list.forEach(child => {
-        if (child?.isPlayerBullet && child.active) playerBullets.push(child);
-      });
-    }
+    const playerBullets = this.getManagedBullets('player');
     if (playerBullets.length === 0) return;
 
     const now = this.scene.time?.now ?? 0;
@@ -197,6 +233,17 @@ export default class CollisionManager {
           fromPlayer: true
         });
         this.player.onDealDamage(damageResult.amount);
+        this.notifyBulletHit({
+          bullet,
+          side: 'player',
+          attacker: this.player,
+          target: enemy,
+          targetType: 'minion',
+          hitX,
+          hitY,
+          damage: damageResult.amount,
+          isCrit: damageResult.isCrit
+        });
 
         // 命中特效与数字
         const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (damageResult.isCrit ? 0xff3333 : 0xffff00));
@@ -238,11 +285,7 @@ export default class CollisionManager {
           bullet.hitCount = (bullet.hitCount || 0) + 1;
           const shouldDestroy = !bullet.pierce || bullet.hitCount >= maxHits;
           if (shouldDestroy) {
-            if (this.scene.bulletManager) {
-              this.scene.bulletManager.destroyBullet(bullet, true);
-            } else {
-              bullet.destroy();
-            }
+            this.destroyManagedBullet(bullet, 'player', 'hit');
           }
         }
       }
@@ -257,15 +300,7 @@ export default class CollisionManager {
     if (!boss || !boss.isAlive) return;
     if (boss.isInvincible) return;
 
-    let playerBullets = [];
-    if (this.scene?.bulletManager?.getPlayerBullets) {
-      playerBullets = this.scene.bulletManager.getPlayerBullets() || [];
-    } else {
-      // 降级方案：直接从场景中查找
-      this.scene.children.list.forEach(child => {
-        if (child?.isPlayerBullet && child.active) playerBullets.push(child);
-      });
-    }
+    const playerBullets = this.getManagedBullets('player');
 
     if (playerBullets.length === 0) return;
 
@@ -362,6 +397,18 @@ export default class CollisionManager {
           isCrit: damageResult.isCrit,
           fromPlayer: true
         });
+        this.notifyBulletHit({
+          bullet,
+          side: 'player',
+          attacker: this.player,
+          target: boss,
+          targetType: 'boss',
+          hitX,
+          hitY,
+          damage: damageResult.amount,
+          isCrit: damageResult.isCrit,
+          killed: !!isDead
+        });
 
         // 圣骑：制裁（眩晕）- 仅对 Boss 生效
         if (!isDead && (bullet?.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
@@ -377,32 +424,27 @@ export default class CollisionManager {
         if (isDead && bullet.isPoisonZone && this.player?.warlockPoisonContagion && this.scene?.bulletManager?.createPlayerBullet) {
           const poisonCore = bullet?.visualCoreColor ?? getBaseColorForCoreKey('warlock');
           const poisonStroke = lerpColor(poisonCore, 0xffffff, 0.45);
-          const small = this.scene.bulletManager.createPlayerBullet(
+          const small = this.scene.createManagedPlayerAreaBullet(
             hitX,
             hitY,
             poisonCore,
             {
               radius: Math.max(28, Math.round((bullet.radius || 96) * 0.55)),
-              speed: 0,
               damage: Math.max(1, Math.round((bullet.damage || 1) * 0.65)),
               hasGlow: true,
               glowRadius: Math.max(42, Math.round((bullet.radius || 96) * 0.55) + 14),
               glowColor: poisonCore,
-              hasTrail: false,
               strokeColor: poisonStroke,
-              isAbsoluteAngle: true,
-              angleOffset: 0,
-              homing: false,
-              explode: false,
-              skipUpdate: false
+              maxLifeMs: 3000,
+              hitCooldownMs: 1000,
+              fillAlpha: 0.06,
+              strokeWidth: 2,
+              strokeAlpha: 0.55,
+              tags: ['player_poison_contagion_zone']
             }
           );
           if (small) {
-            if (small.setFillStyle) small.setFillStyle(poisonCore, 0.06);
-            if (small.setStrokeStyle) small.setStrokeStyle(2, poisonStroke, 0.55);
             small.isPoisonZone = true;
-            small.hitCooldownMs = 1000;
-            small.maxLifeMs = 3000;
             small.hitEffectType = 'poison_zone';
             this.player.bullets.push(small);
           }
@@ -411,29 +453,21 @@ export default class CollisionManager {
         // 圣骑专精：圣焰（命中后留持续伤害区域）
         if (bullet?.holyfire && this.scene?.bulletManager?.createPlayerBullet) {
           const paladinColor = getBaseColorForCoreKey('paladin');
-          const fire = this.scene.bulletManager.createPlayerBullet(
+          const fire = this.scene.createManagedPlayerAreaBullet(
             hitX,
             hitY,
             paladinColor,
             {
               radius: 54,
-              speed: 0,
               damage: Math.max(1, Math.round(this.player.bulletDamage * 0.18)),
-              hasGlow: false,
-              hasTrail: false,
-              glowRadius: 0,
-              isAbsoluteAngle: true,
-              angleOffset: 0,
-              homing: false,
-              explode: false,
-              skipUpdate: false
+              alpha: 0.001,
+              maxLifeMs: 850,
+              noCrit: true,
+              hitCooldownMs: Math.max(60, Math.round((this.player?.fireRate || 320) * (220 / 320))),
+              tags: ['player_paladin_holyfire_zone']
             }
           );
           if (fire) {
-            fire.alpha = 0.001;
-            fire.maxLifeMs = 850;
-            fire.noCrit = true;
-            fire.hitCooldownMs = Math.max(60, Math.round((this.player?.fireRate || 320) * (220 / 320)));
             fire.isHolyfire = true;
             this.player.bullets.push(fire);
 
@@ -446,29 +480,21 @@ export default class CollisionManager {
         // 术士专精：回响（命中后留法阵）
         if (this.player?.warlockEcho && this.scene?.bulletManager?.createPlayerBullet) {
           const warlockColor = getBaseColorForCoreKey('warlock');
-          const rune = this.scene.bulletManager.createPlayerBullet(
+          const rune = this.scene.createManagedPlayerAreaBullet(
             hitX,
             hitY,
             warlockColor,
             {
               radius: 46,
-              speed: 0,
               damage: Math.max(1, Math.round(this.player.bulletDamage * 0.22)),
-              hasGlow: false,
-              hasTrail: false,
-              glowRadius: 0,
-              isAbsoluteAngle: true,
-              angleOffset: 0,
-              homing: false,
-              explode: false,
-              skipUpdate: false
+              alpha: 0.001,
+              maxLifeMs: 650,
+              noCrit: true,
+              hitCooldownMs: 220,
+              tags: ['player_warlock_echo_rune']
             }
           );
           if (rune) {
-            rune.alpha = 0.001;
-            rune.maxLifeMs = 650;
-            rune.noCrit = true;
-            rune.hitCooldownMs = 220;
             rune.isRune = true;
             this.player.bullets.push(rune);
           }
@@ -592,11 +618,7 @@ export default class CollisionManager {
           const shouldDestroy = !bullet.pierce || bullet.hitCount >= maxHits;
 
           if (shouldDestroy) {
-            if (this.scene.bulletManager) {
-              this.scene.bulletManager.destroyBullet(bullet, true);
-            } else {
-              bullet.destroy();
-            }
+            this.destroyManagedBullet(bullet, 'player', 'hit');
           }
         }
 
@@ -629,7 +651,7 @@ export default class CollisionManager {
     const now = this.scene?.time?.now ?? 0;
 
     const playerPos = this.player.getHitboxPosition();
-    const allBossBullets = this.scene.bulletManager?.getBossBullets() || [];
+    const allBossBullets = this.getManagedBullets('boss');
 
     const hittablePets = this.scene?.petManager?.getHittablePets?.() || [];
     const hittableUndead = this.scene?.undeadSummonManager?.getHittableSummons?.() || [];
@@ -706,13 +728,21 @@ export default class CollisionManager {
             // 命中特效与数字
             this.createBossBulletHitEffect(pet.x, pet.y, bullet);
             this.showDamageNumber(pet.x, pet.y - 30, dmg, { color: '#ffd6a5', fontSize: 20, whisper: true });
+            this.notifyBulletHit({
+              bullet,
+              side: 'boss',
+              attacker: boss,
+              target: pet,
+              targetType: pet.isUndeadSummon ? 'summon' : 'pet',
+              hitX: pet.x,
+              hitY: pet.y,
+              damage: dmg,
+              isCrit: false,
+              killed: (pet.currentHp || 0) <= 0
+            });
 
             // 销毁子弹
-            if (this.scene.bulletManager) {
-              this.scene.bulletManager.destroyBullet(bullet, false);
-            } else {
-              bullet.destroy();
-            }
+            this.destroyManagedBullet(bullet, 'boss', 'hit');
 
             // 宠物死亡：交给 PetManager 进入冷却并销毁
             if (pet.currentHp <= 0) {
@@ -762,6 +792,18 @@ export default class CollisionManager {
         }
 
         const isDead = this.player.takeDamage(incoming);
+        this.notifyBulletHit({
+          bullet,
+          side: 'boss',
+          attacker: boss,
+          target: this.player,
+          targetType: 'player',
+          hitX: playerPos.x,
+          hitY: playerPos.y,
+          damage: incoming,
+          isCrit: false,
+          killed: !!isDead
+        });
 
         // 守护：反制（格挡成功后反击）
         if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
@@ -792,12 +834,8 @@ export default class CollisionManager {
         // 创建命中特效（与子弹形状关联：尖锐=火花，圆钝=粉尘爆）
         this.createBossBulletHitEffect(playerPos.x, playerPos.y, bullet);
         
-        // 通过BulletManager销毁子弹
-        if (this.scene.bulletManager) {
-          this.scene.bulletManager.destroyBullet(bullet, false);
-        } else {
-          bullet.destroy();
-        }
+        // 通过统一出口销毁子弹，避免新旧系统各记各的生命周期。
+        this.destroyManagedBullet(bullet, 'boss', 'hit');
         
         // 统计
         this.stats.playerHits++;
@@ -833,23 +871,22 @@ export default class CollisionManager {
    * 获取所有 Boss 子弹（向后兼容）
    */
   getAllBossBullets() {
-    if (this.scene.bulletManager) {
-      return this.scene.bulletManager.getBossBullets();
-    }
+    const bullets = this.getManagedBullets('boss');
+    if (bullets.length > 0) return bullets;
     
     // 降级方案：直接从场景中查找
-    const bullets = [];
+    const fallbackBullets = [];
     this.scene.children.list.forEach(child => {
       if (child.type === 'Arc' || child.type === 'Star' || child.type === 'Rectangle') {
         if (!child.isPlayerBullet && child.active) {
           if (!child.isBoss && !child.isPlayer) {
-            bullets.push(child);
+            fallbackBullets.push(child);
           }
         }
       }
     });
     
-    return bullets;
+    return fallbackBullets;
   }
 
   /**
