@@ -4,6 +4,21 @@ import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
 import { TUTORIAL_EXP_REWARDS, getStageBalance } from '../data/balanceConfig';
 
+// ── 每关 Boss 独立配置 ──────────────────────────
+import { getAttackPatterns as getStage1Patterns, BOSS_META as STAGE1_META } from '../enemies/bosses/stage1Boss';
+import { getAttackPatterns as getStage2Patterns, BOSS_META as STAGE2_META } from '../enemies/bosses/stage2Boss';
+import { getAttackPatterns as getStage3Patterns, BOSS_META as STAGE3_META } from '../enemies/bosses/stage3Boss';
+
+/**
+ * 根据关卡 stage 获取 Boss 专属名称/颜色/攻击模式。
+ * stage 1~3 有独立设计，4+ 回退到通用模式。
+ */
+const STAGE_BOSS_CONFIGS = {
+  1: { meta: STAGE1_META, getPatterns: getStage1Patterns },
+  2: { meta: STAGE2_META, getPatterns: getStage2Patterns },
+  3: { meta: STAGE3_META, getPatterns: getStage3Patterns },
+};
+
 function getTargetPoint(target) {
   if (!target) return { x: 0, y: 0, radius: 0 };
   if (typeof target.getHitboxPosition === 'function') {
@@ -269,39 +284,50 @@ export default class BossManager {
     const cellSize = Math.max(64, Math.round(this.scene?.mapConfig?.cellSize || 128));
     const aggroRadius = Phaser.Math.Clamp(Math.floor(cellSize * 6.0), 520, 980);
 
-    // 需求：Boss 预警发现玩家后，应缓慢、智能地朝玩家移动（而不是左右巡逻/随机漂移）。
-    // 因此地图 Boss 统一采用 tracking。
+    // Boss 统一采用 tracking 移动
     const resolvedMovePattern = 'tracking';
 
-    // 默认攻击模式：近身半月斩；中距离时展示新弹幕系统示例。
-    // 首个正式示例：地面预警 + 扇形弹幕 + 延迟爆发。
-    const defaultAttackPatterns = [
-      {
-        interval: 2800,
-        execute: executeBossPatternShowcase
-      }
-    ];
+    // ── 根据 stage 选择专属 Boss 配置（名称/颜色/攻击模式）──
+    const stageConfig = STAGE_BOSS_CONFIGS[stage] || null;
+
+    // 先创建 Boss，再绑定攻击模式（getAttackPatterns 需要 boss 实例引用）
+    const bossName = stageConfig?.meta?.name || bossData.name;
+    const bossColor = stageConfig?.meta?.color ?? bossData.color;
 
     const cfg = {
       x: spawnPt.x,
       y: spawnPt.y,
-      name: bossData.name,
+      name: bossName,
       hp: Math.round(balance.boss.hp),
       expReward: balance.boss.exp,
       size: bossSize,
-      color: bossData.color,
+      color: bossColor,
       movePattern: resolvedMovePattern,
       moveSpeed: balance.boss.moveSpeed,
       aggroRadius,
-      // 近战：靠近玩家但不要贴脸（玩家会被 Boss 禁入圈推开）
       trackingStopDist: 150,
-      attackPatterns: defaultAttackPatterns,
+      // 先传空数组，下面会用 stage 专属模式覆盖
+      attackPatterns: [],
       combatActive: false,
       entryType: 'fade',
       entryDuration: 400,
     };
 
     this.currentBoss = new BaseBoss(this.scene, cfg);
+
+    // 将 TestMinion 类暴露给召唤型 Boss（stage3 需要）
+    this.scene._TestMinionClass = TestMinion;
+
+    // 绑定 stage 专属攻击模式
+    if (stageConfig?.getPatterns) {
+      this.currentBoss.attackPatterns = stageConfig.getPatterns(this.currentBoss);
+    } else {
+      // 4+ 关回退到通用展示模式
+      this.currentBoss.attackPatterns = [
+        { interval: 2800, execute: executeBossPatternShowcase }
+      ];
+    }
+
     this.updateBossInfo();
 
     if (!silent) {

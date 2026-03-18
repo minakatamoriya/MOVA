@@ -125,6 +125,7 @@ const STAGE_OVERRIDES = {
     },
     boss: {
       hp: 400,
+      moveSpeed: 52,
     },
   },
 };
