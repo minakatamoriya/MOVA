@@ -224,6 +224,13 @@ export default class Player extends Phaser.GameObjects.Container {
     this.offEntryDodgeChance = 0;
     this.offEntryCritChance = 0;
     this.offEntryRegenRatioPerSec = 0;
+    this.thirdSpecDamageBonus = 0;
+    this.thirdSpecFireRateBonus = 0;
+    this.thirdSpecCritChanceBonus = 0;
+    this.thirdSpecDamageReductionBonus = 0;
+    this.thirdSpecDodgeChanceBonus = 0;
+    this.thirdSpecBlockChanceBonus = 0;
+    this.thirdSpecRegenRatioPerSec = 0;
     this.dodgeChance = 0;
     this.equipmentDodgeChance = 0;
     this.blockChance = 0;
@@ -1665,7 +1672,8 @@ export default class Player extends Phaser.GameObjects.Container {
   updatePassiveRegen(delta) {
     if (!this.isAlive) return;
     const regenPerSec = Math.max(0, Number(this.passiveRegenPerSec || 0))
-      + Math.max(0, Number(this.offEntryRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0));
+      + Math.max(0, Number(this.offEntryRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0))
+      + Math.max(0, Number(this.thirdSpecRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0));
     if (regenPerSec <= 0 || this.hp >= this.maxHp) return;
     this.heal(regenPerSec * Math.max(0, Number(delta || 0)) / 1000);
   }
@@ -1857,15 +1865,18 @@ export default class Player extends Phaser.GameObjects.Container {
   applyEquipmentEffects(effects) {
     // 非派生型数值（暴击、吸血、护盾、闪避）仍然统一从规范化结果回写
     const resolved = normalizeStatMods(effects);
-    this.critChance = this.baseCritChance + resolved.critChance + Math.max(0, Number(this.offEntryCritChance || 0));
+    this.critChance = this.baseCritChance
+      + resolved.critChance
+      + Math.max(0, Number(this.offEntryCritChance || 0))
+      + Math.max(0, Number(this.thirdSpecCritChanceBonus || 0));
     this.critMultiplier = this.baseCritMultiplier + resolved.critMultiplier;
     this.lifestealPercent = resolved.lifestealPercent;
     this.magnetRadius = this.baseMagnetRadius + resolved.magnetRadius;
     this.shieldCharges = resolved.shieldCharges;
-    this.equipmentDodgeChance = resolved.dodgeChance;
-    this.dodgePercent = resolved.dodgeChance;
-    this.damageReductionPercent = resolved.damageReductionPercent;
-    this.blockChance = resolved.blockChance;
+    this.equipmentDodgeChance = resolved.dodgeChance + Math.max(0, Number(this.thirdSpecDodgeChanceBonus || 0));
+    this.dodgePercent = this.equipmentDodgeChance;
+    this.damageReductionPercent = resolved.damageReductionPercent + Math.max(0, Number(this.thirdSpecDamageReductionBonus || 0));
+    this.blockChance = resolved.blockChance + Math.max(0, Number(this.thirdSpecBlockChanceBonus || 0));
     this.passiveRegenPerSec = resolved.regenPerSec;
     this.regenPerSec = this.passiveRegenPerSec + (((this.emergencyRegenPerMs || 0) > 0) ? this.emergencyRegenPerMs * 1000 : 0);
     this.updateShieldIndicator();

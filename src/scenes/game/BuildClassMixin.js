@@ -11,6 +11,10 @@ import {
   THIRD_SPEC_PREP_OPTIONS,
   DEPTH_SPEC_POOLS,
   DUAL_SPEC_POOLS,
+  DUAL_SPEC_GENERIC_BONUS_BY_ID,
+  getThirdDepthPrepBonus,
+  getThirdDualPrepBonus,
+  getThirdSpecPrepOption,
   TALENT_OFFER_WEIGHT_CONFIG
 } from '../../classes/upgradePools';
 import { getTalentOfferStage } from '../../classes/dualClass';
@@ -20,6 +24,21 @@ import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentat
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 import { spawnWarriorMeleeHit as _spawnWarriorMeleeHit, spawnWarriorCrescentProjectile as _spawnWarriorCrescentProjectile } from '../../classes/attacks/weapons/warriorSlash';
+
+function applyThirdSpecBonusPackage(player, bonuses = {}) {
+  if (!player || !bonuses || typeof bonuses !== 'object') return;
+
+  player.thirdSpecDamageBonus = Math.max(0, Number(player.thirdSpecDamageBonus || 0) + Number(bonuses.damageBonus || 0));
+  player.thirdSpecFireRateBonus = Math.max(0, Number(player.thirdSpecFireRateBonus || 0) + Number(bonuses.fireRateBonus || 0));
+  player.thirdSpecCritChanceBonus = Math.max(0, Number(player.thirdSpecCritChanceBonus || 0) + Number(bonuses.critChanceBonus || 0));
+  player.thirdSpecDamageReductionBonus = Math.max(0, Number(player.thirdSpecDamageReductionBonus || 0) + Number(bonuses.damageReductionBonus || 0));
+  player.thirdSpecDodgeChanceBonus = Math.max(0, Number(player.thirdSpecDodgeChanceBonus || 0) + Number(bonuses.dodgeChanceBonus || 0));
+  player.thirdSpecBlockChanceBonus = Math.max(0, Number(player.thirdSpecBlockChanceBonus || 0) + Number(bonuses.blockChanceBonus || 0));
+  player.thirdSpecRegenRatioPerSec = Math.max(0, Number(player.thirdSpecRegenRatioPerSec || 0) + Number(bonuses.regenRatioPerSec || 0));
+
+  player.applyStatMultipliers?.(player.equipmentMods || {});
+  player.applyEquipmentEffects?.(player.equipmentMods || {});
+}
 
 /**
  * 职业构建 / 升级 / 近战 / 法师 / 圣骑 / 术士 / 德鲁伊宠物 相关方法
@@ -508,9 +527,14 @@ export function applyBuildClassMixin(GameScene) {
         // === 第三天赋：准备节点 ===
         case 'third_depth_prep':
           this.player.thirdDepthPrepUnlocked = true;
+          applyThirdSpecBonusPackage(this.player, getThirdDepthPrepBonus(normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core))?.bonuses);
           break;
         case 'third_dual_prep':
           this.player.thirdDualPrepUnlocked = true;
+          applyThirdSpecBonusPackage(this.player, getThirdDualPrepBonus({
+            mainCoreKey: normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core),
+            offFaction: this.registry.get('offFaction') || null
+          })?.bonuses);
           break;
 
         // === 第三天赋：深度专精 ===
@@ -633,8 +657,13 @@ export function applyBuildClassMixin(GameScene) {
           this.petManager?.refreshPetStats?.();
           break;
 
-        default:
+        default: {
+          const genericDualBonus = DUAL_SPEC_GENERIC_BONUS_BY_ID[normalizedUpgradeId] || null;
+          if (genericDualBonus) {
+            applyThirdSpecBonusPackage(this.player, genericDualBonus);
+          }
           break;
+        }
       }
 
       this.installPassiveCooldownSkills?.();
@@ -1152,9 +1181,8 @@ export function applyBuildClassMixin(GameScene) {
       if (stage === 'all' && mainCore && offFaction && thirdSpecType) {
         const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
 
-        pendingThirdPrepOption = thirdSpecType === 'depth'
-          ? THIRD_SPEC_PREP_OPTIONS.depth
-          : THIRD_SPEC_PREP_OPTIONS.dual;
+        pendingThirdPrepOption = getThirdSpecPrepOption({ specType: thirdSpecType, mainCoreKey: mainCore, offFaction })
+          || (thirdSpecType === 'depth' ? THIRD_SPEC_PREP_OPTIONS.depth : THIRD_SPEC_PREP_OPTIONS.dual);
         hasThirdPrep = !!pendingThirdPrepOption && getSkillLevelValue(pendingThirdPrepOption.id) >= getMaxLevel(pendingThirdPrepOption.id);
 
         if (thirdSpecType === 'depth') {

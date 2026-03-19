@@ -78,6 +78,7 @@ export function buildPlayerDerivedStats(player, options = {}) {
   const damageMult = equipmentMods.damageMult
     * lootMods.damageMult
     * toMultiplier(player?.offEntryDamageMult, 1)
+    * (1 + Math.max(0, toNumber(player?.thirdSpecDamageBonus, 0)))
     * toMultiplier(player?.universalDamageMult, 1)
     * toMultiplier(player?.natureDamageMult, 1);
 
@@ -85,6 +86,7 @@ export function buildPlayerDerivedStats(player, options = {}) {
     * lootMods.fireRateMult
     * toMultiplier(player?.buildFireRateMult, 1)
     * toMultiplier(player?.offFireRateMult, 1)
+    * Math.max(0.25, 1 - Math.max(0, toNumber(player?.thirdSpecFireRateBonus, 0)))
     * toMultiplier(player?.universalFireRateMult, 1)
     * toMultiplier(player?.deathDuelFireRateMult, 1);
 
@@ -254,6 +256,7 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
   const dodgeChance = clampChance(
     toNumber(defender?.dodgeChance, 0)
       + toNumber(defender?.offEntryDodgeChance, 0)
+      + toNumber(defender?.thirdSpecDodgeChanceBonus, 0)
       + toNumber(defender?.equipmentDodgeChance, 0)
       + emergencyDodgeBonus
   );
@@ -268,7 +271,11 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
   }
 
   let finalDamage = Math.max(0, Math.round(toNumber(incomingDamage, 0) - toNumber(defender?.flatDamageReduction, 0)));
-  finalDamage = Math.max(0, Math.round(finalDamage * (1 - clampChance(toNumber(defender?.damageReductionPercent, 0) + toNumber(defender?.offEntryDamageReduction, 0)))));
+  finalDamage = Math.max(0, Math.round(finalDamage * (1 - clampChance(
+    toNumber(defender?.damageReductionPercent, 0)
+      + toNumber(defender?.offEntryDamageReduction, 0)
+      + toNumber(defender?.thirdSpecDamageReductionBonus, 0)
+  ))));
   finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.natureDamageTakenMult, 1)));
 
   if (toNumber(defender?.emergencyMitigationUntil, 0) > now) {

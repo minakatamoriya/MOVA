@@ -175,6 +175,157 @@ export const THIRD_SPEC_PREP_OPTIONS = {
   dual: { id: 'third_dual_prep', category: 'build', name: '双职业天赋', desc: '解锁双职业天赋', icon: '双职' }
 };
 
+const THIRD_SPEC_CORE_LABELS = {
+  mage: '法师',
+  archer: '猎人',
+  warrior: '战士',
+  warlock: '术士',
+  paladin: '圣骑士',
+  drone: '德鲁伊'
+};
+
+const OFF_FACTION_TO_ACCENT_CORE_KEY = {
+  arcane: 'mage',
+  ranger: 'archer',
+  unyielding: 'warrior',
+  curse: 'warlock',
+  guardian: 'paladin',
+  nature: 'drone'
+};
+
+const DUAL_MAIN_ENTRY_BONUSES = {
+  mage: { title: '奥术洪流', stat: 'fireRate', value: 0.15 },
+  archer: { title: '致命瞄准', stat: 'critChance', value: 0.15 },
+  warrior: { title: '破阵之力', stat: 'damage', value: 0.15 },
+  warlock: { title: '灾厄灌注', stat: 'damage', value: 0.15 },
+  paladin: { title: '圣裁锋芒', stat: 'damage', value: 0.15 },
+  drone: { title: '星怒奔流', stat: 'fireRate', value: 0.15 }
+};
+
+const DUAL_OFF_STYLE_BONUSES_BY_FACTION = {
+  arcane: { title: '奥术余韵', stat: 'fireRate', value: 0.10 },
+  ranger: { title: '游侠步调', stat: 'dodgeChance', value: 0.10 },
+  unyielding: { title: '不屈战意', stat: 'critChance', value: 0.10 },
+  curse: { title: '诅咒灌注', stat: 'damage', value: 0.10 },
+  guardian: { title: '守护庇佑', stat: 'damageReduction', value: 0.10 },
+  nature: { title: '自然回响', stat: 'regenRatio', value: 0.01 }
+};
+
+const DEPTH_ENTRY_BONUSES = {
+  mage: { title: '奥术觉醒', stat: 'fireRate', value: 0.30 },
+  archer: { title: '猎神凝视', stat: 'critChance', value: 0.30 },
+  warrior: { title: '战神附体', stat: 'damage', value: 0.30 },
+  warlock: { title: '灾厄真名', stat: 'damage', value: 0.30 },
+  paladin: { title: '圣裁降临', stat: 'damage', value: 0.30 },
+  drone: { title: '星界澎湃', stat: 'fireRate', value: 0.30 }
+};
+
+function formatThirdSpecBonusDesc(bonus) {
+  if (!bonus) return '';
+  const percent = Math.round((bonus.value || 0) * 1000) / 10;
+  switch (bonus.stat) {
+    case 'fireRate':
+      return `攻击间隔 -${percent}%。`;
+    case 'damage':
+      return `造成伤害 +${percent}%。`;
+    case 'critChance':
+      return `暴击率 +${percent}%。`;
+    case 'damageReduction':
+      return `受到伤害 -${percent}%。`;
+    case 'dodgeChance':
+      return `闪避率 +${percent}%。`;
+    case 'blockChance':
+      return `格挡率 +${percent}%。`;
+    case 'regenRatio':
+      return `每秒恢复 ${percent}% 最大生命。`;
+    default:
+      return '';
+  }
+}
+
+function toThirdSpecBonusPackage(...entries) {
+  return entries.reduce((acc, entry) => {
+    if (!entry) return acc;
+    switch (entry.stat) {
+      case 'damage':
+        acc.damageBonus += entry.value || 0;
+        break;
+      case 'fireRate':
+        acc.fireRateBonus += entry.value || 0;
+        break;
+      case 'critChance':
+        acc.critChanceBonus += entry.value || 0;
+        break;
+      case 'damageReduction':
+        acc.damageReductionBonus += entry.value || 0;
+        break;
+      case 'dodgeChance':
+        acc.dodgeChanceBonus += entry.value || 0;
+        break;
+      case 'blockChance':
+        acc.blockChanceBonus += entry.value || 0;
+        break;
+      case 'regenRatio':
+        acc.regenRatioPerSec += entry.value || 0;
+        break;
+      default:
+        break;
+    }
+    return acc;
+  }, {
+    damageBonus: 0,
+    fireRateBonus: 0,
+    critChanceBonus: 0,
+    damageReductionBonus: 0,
+    dodgeChanceBonus: 0,
+    blockChanceBonus: 0,
+    regenRatioPerSec: 0
+  });
+}
+
+function scaleThirdSpecBonus(bonus, multiplier) {
+  if (!bonus) return null;
+  return {
+    ...bonus,
+    value: Number(bonus.value || 0) * Number(multiplier || 1)
+  };
+}
+
+export function getThirdDepthPrepBonus(mainCoreKey) {
+  const bonus = DEPTH_ENTRY_BONUSES[mainCoreKey] || null;
+  return bonus ? {
+    title: bonus.title,
+    desc: `获得${formatThirdSpecBonusDesc(bonus)}`,
+    bonuses: toThirdSpecBonusPackage(bonus)
+  } : null;
+}
+
+export function getThirdDualPrepBonus({ mainCoreKey, offFaction }) {
+  const mainBonus = DUAL_MAIN_ENTRY_BONUSES[mainCoreKey] || null;
+  const offBonus = DUAL_OFF_STYLE_BONUSES_BY_FACTION[offFaction] || null;
+  return (mainBonus && offBonus) ? {
+    title: `${mainBonus.title} / ${offBonus.title}`,
+    desc: `获得${formatThirdSpecBonusDesc(mainBonus)}并获得${formatThirdSpecBonusDesc(offBonus)}`,
+    bonuses: toThirdSpecBonusPackage(mainBonus, offBonus)
+  } : null;
+}
+
+export function getThirdSpecPrepOption({ specType, mainCoreKey, offFaction }) {
+  if (specType === 'depth') {
+    const base = THIRD_SPEC_PREP_OPTIONS.depth;
+    const bonus = getThirdDepthPrepBonus(mainCoreKey);
+    return bonus ? { ...base, desc: `${base.desc}。${bonus.desc}` } : base;
+  }
+
+  if (specType === 'dual') {
+    const base = THIRD_SPEC_PREP_OPTIONS.dual;
+    const bonus = getThirdDualPrepBonus({ mainCoreKey, offFaction });
+    return bonus ? { ...base, desc: `${base.desc}。${bonus.desc}` } : base;
+  }
+
+  return null;
+}
+
 // 深度专精池：按主职业主题拆分
 export const DEPTH_SPEC_POOLS = {
   mage: [
@@ -212,7 +363,7 @@ export const DEPTH_SPEC_POOLS = {
 };
 
 // 双职业专精池：按（主职业主题 -> 副职业主题）拆分
-export const DUAL_SPEC_POOLS = {
+const CUSTOM_DUAL_SPEC_POOLS = {
   mage: {
     drone: [
       { id: 'dual_mage_drone_arcanebear', category: 'third_dual', name: '奥术之熊', desc: '你的熊灵继承你法阵效果，在法阵内减伤 +20%、攻击力 +30%', icon: '法德', maxLevel: 1 },
@@ -256,6 +407,140 @@ export const DUAL_SPEC_POOLS = {
     ]
   }
 };
+
+const GENERIC_DUAL_MAIN_TITLES = {
+  mage: '奥术过载',
+  archer: '致命节律',
+  warrior: '战场压制',
+  warlock: '灾厄涌流',
+  paladin: '圣裁锋芒',
+  drone: '星潮迸发'
+};
+
+const GENERIC_DUAL_OFF_TITLES = {
+  mage: '法阵余韵',
+  archer: '游侠步调',
+  warrior: '不屈战意',
+  warlock: '诅咒灌注',
+  paladin: '守护庇佑',
+  drone: '自然回响'
+};
+
+function getDualStyleBonusByAccentCore(accentCoreKey) {
+  const entry = Object.entries(OFF_FACTION_TO_ACCENT_CORE_KEY).find(([, value]) => value === accentCoreKey);
+  const offFaction = entry?.[0] || null;
+  return offFaction ? DUAL_OFF_STYLE_BONUSES_BY_FACTION[offFaction] || null : null;
+}
+
+function getCanonicalDualPair(mainCoreKey, accentCoreKey) {
+  const left = String(mainCoreKey || '');
+  const right = String(accentCoreKey || '');
+  if (!left || !right) return ['', ''];
+  return left < right ? [left, right] : [right, left];
+}
+
+function buildCanonicalDualTalentId(mainCoreKey, accentCoreKey, suffix) {
+  const [left, right] = getCanonicalDualPair(mainCoreKey, accentCoreKey);
+  return `dual_${left}_${right}_${suffix}`;
+}
+
+function buildGenericDualPool(mainCoreKey, accentCoreKey) {
+  const [leftKey, rightKey] = getCanonicalDualPair(mainCoreKey, accentCoreKey);
+  const leftLabel = THIRD_SPEC_CORE_LABELS[leftKey] || leftKey;
+  const rightLabel = THIRD_SPEC_CORE_LABELS[rightKey] || rightKey;
+  const leftMainBonus = scaleThirdSpecBonus(DUAL_MAIN_ENTRY_BONUSES[leftKey], 0.7);
+  const rightMainBonus = scaleThirdSpecBonus(DUAL_MAIN_ENTRY_BONUSES[rightKey], 0.7);
+  const leftStyleBonus = scaleThirdSpecBonus(getDualStyleBonusByAccentCore(leftKey), 0.7);
+  const rightStyleBonus = scaleThirdSpecBonus(getDualStyleBonusByAccentCore(rightKey), 0.7);
+  const sharedMainBonus = leftMainBonus || rightMainBonus;
+  const sharedStyleBonus = rightStyleBonus || leftStyleBonus;
+  const fusionBonusA = scaleThirdSpecBonus(sharedMainBonus, 0.55);
+  const fusionBonusB = scaleThirdSpecBonus(sharedStyleBonus, 0.55);
+
+  return [
+    {
+      id: buildCanonicalDualTalentId(leftKey, rightKey, 'onslaught'),
+      category: 'third_dual',
+      name: `${leftLabel} / ${rightLabel} 先攻`,
+      desc: `双职业主轴强化：${formatThirdSpecBonusDesc(sharedMainBonus)}`,
+      icon: `${leftLabel}${rightLabel}`,
+      maxLevel: 1
+    },
+    {
+      id: buildCanonicalDualTalentId(leftKey, rightKey, 'style'),
+      category: 'third_dual',
+      name: `${leftLabel} / ${rightLabel} 偏锋`,
+      desc: `双职业风格强化：${formatThirdSpecBonusDesc(sharedStyleBonus)}`,
+      icon: `${leftLabel}${rightLabel}`,
+      maxLevel: 1
+    },
+    {
+      id: buildCanonicalDualTalentId(leftKey, rightKey, 'fusion'),
+      category: 'third_dual',
+      name: `${leftLabel}·${rightLabel} 共振`,
+      desc: `混融强化：${formatThirdSpecBonusDesc(fusionBonusA)}并${formatThirdSpecBonusDesc(fusionBonusB)}`,
+      icon: `${leftLabel}${rightLabel}`,
+      maxLevel: 1
+    }
+  ];
+}
+
+export const DUAL_SPEC_GENERIC_BONUS_BY_ID = {};
+
+const THIRD_SPEC_CORE_ORDER = ['mage', 'archer', 'warrior', 'warlock', 'paladin', 'drone'];
+
+const CUSTOM_DUAL_SPEC_PAIR_POOLS = {
+  'drone|mage': CUSTOM_DUAL_SPEC_POOLS.mage.drone,
+  'archer|mage': CUSTOM_DUAL_SPEC_POOLS.archer.mage,
+  'paladin|warrior': CUSTOM_DUAL_SPEC_POOLS.warrior.paladin,
+  'drone|warlock': CUSTOM_DUAL_SPEC_POOLS.warlock.drone,
+  'archer|paladin': CUSTOM_DUAL_SPEC_POOLS.paladin.archer,
+  'drone|warrior': CUSTOM_DUAL_SPEC_POOLS.drone.warrior
+};
+
+const DUAL_SPEC_PAIR_POOLS = {};
+
+THIRD_SPEC_CORE_ORDER.forEach((mainCoreKey) => {
+  THIRD_SPEC_CORE_ORDER.forEach((accentCoreKey) => {
+    if (mainCoreKey === accentCoreKey) return;
+    const [leftKey, rightKey] = getCanonicalDualPair(mainCoreKey, accentCoreKey);
+    const pairKey = `${leftKey}|${rightKey}`;
+    if (DUAL_SPEC_PAIR_POOLS[pairKey]) return;
+
+    const customPool = CUSTOM_DUAL_SPEC_PAIR_POOLS[pairKey] || null;
+    const pairPool = customPool || buildGenericDualPool(leftKey, rightKey);
+    DUAL_SPEC_PAIR_POOLS[pairKey] = pairPool;
+
+    if (customPool) return;
+
+    const leftMainBonus = scaleThirdSpecBonus(DUAL_MAIN_ENTRY_BONUSES[leftKey], 0.7);
+    const rightMainBonus = scaleThirdSpecBonus(DUAL_MAIN_ENTRY_BONUSES[rightKey], 0.7);
+    const leftStyleBonus = scaleThirdSpecBonus(getDualStyleBonusByAccentCore(leftKey), 0.7);
+    const rightStyleBonus = scaleThirdSpecBonus(getDualStyleBonusByAccentCore(rightKey), 0.7);
+    const sharedMainBonus = leftMainBonus || rightMainBonus;
+    const sharedStyleBonus = rightStyleBonus || leftStyleBonus;
+
+    DUAL_SPEC_GENERIC_BONUS_BY_ID[buildCanonicalDualTalentId(leftKey, rightKey, 'onslaught')] = toThirdSpecBonusPackage(sharedMainBonus);
+    DUAL_SPEC_GENERIC_BONUS_BY_ID[buildCanonicalDualTalentId(leftKey, rightKey, 'style')] = toThirdSpecBonusPackage(sharedStyleBonus);
+    DUAL_SPEC_GENERIC_BONUS_BY_ID[buildCanonicalDualTalentId(leftKey, rightKey, 'fusion')] = toThirdSpecBonusPackage(
+      scaleThirdSpecBonus(sharedMainBonus, 0.55),
+      scaleThirdSpecBonus(sharedStyleBonus, 0.55)
+    );
+  });
+});
+
+export const DUAL_SPEC_POOLS = THIRD_SPEC_CORE_ORDER.reduce((acc, mainCoreKey) => {
+  acc[mainCoreKey] = acc[mainCoreKey] || {};
+
+  THIRD_SPEC_CORE_ORDER.forEach((accentCoreKey) => {
+    if (mainCoreKey === accentCoreKey) return;
+    const [leftKey, rightKey] = getCanonicalDualPair(mainCoreKey, accentCoreKey);
+    const pairKey = `${leftKey}|${rightKey}`;
+    acc[mainCoreKey][accentCoreKey] = DUAL_SPEC_PAIR_POOLS[pairKey] || [];
+  });
+
+  return acc;
+}, {});
 
 // 技能树 id -> GameScene.buildState.core key
 export const TREE_TO_CORE_KEY = {
