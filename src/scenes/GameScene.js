@@ -472,7 +472,22 @@ class GameScene extends Phaser.Scene {
     const naturePetType = this.registry.get('naturePetType') || null;
 
     const inventoryEquipped = Array.isArray(this.inventoryEquipped)
-      ? this.inventoryEquipped.map(i => (i ? { id: i.id, name: i.name, desc: i.desc, icon: i.icon, effects: i.effects, count: i.count, rarityId: i.rarityId, rarityLabel: i.rarityLabel, rarityTextColor: i.rarityTextColor, statLines: i.statLines } : null))
+      ? this.inventoryEquipped.map(i => (i ? {
+        id: i.id,
+        name: i.name,
+        desc: i.desc,
+        icon: i.icon,
+        effects: i.effects,
+        count: i.count,
+        kind: i.kind,
+        category: i.category,
+        categoryLabel: i.categoryLabel,
+        consumable: i.consumable,
+        rarityId: i.rarityId,
+        rarityLabel: i.rarityLabel,
+        rarityTextColor: i.rarityTextColor,
+        statLines: i.statLines
+      } : null))
       : [];
     const inventoryAcquired = Array.isArray(this.inventoryAcquired)
       ? this.inventoryAcquired.map(i => (i ? {
@@ -1414,15 +1429,7 @@ class GameScene extends Phaser.Scene {
     }
 
     this.cooldownSkills = Object.create(null);
-    this.cooldownHud = new CooldownHud(this, {
-      depth: 2450,
-      slotSize: 74,
-      gap: 14,
-      rightPadding: 18,
-      bottomPadding: 8,
-      labelGap: 8,
-      longPressMs: 420
-    });
+    this.cooldownHud = null;
   }
 
   // 场景级统一发弹入口：业务层不再直接依赖 BulletManager，

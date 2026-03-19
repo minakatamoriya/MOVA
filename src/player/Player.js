@@ -355,14 +355,16 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 猎人基础技能（箭矢连射）
     this.archerEnabled = true;
-    this.archerVolleySpread = 0;
-    this.archerVolleyCount = 1;
+    this.archerVolleySpread = Phaser.Math.DegToRad(8.6);
+    this.archerVolleyCount = 3;
     this.archerVolleyMode = 'fan'; // fan | ring
     this.archerVolleyRingCount = 10;
     this.archerVolleyDamageMult = 0.55;
     this.archerVolleyHoming = false;
     this.archerVolleyHomingTurn = 0.04;
     this.archerVolleyExplode = false;
+    this.archerVolleyLockAim = true;
+    this.archerVolleyLockTurn = Phaser.Math.DegToRad(300);
     this.buildFireRateMult = 1;
 
     // 猎人基础技能（箭矢）专属升级参数
@@ -768,68 +770,11 @@ export default class Player extends Phaser.GameObjects.Container {
       this.archerReleaseFlash.y = -this.visualRadius * 0.9;
     }
     if (this.sprite?.clearTint) this.sprite.clearTint();
+    if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
   }
 
   playArcherAttackTelegraph(durationMs, fireAngle = -Math.PI / 2) {
-    if (!this.scene?.sys?.isActive?.() || !this.sprite) return;
-    const fxSeq = ++this._archerChargeFxSeq;
-    const aimDeg = Phaser.Math.RadToDeg(fireAngle) + 90;
-
-    this.scene.tweens.killTweensOf(this.archerChargeAura);
-    this.scene.tweens.killTweensOf(this.archerChargeSpark);
-    this.scene.tweens.killTweensOf(this.archerReleaseFlash);
-    this.scene.tweens.killTweensOf(this.sprite);
-
-    if (this.sprite.setTint) this.sprite.setTint(0x66ff78);
-
-    if (this.archerChargeAura) {
-      this.archerChargeAura.setVisible(true);
-      this.archerChargeAura.setAlpha(0.56);
-      this.archerChargeAura.setScale(0.54);
-      this.archerChargeAura.setStrokeStyle(2, 0x68ff78, 0.85);
-      this.scene.tweens.add({
-        targets: this.archerChargeAura,
-        alpha: 0,
-        scale: 1.18,
-        duration: durationMs,
-        ease: 'Quad.Out',
-        onComplete: () => {
-          if (!this.archerChargeAura) return;
-          this.archerChargeAura.setVisible(false);
-          this.archerChargeAura.setScale(1);
-        }
-      });
-    }
-
-    if (this.archerChargeSpark) {
-      this.archerChargeSpark.setVisible(true);
-      this.archerChargeSpark.setAngle(aimDeg);
-      this.archerChargeSpark.setAlpha(0.98);
-      this.archerChargeSpark.setScale(0.42, 1.48);
-      this.archerChargeSpark.setStrokeStyle(1, 0x54ff68, 0.74);
-      this.scene.tweens.add({
-        targets: this.archerChargeSpark,
-        alpha: 0,
-        scaleX: 1.05,
-        scaleY: 0.72,
-        x: Math.cos(fireAngle) * 2,
-        y: -this.visualRadius * 0.92 + Math.sin(fireAngle) * 2,
-        duration: durationMs,
-        ease: 'Sine.Out',
-        onComplete: () => {
-          if (!this.archerChargeSpark) return;
-          this.archerChargeSpark.setVisible(false);
-          this.archerChargeSpark.x = 0;
-          this.archerChargeSpark.y = -this.visualRadius * 0.85;
-        }
-      });
-    }
-
-    this.scene.time.delayedCall(durationMs + 12, () => {
-      if (!this.scene?.sys?.isActive?.()) return;
-      if (fxSeq !== this._archerChargeFxSeq) return;
-      this.clearArcherChargeEffects();
-    });
+    this.clearArcherChargeEffects();
   }
 
   playArcherShotKick(fireAngle = -Math.PI / 2) {
@@ -840,7 +785,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.x = kickX;
     this.sprite.y = kickY;
-    if (this.sprite.setTint) this.sprite.setTint(0x7bff85);
+    if (this.sprite.setAlpha) this.sprite.setAlpha(1);
     this.scene.tweens.add({
       targets: this.sprite,
       x: 0,
@@ -849,6 +794,7 @@ export default class Player extends Phaser.GameObjects.Container {
       ease: 'Quad.Out',
       onComplete: () => {
         if (this.sprite?.clearTint) this.sprite.clearTint();
+        if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
       }
     });
 
@@ -1510,12 +1456,18 @@ export default class Player extends Phaser.GameObjects.Container {
    * 受伤闪烁效果
    */
   flashDamage() {
+    if (!this.sprite) return;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setAlpha(1);
     this.scene.tweens.add({
       targets: this.sprite,
       alpha: 0.3,
       duration: 100,
       yoyo: true,
-      repeat: 2
+      repeat: 2,
+      onComplete: () => {
+        if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
+      }
     });
   }
 
@@ -1525,6 +1477,7 @@ export default class Player extends Phaser.GameObjects.Container {
   becomeInvincible() {
     this.isInvincible = true;
     this.shield.setVisible(true);
+    if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
     
     // 护盾闪烁
     this.scene.tweens.add({
@@ -1539,6 +1492,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.scene.time.delayedCall(this.invincibleTime, () => {
       this.isInvincible = false;
       this.shield.setVisible(false);
+      if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
     });
   }
 
@@ -1891,6 +1845,10 @@ export default class Player extends Phaser.GameObjects.Container {
     this.weaponType = 'archer_arrow';
     this.baseFireRate = this.baseFireRateArcher;
     this.archerVolleyDamageMult = 0.55;
+    this.archerVolleyCount = 3;
+    this.archerVolleySpread = Phaser.Math.DegToRad(8.6);
+    this.archerVolleyLockAim = true;
+    this.archerVolleyLockTurn = Phaser.Math.DegToRad(300);
     // 箭矢需要更快的弹速与明确射程
     this.bulletSpeed = 720;
     this.applyStatMultipliers(this.equipmentMods);
@@ -1918,16 +1876,18 @@ export default class Player extends Phaser.GameObjects.Container {
   upgradeArcherVolley() {
 
     this.archerArrowScatterLevel = Math.min(3, (this.archerArrowScatterLevel || 0) + 1);
-    // L1: 3 列；L2: 5 列；L3: 7 列。奇数列保证中心列仍然正对目标。
+    // 基础：3 列；L1: 5 列；L2: 强化弹道质量；L3: 7 列。
     if (this.archerArrowScatterLevel === 1) {
-      this.archerVolleyCount = 3;
-      this.archerVolleySpread = Phaser.Math.DegToRad(8.2);
+      this.archerVolleyCount = 5;
+      this.archerVolleySpread = Phaser.Math.DegToRad(7.8);
     } else if (this.archerArrowScatterLevel === 2) {
       this.archerVolleyCount = 5;
-      this.archerVolleySpread = Phaser.Math.DegToRad(7.4);
+      this.archerVolleySpread = Phaser.Math.DegToRad(6.3);
+      this.archerVolleyLockTurn = Phaser.Math.DegToRad(420);
     } else {
       this.archerVolleyCount = 7;
-      this.archerVolleySpread = Phaser.Math.DegToRad(6.85);
+      this.archerVolleySpread = Phaser.Math.DegToRad(5.8);
+      this.archerVolleyLockTurn = Phaser.Math.DegToRad(480);
     }
   }
 
@@ -1992,7 +1952,7 @@ export default class Player extends Phaser.GameObjects.Container {
    * 散射范围提升
    */
   upgradeArcherVolleySpread() {
-    this.archerVolleySpread = Math.min(0.5, this.archerVolleySpread + 0.06);
+    this.archerVolleySpread = Math.max(Phaser.Math.DegToRad(4.8), this.archerVolleySpread - Phaser.Math.DegToRad(0.85));
   }
 
   /**
@@ -2004,7 +1964,11 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   upgradeArcherVolleyCount() {
-    this.archerVolleyCount = Math.min(6, this.archerVolleyCount + 1);
+    if (this.archerVolleyCount <= 3) {
+      this.archerVolleyCount = 5;
+    } else {
+      this.archerVolleyCount = 7;
+    }
   }
 
   enableArcherVolleyRing() {

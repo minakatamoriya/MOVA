@@ -36,7 +36,7 @@ export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
   archer: [
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+12%/+24%/+36%）', icon: '猎主', maxLevel: 3 },
-    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '基础射击初始为1列；升级后变为3列→5列→7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
     { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒', icon: '猎主', maxLevel: 3 },
     { id: 'archer_evade_mastery', category: 'build', name: '残影步调', desc: '强化灵巧回避：持续时间提高至5/8/10秒', icon: '猎主', maxLevel: 3, requiredSkillId: 'archer_nimble_evade' },
   ],

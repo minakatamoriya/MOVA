@@ -228,6 +228,17 @@ function getBeamStart(player) {
   };
 }
 
+function getExtendedBeamEnd(start, target, range) {
+  const dx = (target?.x || 0) - start.x;
+  const dy = (target?.y || 0) - start.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+  const beamLen = Math.max(dist, range);
+  return {
+    x: start.x + (dx / dist) * beamLen,
+    y: start.y + (dy / dist) * beamLen
+  };
+}
+
 function closestPointOnSegment(ax, ay, bx, by, px, py) {
   const abx = bx - ax;
   const aby = by - ay;
@@ -528,7 +539,7 @@ export function updateArcaneRay(player, delta) {
   if (hasAnyBeam) {
     ensureBeamGraphics(scene, state);
     const drawEnd = target
-      ? { x: target.x, y: target.y }
+      ? getExtendedBeamEnd(getBeamStart(player), target, range)
       : ((state.lastEnd && now <= (state.lastEnd.until || 0)) ? { x: state.lastEnd.x, y: state.lastEnd.y } : null);
     updateBeamDraw(state, player, drawEnd, scheme, state.beamAlpha || 0);
 
@@ -549,12 +560,12 @@ export function updateArcaneRay(player, delta) {
     const s = getBeamStart(player);
     const startX = s.x;
     const startY = s.y;
-    const dx = target.x - startX;
-    const dy = target.y - startY;
+    const extendedEnd = getExtendedBeamEnd({ x: startX, y: startY }, target, range);
+    const dx = extendedEnd.x - startX;
+    const dy = extendedEnd.y - startY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-    const cut = Math.max(0, dist - targetRadius);
-    state.hitbox.x = startX + (dx / dist) * cut;
-    state.hitbox.y = startY + (dy / dist) * cut;
+    state.hitbox.x = extendedEnd.x;
+    state.hitbox.y = extendedEnd.y;
 
     // ====== 路径伤害 ======
     const tickIntervalMs = Math.max(60, Math.round(player.fireRate || 320));
@@ -578,8 +589,8 @@ export function updateArcaneRay(player, delta) {
     }
 
     // 路径伤害：主束对“路径上的其它敌人”
-    const mainEndX = target.x;
-    const mainEndY = target.y;
+    const mainEndX = extendedEnd.x;
+    const mainEndY = extendedEnd.y;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (!e || !e.isAlive || e === target) continue;

@@ -14,7 +14,7 @@ export const TREE_DEFS = [
       { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 3, desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒。' },
       { id: 'archer_evade_mastery', name: '残影步调', maxLevel: 3, desc: '强化灵巧回避：持续时间提高至5/8/10秒。' },
       { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+12%/+24%/+36%）。' },
-      { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为1列；升级后变为3列→5列→7列，中心列始终锁定目标。' }
+      { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列，中心列始终锁定目标。' }
     ],
     ultimate: { id: 'archer_ultimate', name: '终极：箭雨风暴', maxLevel: 1, desc: '箭矢连射进化为高密度箭雨。' }
   },

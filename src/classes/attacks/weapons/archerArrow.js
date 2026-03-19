@@ -56,11 +56,20 @@ export function fireArcherArrow(player) {
   const target = pickTarget(spawnX, spawnY);
   if (!target || !target.isAlive) return false;
 
-  const dx = target.x - rangeX;
-  const dy = target.y - rangeY;
+  const targetBody = target.body || null;
+  const targetVx = Number.isFinite(target.vx) ? target.vx : Number(targetBody?.velocity?.x || 0);
+  const targetVy = Number.isFinite(target.vy) ? target.vy : Number(targetBody?.velocity?.y || 0);
+  const shotSpeed = Math.max(1, Number(player.bulletSpeed || 720));
+  const rawDx = target.x - rangeX;
+  const rawDy = target.y - rangeY;
+  const leadTime = Phaser.Math.Clamp(Math.sqrt((rawDx * rawDx) + (rawDy * rawDy)) / shotSpeed, 0, 0.32);
+  const aimX = target.x + targetVx * leadTime;
+  const aimY = target.y + targetVy * leadTime;
+  const dx = aimX - rangeX;
+  const dy = aimY - rangeY;
   if ((dx * dx + dy * dy) > acquireRange * acquireRange) return false;
 
-  const angle = Phaser.Math.Angle.Between(spawnX, spawnY, target.x, target.y);
+  const angle = Phaser.Math.Angle.Between(spawnX, spawnY, aimX, aimY);
 
   const now = scene.time?.now ?? 0;
 
@@ -129,6 +138,21 @@ export function fireArcherArrow(player) {
     applyEnhancementsToBullet(bullet, enh, scheme);
   };
 
+  const getArrowDamageScale = (shotIndex, shotCount) => {
+    if (shotCount <= 1) return 1;
+    const centerIndex = (shotCount - 1) / 2;
+    const distanceFromCenter = Math.abs(shotIndex - centerIndex);
+    if (distanceFromCenter < 0.25) return 1;
+    if (distanceFromCenter <= 1.25) return 0.72;
+    return 0.52;
+  };
+
+  const isCenterArrow = (shotIndex, shotCount) => {
+    if (shotCount <= 1) return true;
+    const centerIndex = (shotCount - 1) / 2;
+    return Math.abs(shotIndex - centerIndex) < 0.25;
+  };
+
   const fireVolley = (allowRapidProc = true) => {
     if (player.archerVolleyMode === 'ring') {
       const count = Math.max(1, Math.round(player.archerVolleyRingCount || 8));
@@ -144,6 +168,16 @@ export function fireArcherArrow(player) {
       for (let i = 0; i < count; i++) {
         const shotAngle = angle + start + spread * i;
         const bullet = player.createBulletAtAngle(shotAngle, true);
+        if (bullet) {
+          bullet.damage = Math.max(1, Math.round((bullet.damage || 0) * getArrowDamageScale(i, count)));
+          if (player.archerVolleyLockAim && target && target.isAlive && isCenterArrow(i, count)) {
+            bullet.homing = true;
+            bullet.homingMode = 'fan_lock';
+            bullet.lockTarget = target;
+            bullet.fanOffsetRad = 0;
+            bullet.homingTurnRadPerSec = Number(player.archerVolleyLockTurn || Phaser.Math.DegToRad(300));
+          }
+        }
         applyArrowVisuals(bullet);
       }
     }

@@ -234,6 +234,32 @@ export default function App() {
   const getOwnedCount = (itemId) => getOwnedItemCount(ownedItems, itemId);
   const getEquippedCount = (itemId) => getOwnedItemCount(equippedItems, itemId);
 
+  const getStackedEquippedDisplay = (items) => {
+    const source = Array.isArray(items) ? items : [];
+    const grouped = [];
+    const indexById = new Map();
+
+    for (let i = 0; i < source.length; i += 1) {
+      const item = source[i];
+      if (!item?.id) continue;
+      const existingIndex = indexById.get(item.id);
+      if (existingIndex == null) {
+        indexById.set(item.id, grouped.length);
+        grouped.push({ ...item, count: 1, slots: [i] });
+      } else {
+        const current = grouped[existingIndex];
+        grouped[existingIndex] = {
+          ...current,
+          count: Number(current.count || 0) + 1,
+          slots: [...(current.slots || []), i]
+        };
+      }
+    }
+
+    while (grouped.length < 6) grouped.push(null);
+    return grouped.slice(0, 6);
+  };
+
   const attemptPurchaseShopItem = (item) => {
     if (!item?.id) return;
     const purchaseState = getPurchaseState(item, ownedItems, viewData?.globalCoins || 0);
@@ -849,9 +875,11 @@ export default function App() {
         ? item.statLines
         : [item?.desc || ''];
       const rarityLine = item?.rarityLabel ? `品质: ${item.rarityLabel}` : '';
+      const countLine = (Number(item?.count || 0) > 1) ? `数量: x${Number(item.count)}` : '';
       return [
         `${item.icon || ''} ${item.name || ''}`.trim(),
         rarityLine,
+        countLine,
         ...lines
       ].filter(Boolean).join('\n');
     };
@@ -900,7 +928,7 @@ export default function App() {
           }
 
           endLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => {
-            showFloatingInfo(getItemInfoText(item, slotLabel || label));
+            showBagDetail(item, slotLabel || label);
           }, e);
         }}
         onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
@@ -964,7 +992,7 @@ export default function App() {
       );
     };
 
-    const equipped6 = new Array(6).fill(null).map((_, i) => inventoryEquipped?.[i] || null);
+    const equipped6 = getStackedEquippedDisplay(inventoryEquipped);
     const lootList = Array.isArray(inventoryAcquired) ? inventoryAcquired.filter(Boolean) : [];
     const groupedLoot = [
       { key: 'legendary', title: '传说', color: '#ff9f2e', items: lootList.filter((it) => it?.kind === 'run_loot_equipment' && it?.rarityId === 'legendary') },
