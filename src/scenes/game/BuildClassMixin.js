@@ -323,8 +323,8 @@ export function applyBuildClassMixin(GameScene) {
         case 'paladin_pierce':
           this.player.paladinPierce = true;
           break;
-        case 'paladin_holyfire':
-          this.player.paladinHolyfire = true;
+        case 'paladin_repulse':
+          this.player.paladinKnockback = Math.max(28, Number(this.player.paladinKnockback || 0));
           break;
         case 'paladin_triple':
           this.player.paladinTriple = true;
@@ -547,9 +547,6 @@ export function applyBuildClassMixin(GameScene) {
         case 'mage_arcanomorph':
           this.player.mageArcanomorphLevel = Math.min(3, (this.player.mageArcanomorphLevel || 0) + 1);
           break;
-        case 'archer_hundred':
-          this.player.archerHundredLevel = Math.min(3, (this.player.archerHundredLevel || 0) + 1);
-          break;
         case 'archer_windfury':
           this.player.archerWindfury = true;
           break;
@@ -564,9 +561,6 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'warrior_unyielding':
           this.player.warriorUnyielding = true;
-          break;
-        case 'warlock_infinite':
-          this.player.warlockInfinite = true;
           break;
         case 'warlock_souleater':
           this.player.warlockSouleaterLevel = Math.min(3, (this.player.warlockSouleaterLevel || 0) + 1);

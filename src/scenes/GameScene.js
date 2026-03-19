@@ -1770,6 +1770,12 @@ class GameScene extends Phaser.Scene {
     if (bullet.explode) {
       this.collisionManager?.createHitEffect?.(hitX, hitY, 0xffaa66);
     }
+
+    if (bullet.knockback && enemy.isAlive) {
+      const angle = Phaser.Math.Angle.Between(bullet.x, bullet.y, enemy.x, enemy.y);
+      enemy.x += Math.cos(angle) * bullet.knockback;
+      enemy.y += Math.sin(angle) * bullet.knockback;
+    }
   }
 
   presentManagedPlayerBossHit({ bullet, boss, hitX, hitY, damage, isCrit } = {}) {
@@ -1835,31 +1841,6 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    if (bullet.holyfire) {
-      const paladinColor = getBaseColorForCoreKey('paladin');
-      const holyfireZone = this.createManagedPlayerAreaBullet(
-        hitX,
-        hitY,
-        paladinColor,
-        {
-          radius: 54,
-          damage: Math.max(1, Math.round((this.player?.bulletDamage || 1) * 0.18)),
-          alpha: 0.001,
-          maxLifeMs: 850,
-          noCrit: true,
-          hitCooldownMs: Math.max(60, Math.round((this.player?.fireRate || 320) * (220 / 320))),
-          tags: ['player_paladin_holyfire_zone']
-        }
-      );
-      if (holyfireZone) {
-        holyfireZone.isHolyfire = true;
-        this.player?.bullets?.push?.(holyfireZone);
-
-        const ring = this.add.circle(hitX, hitY, 54, paladinColor, 0.06);
-        ring.setStrokeStyle(2, paladinColor, 0.65);
-        this.tweens.add({ targets: ring, alpha: 0, duration: 850, onComplete: () => ring.destroy() });
-      }
-    }
 
     if (this.player?.warlockEcho) {
       const warlockColor = getBaseColorForCoreKey('warlock');

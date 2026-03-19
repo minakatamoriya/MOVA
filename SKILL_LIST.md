@@ -61,7 +61,7 @@
 
 ### 圣骑士（coreKey=paladin）
 - 重锤（id=paladin_pierce）：锤击范围略扩大，落点更靠前
-- 圣焰（id=paladin_holyfire）：锤击命中后留下圣焰持续伤害
+- 震荡锤击（id=paladin_repulse）：锤击命中附带明显击退，更难让敌人贴身
 - 连锤（id=paladin_triple）：每 5 秒下一次锤击额外追加 2 次余震
 - 制裁（id=paladin_stun，maxLevel=3）：锤击眩晕概率 10%/20%/30%
 - 神圣庇护（id=paladin_divine_shelter，maxLevel=3）：生命低于30%时自动触发，获得40%/60%/80%减伤，持续5秒，冷却30秒
@@ -130,39 +130,40 @@
 
 ## 第三天赋：深度专精（主/副同主题）
 
-深度专精的节点池按主职业主题（mainCoreKey）区分：
+深度专精终稿统一按“3 节点结构”设计：
+- 第 1 节点：立即改变手感
+- 第 2 节点：建立连锁或循环
+- 第 3 节点：终局爆点
 
 - 法师深度（mainCoreKey=mage）
-  - 双倍施法（id=mage_dualcaster）
-  - 三重激光（id=mage_trilaser）
-  - 奥术化身（id=mage_arcanomorph，maxLevel=3）
+  - 星界贯炮（id=mage_dualcaster）：激光变为巨粗贯穿光束，立刻进入终局主炮手感
+  - 棱镜超载（id=mage_trilaser）：激光命中后在主目标后方继续裂出副光束，形成后排延伸打击
+  - 奥术叠界（id=mage_arcanomorph，maxLevel=3）：奥能法阵允许重叠，重叠区内法阵增伤与附加效果按层放大
 
-- 猎人深度（mainCoreKey=scatter）
-  - 百发百中（id=archer_hundred，maxLevel=3）
-  - 疾风连射（id=archer_windfury）
-  - 鹰眼化身（id=archer_eagleeye）
-  - 箭矢弹射（id=archer_bounce）
+- 猎人深度（mainCoreKey=archer）
+  - 反射猎场（id=archer_bounce）：箭矢可在墙体与边界间反弹，优先继续追猎最近敌人
+  - 暴风裂羽（id=archer_windfury）：每轮散射额外追加一组延迟二段箭幕，形成前后两波清屏
+  - 终局鹰眼（id=archer_eagleeye）：所有散射箭获得更高暴击权重，对被标记目标进一步提高暴击上限
 
 - 战士深度（mainCoreKey=warrior）
-  - 剑刃风暴（id=warrior_bladestorm）
-  - 战神下凡（id=warrior_berserkgod，maxLevel=3）
-  - 不灭化身（id=warrior_unyielding）
+  - 永动旋刃（id=warrior_bladestorm）：进入持续旋转状态，移动中也不会中断主攻节奏
+  - 外放剑潮（id=warrior_berserkgod，maxLevel=3）：持续旋转期间周期性向外发射剑刃，补足远端压制与追击
+  - 暴走战躯（id=warrior_unyielding）：血怒、战吼、处决本能收益上限全部提高，低血时旋转更快、剑刃更多
 
 - 术士深度（mainCoreKey=warlock）
-  - 无限回响（id=warlock_infinite）
-  - 噬魂者（id=warlock_souleater，maxLevel=3）
-  - 虚空领主（id=warlock_netherlord）
-  - 索敌毒径（id=warlock_autoseek）
+  - 瘟疫疆域（id=warlock_autoseek）：毒圈会主动缓慢索敌并向敌群漂移
+  - 腐灭连环（id=warlock_souleater，maxLevel=3）：中毒敌人死亡时向周围扩散更强的腐蚀层，形成稳定滚雪球
+  - 炼狱君王（id=warlock_netherlord）：地狱火显著强化，并持续放大毒圈伤害、范围与压场能力
 
 - 圣骑深度（mainCoreKey=paladin）
-  - 复仇者（id=paladin_avenger，maxLevel=3）
-  - 圣盾术（id=paladin_sacredshield）
-  - 神圣化身（id=paladin_divine）
+  - 震退反制（id=paladin_avenger，maxLevel=3）：反击命中附带明显击退，高等级可追加短暂眩晕
+  - 圣棘回响（id=paladin_sacredshield）：格挡、受击、反制时都会反弹一部分神圣伤害
+  - 审判禁区（id=paladin_divine）：神圣回击、反制、击退彼此联动，在身边形成难以逼近的审判区
 
 - 德鲁伊深度（mainCoreKey=drone）
-  - 万兽之主（id=druid_kingofbeasts）
-  - 自然化身（id=druid_naturefusion）
-  - 星辰风暴（id=druid_astralstorm，maxLevel=3）
+  - 群星坠世（id=druid_kingofbeasts）：星落覆盖范围显著扩大，单次施法落点数提升
+  - 连星陨爆（id=druid_naturefusion）：陨石命中后引发二次流星坠击，形成连续轰炸区
+  - 天穹潮汐（id=druid_astralstorm，maxLevel=3）：星落循环显著加速，流星雨与陨石能更高频进入战场
 
 ---
 

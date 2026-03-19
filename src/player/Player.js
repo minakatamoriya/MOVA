@@ -211,7 +211,8 @@ export default class Player extends Phaser.GameObjects.Container {
     // 法师激光：早期不再“一碰就秒”
     this.laserDamageMult = 1.4;
 
-    // 圣骑：制裁（眩晕）
+    // 圣骑：击退与制裁（眩晕）
+    this.paladinKnockback = 0;
     this.paladinStunLevel = 0;
     this.paladinStunChance = 0;
     this.mageFrostNovaLevel = 0;

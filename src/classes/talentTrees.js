@@ -68,7 +68,7 @@ export const TREE_DEFS = [
     core: { id: 'paladin_core', name: '初始：圣骑', maxLevel: 1, desc: '护盾脉冲清弹并反击。' },
     nodes: [
       { id: 'paladin_pierce', name: '重锤', maxLevel: 1, desc: '锤击范围与伤害提高。' },
-      { id: 'paladin_holyfire', name: '圣焰', maxLevel: 1, desc: '锤击命中后留下圣焰持续伤害。' },
+      { id: 'paladin_repulse', name: '震荡锤击', maxLevel: 1, desc: '锤击命中附带明显击退。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
       { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' },
       { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 3, desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒。' },
@@ -227,7 +227,7 @@ export const SKILL_TO_TREE = {
 
   paladin_core: 'paladin',
   paladin_pierce: 'paladin',
-  paladin_holyfire: 'paladin',
+  paladin_repulse: 'paladin',
   paladin_triple: 'paladin',
   paladin_stun: 'paladin',
   paladin_divine_shelter: 'paladin',
@@ -317,7 +317,7 @@ export const SKILL_TO_TREE = {
   mage_trilaser: 'third',
   mage_arcanomorph: 'third',
 
-  archer_hundred: 'third',
+  archer_bounce: 'third',
   archer_windfury: 'third',
   archer_eagleeye: 'third',
 
@@ -325,7 +325,7 @@ export const SKILL_TO_TREE = {
   warrior_berserkgod: 'third',
   warrior_unyielding: 'third',
 
-  warlock_infinite: 'third',
+  warlock_autoseek: 'third',
   warlock_souleater: 'third',
   warlock_netherlord: 'third',
 
@@ -492,7 +492,16 @@ const THIRD_SPEC_MAX_LEVELS = (() => {
 })();
 
 export function getTreeIdForSkill(skillId) {
-  return SKILL_TO_TREE[normalizeSkillId(skillId)] || null;
+  const normalizedSkillId = normalizeSkillId(skillId);
+  const explicitTreeId = SKILL_TO_TREE[normalizedSkillId] || null;
+  if (explicitTreeId) return explicitTreeId;
+
+  // 双职业通用池会动态生成 dual_* id，这些 id 不会逐条静态登记，统一归到第三树。
+  if (typeof normalizedSkillId === 'string' && normalizedSkillId.startsWith('dual_')) {
+    return 'third';
+  }
+
+  return null;
 }
 
 export function getMaxLevel(skillId) {

@@ -72,7 +72,7 @@ export const UPGRADE_POOLS = {
   // 🛡️ 圣骑士·矛
   paladin: [
     { id: 'paladin_pierce', category: 'build', name: '重锤', desc: '锤击范围与伤害提高', icon: '骑主' },
-    { id: 'paladin_holyfire', category: 'build', name: '圣焰', desc: '锤击命中后在地上留下圣焰，造成持续伤害', icon: '骑主' },
+    { id: 'paladin_repulse', category: 'build', name: '震荡锤击', desc: '锤击命中附带明显击退，更难让敌人贴身', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
     { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' },
     { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒', icon: '骑主', maxLevel: 3 },
@@ -329,36 +329,34 @@ export function getThirdSpecPrepOption({ specType, mainCoreKey, offFaction }) {
 // 深度专精池：按主职业主题拆分
 export const DEPTH_SPEC_POOLS = {
   mage: [
-    { id: 'mage_dualcaster', category: 'third_depth', name: '双倍施法', desc: '激光有 20% 概率同时发射两道（可叠加过热/蓄能）', icon: '法深', maxLevel: 1 },
-    { id: 'mage_trilaser', category: 'third_depth', name: '三重激光', desc: '激光分裂为 3 道，每道伤害为原伤害的 60%', icon: '法深', maxLevel: 1 },
-    { id: 'mage_arcanomorph', category: 'third_depth', name: '奥术化身', desc: '每层使法阵效果翻倍，且法阵内移动不消失（上限3层）', icon: '法深', maxLevel: 3 }
+    { id: 'mage_dualcaster', category: 'third_depth', name: '星界贯炮', desc: '激光变为巨粗贯穿光束，立刻进入终局主炮手感', icon: '法深', maxLevel: 1 },
+    { id: 'mage_trilaser', category: 'third_depth', name: '棱镜超载', desc: '激光命中后会在主目标后方继续裂出副光束，强化后排延伸打击', icon: '法深', maxLevel: 1 },
+    { id: 'mage_arcanomorph', category: 'third_depth', name: '奥术叠界', desc: '奥能法阵允许重叠，重叠区内法阵增伤与附加效果按层放大', icon: '法深', maxLevel: 3 }
   ],
   archer: [
-    { id: 'archer_hundred', category: 'third_depth', name: '百发百中', desc: '每层使暴击伤害 +30%', icon: '猎深', maxLevel: 3 },
-    { id: 'archer_windfury', category: 'third_depth', name: '疾风连射', desc: '每次攻击有 15% 概率触发一次额外攻击（可触发自身）', icon: '猎深', maxLevel: 1 },
-    { id: 'archer_eagleeye', category: 'third_depth', name: '鹰眼化身', desc: '攻击无视敌人 30% 防御，且猎手标记对任何血量生效', icon: '猎深', maxLevel: 1 },
-    { id: 'archer_bounce', category: 'third_depth', name: '箭矢弹射', desc: '箭矢命中后可在敌人之间额外弹射 1 次', icon: '猎深', maxLevel: 1 }
+    { id: 'archer_bounce', category: 'third_depth', name: '反射猎场', desc: '箭矢可在墙体与边界间反弹，优先继续追猎最近敌人', icon: '猎深', maxLevel: 1 },
+    { id: 'archer_windfury', category: 'third_depth', name: '暴风裂羽', desc: '每轮散射额外追加一组延迟二段箭幕，形成前后两波清屏', icon: '猎深', maxLevel: 1 },
+    { id: 'archer_eagleeye', category: 'third_depth', name: '终局鹰眼', desc: '所有散射箭获得更高暴击权重，对被标记目标进一步提高暴击上限', icon: '猎深', maxLevel: 1 }
   ],
   warrior: [
-    { id: 'warrior_bladestorm', category: 'third_depth', name: '剑刃风暴', desc: '旋风斩持续期间，自身周围持续产生剑气，每0.5秒造成伤害', icon: '战深', maxLevel: 1 },
-    { id: 'warrior_berserkgod', category: 'third_depth', name: '战神下凡', desc: '每层使血怒的最大增伤上限提升至 50%（原30%）', icon: '战深', maxLevel: 3 },
-    { id: 'warrior_unyielding', category: 'third_depth', name: '不灭化身', desc: '死斗状态下免疫控制，且攻击速度加成翻倍', icon: '战深', maxLevel: 1 }
+    { id: 'warrior_bladestorm', category: 'third_depth', name: '永动旋刃', desc: '进入持续旋转状态，移动中也不会中断主攻节奏', icon: '战深', maxLevel: 1 },
+    { id: 'warrior_berserkgod', category: 'third_depth', name: '外放剑潮', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
+    { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '血怒、战吼、处决本能收益上限全部提高，低血时旋转更快、剑刃更多', icon: '战深', maxLevel: 1 }
   ],
   warlock: [
-    { id: 'warlock_infinite', category: 'third_depth', name: '无限回响', desc: '暗影箭回响法阵持续时间翻倍，且可存在多个', icon: '术深', maxLevel: 1 },
-    { id: 'warlock_souleater', category: 'third_depth', name: '噬魂者', desc: '每层使吞噬的斩杀线提高至 40%，且斩杀后回复 5% 生命', icon: '术深', maxLevel: 3 },
-    { id: 'warlock_netherlord', category: 'third_depth', name: '虚空领主', desc: '连环弹射次数 +2，且每次弹射伤害不衰减', icon: '术深', maxLevel: 1 },
-    { id: 'warlock_autoseek', category: 'third_depth', name: '索敌毒径', desc: '深度专精：毒圈会缓慢贴向敌人（移动炮台风格）', icon: '术深', maxLevel: 1 }
+    { id: 'warlock_autoseek', category: 'third_depth', name: '瘟疫疆域', desc: '毒圈会主动缓慢索敌并向敌群漂移，多个毒圈靠近时可融合', icon: '术深', maxLevel: 1 },
+    { id: 'warlock_souleater', category: 'third_depth', name: '腐灭连环', desc: '中毒敌人死亡时向周围扩散更强的腐蚀层，形成稳定滚雪球', icon: '术深', maxLevel: 3 },
+    { id: 'warlock_netherlord', category: 'third_depth', name: '炼狱君王', desc: '地狱火显著强化，并持续放大毒圈伤害、范围与压场能力', icon: '术深', maxLevel: 1 }
   ],
   paladin: [
-    { id: 'paladin_avenger', category: 'third_depth', name: '复仇者', desc: '每层使反制伤害提高 100% 攻击力', icon: '骑深', maxLevel: 3 },
-    { id: 'paladin_sacredshield', category: 'third_depth', name: '圣盾术', desc: '格挡成功后，获得 1 层护盾（可吸收 20% 生命值）', icon: '骑深', maxLevel: 1 },
-    { id: 'paladin_divine', category: 'third_depth', name: '神圣化身', desc: '圣焰持续伤害 +100%，且可叠加 2 层', icon: '骑深', maxLevel: 1 }
+    { id: 'paladin_avenger', category: 'third_depth', name: '震退反制', desc: '反击命中附带明显击退，高等级可追加短暂眩晕', icon: '骑深', maxLevel: 3 },
+    { id: 'paladin_sacredshield', category: 'third_depth', name: '圣棘回响', desc: '格挡、受击、反制时都会反弹一部分神圣伤害', icon: '骑深', maxLevel: 1 },
+    { id: 'paladin_divine', category: 'third_depth', name: '审判禁区', desc: '神圣回击、反制、击退彼此联动，在身边形成难以逼近的审判区', icon: '骑深', maxLevel: 1 }
   ],
   drone: [
-    { id: 'druid_kingofbeasts', category: 'third_depth', name: '万兽之主', desc: '三宠同场：熊、鹰、树精同时存在（属性为正常的 40%/60%/40%）', icon: '德深', maxLevel: 1 },
-    { id: 'druid_naturefusion', category: 'third_depth', name: '自然化身', desc: '永久获得熊的 20% 减伤、鹰的 20% 攻速、树精的 0.5%/秒回血', icon: '德深', maxLevel: 1 },
-    { id: 'druid_astralstorm', category: 'third_depth', name: '星辰风暴', desc: '每层使星落范围 +15%，且流星雨可触发陨石效果', icon: '德深', maxLevel: 3 }
+    { id: 'druid_kingofbeasts', category: 'third_depth', name: '群星坠世', desc: '星落覆盖范围显著扩大，单次施法落点数提升', icon: '德深', maxLevel: 1 },
+    { id: 'druid_naturefusion', category: 'third_depth', name: '连星陨爆', desc: '陨石命中后引发二次流星坠击，形成连续轰炸区', icon: '德深', maxLevel: 1 },
+    { id: 'druid_astralstorm', category: 'third_depth', name: '天穹潮汐', desc: '星落循环显著加速，流星雨与陨石能更高频进入战场', icon: '德深', maxLevel: 3 }
   ]
 };
 
@@ -396,7 +394,7 @@ const CUSTOM_DUAL_SPEC_POOLS = {
     archer: [
       { id: 'dual_paladin_scatter_holyrain', category: 'third_dual', name: '圣光箭雨', desc: '你的箭雨变为神圣箭雨，对敌人造成额外 20% 神圣伤害并致盲 1 秒', icon: '骑猎', maxLevel: 1 },
       { id: 'dual_paladin_scatter_blessedquiver', category: 'third_dual', name: '祝福箭袋', desc: '每层使你的暴击率 +3%，且暴击时有 20% 概率为自己回复 2% 生命', icon: '骑猎', maxLevel: 3 },
-      { id: 'dual_paladin_scatter_retribution', category: 'third_dual', name: '惩戒射击', desc: '对攻击你的敌人，你的下次攻击必定暴击且附加圣焰', icon: '骑猎', maxLevel: 1 }
+      { id: 'dual_paladin_scatter_retribution', category: 'third_dual', name: '惩戒射击', desc: '对攻击你的敌人，你的下次攻击必定暴击，并附带击退或短暂硬直', icon: '骑猎', maxLevel: 1 }
     ]
   },
   drone: {

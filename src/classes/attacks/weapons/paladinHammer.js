@@ -338,10 +338,7 @@ export function firePaladinHammer(player) {
 
     if (!aoe) return;
 
-    // 圣焰：复用碰撞层的 holyfire 落地逻辑
-    if (player.paladinHolyfire) {
-      aoe.holyfire = true;
-    }
+    aoe.knockback = Math.max(0, Number(player.paladinKnockback || 0));
 
     // 制裁：眩晕概率（10/20/30%）
     aoe.stunChance = Phaser.Math.Clamp(player.paladinStunChance || 0, 0, 0.95);
