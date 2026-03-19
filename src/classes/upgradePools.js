@@ -93,45 +93,62 @@ export const UPGRADE_POOLS = {
 export const UNIVERSAL_POOLS = {
   // 🔵 法师·奥术
   arcane: [
-    { id: 'arcane_swift', category: 'build', name: '迅捷', desc: '所有攻击的攻击速度/冷却时间 -8%', icon: '法副' },
-    { id: 'arcane_circle', category: 'build', name: '法阵', desc: '站立不动 2 秒后生成法阵：阵内攻击力 +20%，移动则消失', icon: '法副' }
+    { id: 'arcane_circle', category: 'build', name: '奥能法阵', desc: '周期生成奥能法阵。1/2/3级：每10/8/6秒生成1个法阵，持续3/4/5秒；阵内你的伤害 +10%/+15%/+20%', icon: '法副', maxLevel: 3 },
+    { id: 'arcane_circle_range', category: 'build', name: '法阵扩张', desc: '扩大奥能法阵范围。1/2/3级：法阵半径 +15%/+30%/+45%', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_fire_circle', category: 'build', name: '烈焰法阵', desc: '法阵结束时爆炸。1/2/3级：造成80%/120%/160%攻击力范围伤害；2级范围+20%，3级附带2秒灼烧', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_frost_circle', category: 'build', name: '冰霜法阵', desc: '法阵内敌人减速。1/2/3级：敌人移动速度 -20%/-30%/-40%；3级离开法阵后仍保留1秒减速', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_resonance_mark', category: 'build', name: '共鸣刻印', desc: '进一步扩大奥能法阵增伤。1/2/3级：法阵提供的增伤额外 +6%/+12%/+18%', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_flowcasting', category: 'build', name: '流动施法', desc: '离开法阵后短时间保留法阵增益。1/2/3级：保留1/2/3秒', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' }
   ],
 
   // 🟢 猎人·游侠
   ranger: [
-    { id: 'ranger_precise', category: 'build', name: '精准', desc: '暴击率 +10%', icon: '猎副' },
-    { id: 'ranger_agile', category: 'build', name: '灵巧', desc: '闪避率 +8%', icon: '猎副' },
-    { id: 'ranger_hunter', category: 'build', name: '猎手', desc: '对生命值高于 80% 的敌人，暴击率额外 +15%', icon: '猎副' }
+    { id: 'ranger_snaretrap', category: 'build', name: '绊索陷阱', desc: '自动布置绊索陷阱。1/2/3级：每10/8/6秒布置1个陷阱，触发后定身敌人1/1.5/2秒', icon: '猎副', maxLevel: 3 },
+    { id: 'ranger_huntmark', category: 'build', name: '猎手印记', desc: '被陷阱触发的敌人受到你的伤害提高。1/2/3级：+10%/+20%/+30%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_spiketrap', category: 'build', name: '钉刺陷阱', desc: '陷阱触发后造成伤害与减速。1/2/3级：造成60%/90%/120%攻击力伤害，并使敌人减速25%/35%/45%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_blasttrap', category: 'build', name: '爆裂陷阱', desc: '陷阱触发时额外爆炸。1/2/3级：造成80%/120%/160%攻击力范围伤害；3级范围+25%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_trapcraft', category: 'build', name: '熟练布置', desc: '强化陷阱覆盖能力。1级：同时存在的陷阱数量 +1；2级：触发范围 +20%；3级：陷阱数量再 +1，触发范围总计 +35%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_pack_hunter', category: 'build', name: '围猎本能', desc: '强化你对被控制或被标记目标的暴击收益。1/2/3级：暴击率 +8%/+16%/+24%；3级额外获得 +20% 暴击伤害', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_huntmark' }
   ],
 
   // 🟠 战士·不屈
   unyielding: [
-    { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '战副' },
-    { id: 'unyielding_battlecry', category: 'build', name: '战吼', desc: '受到伤害时，20% 概率触发：3 秒内伤害 +15%', icon: '战副' },
-    { id: 'unyielding_duel', category: 'build', name: '死斗', desc: '生命值低于 30% 时，攻击速度 +25%', icon: '战副' }
+    { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命越低伤害越高。1/2/3级：生命每降低10%，伤害 +2%/+3%/+4%', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_battlecry', category: 'build', name: '战吼', desc: '受伤后短时间增伤。1/2/3级：受到伤害时有20%概率触发，3秒内伤害 +10%/+20%/+30%', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_hamstring', category: 'build', name: '断筋', desc: '近距离命中使敌人减速。1/2/3级：减速15%/25%/35%，持续1.5/1.5/2秒', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_sunder', category: 'build', name: '破甲', desc: '持续命中同一目标时提高对其伤害。1/2/3级：+6%/+12%/+18%', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_standfast', category: 'build', name: '不退', desc: '近距离存在敌人时获得减伤与抗击退。1/2/3级：受到伤害 -6%/-12%/-18%；3级额外获得少量抗击退', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_executioner', category: 'build', name: '处决本能', desc: '对低血敌人造成额外伤害。1/2/3级：对生命低于35%的敌人伤害 +12%/+24%/+36%', icon: '战副', maxLevel: 3 }
   ],
 
   // 🟣 术士·诅咒
   curse: [
-    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 },
-    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。等级 1/2/3 时上限 1/3/5', icon: '术副', maxLevel: 3 }
+    { id: 'curse_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '提高召唤物生命。1/2/3级：召唤物生命 +12%/+24%/+36%', icon: '术副', maxLevel: 3 },
+    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。1/2/3级：上限为 1/3/5', icon: '术副', maxLevel: 3 },
+    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。1/2/3级：上限为 1/3/5', icon: '术副', maxLevel: 3 },
+    { id: 'curse_mage_empower', category: 'build', name: '白骨灌能', desc: '强化骷髅法师输出。1/2/3级：骷髅法师伤害 +15%/+30%/+45%；3级攻击间隔额外缩短15%', icon: '术副', maxLevel: 3, requiredSkillId: 'curse_skeleton_mage' },
+    { id: 'curse_guard_bulwark', category: 'build', name: '骸骨壁垒', desc: '强化骷髅卫士生存与前排能力。1/2/3级：生命额外 +20%/+40%/+60%，受到伤害 -10%/-15%/-20%；3级额外提高拦截倾向', icon: '术副', maxLevel: 3, requiredSkillId: 'curse_skeleton_guard' },
+    { id: 'curse_ember_echo', category: 'build', name: '魂火余烬', desc: '召唤物死亡后为你提供短时间增伤/减伤。1级：每死1名召唤物获得1层魂火，持续4秒，每层伤害 +3%，最多3层；2级：每层同时提供2%减伤；3级：持续时间延长至6秒，每层伤害提高至 +4%，减伤提高至3%', icon: '术副', maxLevel: 3 }
   ],
 
   // 🛡️ 圣骑士·守护
   guardian: [
-    { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '骑副' },
-    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '所有受到的伤害 -3（固定减伤）', icon: '-3' },
-    { id: 'guardian_counter', category: 'build', name: '反制', desc: '格挡成功后，对攻击者造成 100% 攻击力的反击伤害', icon: '骑副' }
+    { id: 'guardian_block', category: 'build', name: '坚盾', desc: '概率格挡，格挡时减伤。1/2/3级：格挡率 5%/8%/12%，格挡减伤 50%', icon: '骑副', maxLevel: 3 },
+    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '固定减伤。1/2/3级：所有受到的伤害 -2/-4/-6', icon: '骑副', maxLevel: 3 },
+    { id: 'guardian_counter', category: 'build', name: '反制', desc: '格挡成功后反击。1/2/3级：反击造成80%/120%/160%攻击力伤害', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
+    { id: 'guardian_sacred_seal', category: 'build', name: '庇护圣印', desc: '受击或格挡时积累圣印。1/2/3级：圣印上限 3/4/5 层', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
+    { id: 'guardian_holy_rebuke', category: 'build', name: '神圣回击', desc: '累计满圣印后，下次格挡或受击触发范围冲击。1/2/3级：造成100%/150%/200%攻击力伤害；3级附带20%减速，持续2秒', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' },
+    { id: 'guardian_light_fortress', category: 'build', name: '光铸壁垒', desc: '低血时自动消耗全部圣印生成护盾。1/2/3级：每层圣印提供4%/6%/8%最大生命护盾', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' }
   ],
 
   // 🌿 德鲁伊·自然伙伴
   nature: [
-    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '召唤熊灵协同作战，负责扛伤与近战压制', icon: '德副', maxLevel: 1 },
-    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '召唤战鹰协同作战，负责持续高频打击', icon: '德副', maxLevel: 1 },
-    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '召唤树精协同作战，负责周期治疗与续航', icon: '德副', maxLevel: 1 },
-    { id: 'nature_bear_vitality', category: 'build', name: '熊灵厚甲', desc: '熊灵生命值提高 +25%/+50%/+75%', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
-    { id: 'nature_hawk_swiftness', category: 'build', name: '鹰击疾掠', desc: '战鹰攻击间隔缩短 12%/24%/36%', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
-    { id: 'nature_treant_bloom', category: 'build', name: '林灵繁茂', desc: '树精单次治疗量提高 +2/+4/+6', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
+    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '召唤熊灵协同作战。1/2/3级：负责近战拦截；后续提升生命、仇恨与减伤能力', icon: '德副', maxLevel: 3 },
+    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '召唤战鹰协同作战。1/2/3级：负责高频打击；后续提升攻速、索敌与追击倾向', icon: '德副', maxLevel: 3 },
+    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '召唤树精协同作战。1/2/3级：负责周期治疗；后续提升治疗量、频率与护盾能力', icon: '德副', maxLevel: 3 },
+    { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: '强化熊灵承担伤害与拦截能力。1/2/3级：玩家受击时熊灵分担8%/16%/24%伤害；3级额外获得概率震地减速', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
+    { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: '强化战鹰标记与增伤。1/2/3级：战鹰命中的敌人被标记，你对其伤害 +8%/+16%/+24%；3级对Boss稳定生效', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
+    { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: '强化树精治疗与护盾。1/2/3级：治疗量 +15%/+30%/+45%，并有15%/30%/45%概率附带2%最大生命护盾', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
   ]
 };
 
@@ -140,18 +157,12 @@ export const UNIVERSAL_POOLS = {
 // - 选中这些节点时，会在 GameScene.applyUpgrade 中自动写入 offFaction
 // - 自然伙伴：这里先解锁德鲁伊副职业，后续再从自然伙伴池中抽取熊/鹰/树精与其强化
 export const OFF_FACTION_ENTRY_OPTIONS = [
-  // 奥术 -> 迅捷
-  { id: 'arcane_swift', category: 'build', name: '迅捷', desc: '所有攻击的攻击速度/冷却时间 -8%', icon: '解锁法师副职业！' },
-  // 游侠 -> 精准
-  { id: 'ranger_precise', category: 'build', name: '精准', desc: '暴击率 +10%', icon: '解锁猎人副职业！' },
-  // 不屈 -> 血怒
-  { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命值每降低 10%，造成的伤害 +3%', icon: '解锁战士副职业！' },
-  // 诅咒 -> 死灵共鸣
-  { id: 'off_curse', category: 'build', name: '死灵共鸣', desc: '你的召唤物伤害 +12%，生命值 +10%，解锁诅咒池', icon: '解锁术士副职业！' },
-  // 守护 -> 坚盾
-  { id: 'guardian_block', category: 'build', name: '坚盾', desc: '5% 概率格挡，格挡时减伤 50%', icon: '解锁圣骑士副职业！' },
-  // 自然伙伴 -> 自然亲和
-  { id: 'off_nature', category: 'build', name: '自然亲和', desc: '受到治疗效果 +12%，解锁自然伙伴池', icon: '解锁德鲁伊副职业！' }
+  { id: 'off_arcane', category: 'build', name: '奥术', desc: '获得奥能法阵，并使所有攻击间隔 -8%。', icon: '解锁法师副职业！' },
+  { id: 'off_ranger', category: 'build', name: '游侠', desc: '获得陷阱体系，并使闪避率 +10%。', icon: '解锁猎人副职业！' },
+  { id: 'off_unyielding', category: 'build', name: '不屈', desc: '获得不屈战意，并使暴击率 +15%。', icon: '解锁战士副职业！' },
+  { id: 'off_curse', category: 'build', name: '诅咒', desc: '获得亡灵军势，并使造成的伤害 +8%。', icon: '解锁术士副职业！' },
+  { id: 'off_guardian', category: 'build', name: '守护', desc: '获得格挡与圣印，并使受到的伤害 -10%。', icon: '解锁圣骑士副职业！' },
+  { id: 'off_nature', category: 'build', name: '自然伙伴', desc: '获得自然伙伴，并每秒恢复 0.8% 最大生命。', icon: '解锁德鲁伊副职业！' }
 ];
 
 // ====== 第三天赋：深度专精 / 双职业专精（占位池，后续由策划填充） ======

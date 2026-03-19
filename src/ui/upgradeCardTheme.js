@@ -3,11 +3,11 @@ import { getTreeIdForSkill } from '../classes/talentTrees';
 import { DEPTH_SPEC_POOLS, DUAL_SPEC_POOLS } from '../classes/upgradePools';
 
 const OFF_CLASS_TREE_BY_ID = {
-  arcane_swift: 'mage',
-  ranger_precise: 'archer',
-  unyielding_bloodrage: 'warrior',
+  off_arcane: 'mage',
+  off_ranger: 'archer',
+  off_unyielding: 'warrior',
   off_curse: 'warlock',
-  guardian_block: 'paladin',
+  off_guardian: 'paladin',
   off_nature: 'druid'
 };
 

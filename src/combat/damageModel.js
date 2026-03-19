@@ -77,6 +77,7 @@ export function buildPlayerDerivedStats(player, options = {}) {
 
   const damageMult = equipmentMods.damageMult
     * lootMods.damageMult
+    * toMultiplier(player?.offEntryDamageMult, 1)
     * toMultiplier(player?.universalDamageMult, 1)
     * toMultiplier(player?.natureDamageMult, 1);
 
@@ -130,11 +131,23 @@ function getPlayerStateDamageMultiplier(attacker, target, now) {
   if (attacker?.bloodrageEnabled && toNumber(attacker?.maxHp, 0) > 0) {
     const missingRatio = 1 - (toNumber(attacker?.hp, attacker?.maxHp) / Math.max(1, toNumber(attacker?.maxHp, 1)));
     const stacks = Math.max(0, Math.floor(missingRatio / 0.1));
-    multiplier *= (1 + stacks * 0.03);
+    multiplier *= (1 + stacks * toNumber(attacker?.bloodragePerStack, 0.03));
   }
 
   if (toNumber(attacker?.battlecryUntil, 0) > now) {
-    multiplier *= 1.15;
+    multiplier *= (1 + toNumber(attacker?.battlecryBonus, 0.15));
+  }
+
+  if (toNumber(attacker?.unyieldingExecutionerLevel, 0) > 0 && toNumber(target?.maxHp, 0) > 0) {
+    const hpRatio = toNumber(target?.currentHp, target?.hp) / Math.max(1, toNumber(target?.maxHp, 1));
+    if (hpRatio <= 0.35) {
+      const executeBonus = [0, 0.12, 0.24, 0.36][Math.max(0, Math.min(3, Math.round(attacker?.unyieldingExecutionerLevel || 0)))] || 0;
+      multiplier *= (1 + executeBonus);
+    }
+  }
+
+  if (toNumber(attacker?.curseEmberUntil, 0) > now && toNumber(attacker?.curseEmberStacks, 0) > 0) {
+    multiplier *= (1 + toNumber(attacker?.curseEmberStacks, 0) * 0.04);
   }
 
   if (toNumber(attacker?.natureRageUntil, 0) > now) {
@@ -157,6 +170,18 @@ function getTargetDamageTakenMultiplier(target, now) {
 
   if (target?.debuffs?.huntMarkEnd && now < target.debuffs.huntMarkEnd) {
     multiplier *= toMultiplier(target.debuffs.huntMarkMult, 1.1);
+  }
+
+  if (target?.debuffs?.natureHawkMarkUntil && now < target.debuffs.natureHawkMarkUntil) {
+    multiplier *= toMultiplier(target.debuffs.natureHawkMarkMult, 1.08);
+  }
+
+  if (target?.debuffs?.arcaneCircleExposureUntil && now < target.debuffs.arcaneCircleExposureUntil) {
+    multiplier *= toMultiplier(target.debuffs.arcaneCircleExposureMult, 1.08);
+  }
+
+  if (target?.debuffs?.warriorSunderUntil && now < target.debuffs.warriorSunderUntil) {
+    multiplier *= toMultiplier(target.debuffs.warriorSunderMult, 1.06);
   }
 
   const poisonZoneStacks = Math.max(0, Math.round(target?.debuffs?.poisonZone?.stacks || 0));
@@ -197,11 +222,16 @@ export function calculateResolvedDamage(options = {}) {
     ? toNumber(attacker.hunterCritBonus, 0)
     : 0;
 
-  const critChance = canCrit ? clampChance(toNumber(attacker?.critChance, 0) + critChanceBonus + toNumber(extraCritChance, 0)) : 0;
+  const packHunterLevel = Math.max(0, Math.min(3, Math.round(attacker?.rangerPackHunterLevel || 0)));
+  const hasHuntMark = !!(target?.debuffs?.huntMarkEnd && now < target.debuffs.huntMarkEnd);
+  const packHunterCritChanceBonus = hasHuntMark ? ([0, 0.06, 0.1, 0.14][packHunterLevel] || 0) : 0;
+  const packHunterCritMultBonus = hasHuntMark ? ([0, 0.12, 0.2, 0.3][packHunterLevel] || 0) : 0;
+
+  const critChance = canCrit ? clampChance(toNumber(attacker?.critChance, 0) + critChanceBonus + packHunterCritChanceBonus + toNumber(extraCritChance, 0)) : 0;
   const isCrit = forceCrit == null ? (canCrit && Math.random() < critChance) : !!forceCrit;
 
   if (isCrit) {
-    amount = roundDamage(amount * toMultiplier(attacker?.critMultiplier, 1.5), minimum);
+    amount = roundDamage(amount * (toMultiplier(attacker?.critMultiplier, 1.5) + packHunterCritMultBonus), minimum);
   }
 
   const targetMult = includeTargetModifiers ? getTargetDamageTakenMultiplier(target, now) : 1;
@@ -223,6 +253,7 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
     : 0;
   const dodgeChance = clampChance(
     toNumber(defender?.dodgeChance, 0)
+      + toNumber(defender?.offEntryDodgeChance, 0)
       + toNumber(defender?.equipmentDodgeChance, 0)
       + emergencyDodgeBonus
   );
@@ -237,7 +268,7 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
   }
 
   let finalDamage = Math.max(0, Math.round(toNumber(incomingDamage, 0) - toNumber(defender?.flatDamageReduction, 0)));
-  finalDamage = Math.max(0, Math.round(finalDamage * (1 - clampChance(toNumber(defender?.damageReductionPercent, 0)))));
+  finalDamage = Math.max(0, Math.round(finalDamage * (1 - clampChance(toNumber(defender?.damageReductionPercent, 0) + toNumber(defender?.offEntryDamageReduction, 0)))));
   finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.natureDamageTakenMult, 1)));
 
   if (toNumber(defender?.emergencyMitigationUntil, 0) > now) {
@@ -248,7 +279,17 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
     finalDamage = Math.max(0, Math.round(finalDamage * 0.8));
   }
 
-  const blockChance = clampChance(toNumber(defender?.blockChance, 0));
+  if (defender?.unyieldingStandfastActive && toNumber(defender?.unyieldingStandfastLevel, 0) > 0) {
+    const standfastReduction = [0, 0.06, 0.12, 0.18][Math.max(0, Math.min(3, Math.round(defender?.unyieldingStandfastLevel || 0)))] || 0;
+    finalDamage = Math.max(0, Math.round(finalDamage * (1 - standfastReduction)));
+  }
+
+  if (toNumber(defender?.guardianSealStacks, 0) > 0 && toNumber(defender?.guardianSacredSealLevel, 0) > 0) {
+    const perStack = [0, 0.02, 0.03, 0.04][Math.max(0, Math.min(3, Math.round(defender?.guardianSacredSealLevel || 0)))] || 0;
+    finalDamage = Math.max(0, Math.round(finalDamage * (1 - Math.min(0.35, perStack * toNumber(defender?.guardianSealStacks, 0)))));
+  }
+
+  const blockChance = clampChance(toNumber(defender?.blockChance, 0) + toNumber(defender?.guardianBlockBonus, 0));
   const blocked = blockChance > 0 && Math.random() < blockChance;
   if (blocked) {
     finalDamage = Math.max(0, Math.round(finalDamage * 0.5));

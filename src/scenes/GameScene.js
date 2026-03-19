@@ -1634,10 +1634,11 @@ class GameScene extends Phaser.Scene {
     if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
       const currentBoss = this.bossManager?.getCurrentBoss?.();
       if (currentBoss && currentBoss.isAlive && !currentBoss.isInvincible) {
+        const counterScale = [0, 0.8, 1.2, 1.6][Math.max(0, Math.min(3, Math.round(this.player?.guardianCounterLevel || 0)))] || 1;
         const counterResult = calculateResolvedDamage({
           attacker: this.player,
           target: currentBoss,
-          baseDamage: Math.max(1, Math.round(this.player.bulletDamage || 1)),
+          baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 1) * counterScale)),
           now: this.time?.now ?? 0,
           canCrit: false
         });
@@ -1680,6 +1681,7 @@ class GameScene extends Phaser.Scene {
     if (!bullet || !boss || boss.isAlive === false) return;
 
     this.player?.onDealDamage?.(damage);
+    this.applyWarriorOffclassHitEffects?.(boss, now);
 
     if (!killed && (bullet.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
       const chance = Phaser.Math.Clamp(Number(bullet.stunChance || 0), 0, 0.95);
@@ -1749,6 +1751,7 @@ class GameScene extends Phaser.Scene {
     if (!bullet || !enemy) return;
 
     this.player?.onDealDamage?.(damage);
+    this.applyWarriorOffclassHitEffects?.(enemy, this.time?.now ?? 0);
     this.presentManagedPlayerMinionHit({ bullet, enemy, hitX, hitY, damage, isCrit });
   }
 
@@ -3025,6 +3028,7 @@ class GameScene extends Phaser.Scene {
       if (this.undeadSummonManager) {
         this.undeadSummonManager.update(time, delta);
       }
+      this.updateOffclassSystems?.(time, delta);
       this.updateDrops(delta);
       this.updateWarriorRangeRing?.(time);
       this.updatePaladinTargetingRing(time);
@@ -3067,6 +3071,7 @@ class GameScene extends Phaser.Scene {
       if (this.undeadSummonManager) {
         this.undeadSummonManager.update(time, delta);
       }
+      this.updateOffclassSystems?.(time, delta);
       this.updateDrops(delta);
       this.updateWarriorRangeRing?.(time);
       this.updatePaladinTargetingRing(time);
@@ -3081,6 +3086,8 @@ class GameScene extends Phaser.Scene {
       this.updateBulletSystemsDebugOverlay();
       return;
     }
+
+    this.updateOffclassSystems?.(time, delta);
     
     // 更新 Boss 管理器
     if (this.bossManager) {

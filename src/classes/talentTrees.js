@@ -96,10 +96,14 @@ export const TREE_DEFS = [
     id: 'arcane',
     name: '法师-副',
     color: resolveClassColor('mage'),
-    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，提供技能加速与站桩奖励。' },
+    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，获得奥能法阵：周期生成法阵，并为阵内提供增伤。' },
     nodes: [
-      { id: 'arcane_swift', name: '迅捷', maxLevel: 1, desc: '所有攻击的攻击速度/冷却时间 -8%。' },
-      { id: 'arcane_circle', name: '法阵', maxLevel: 1, desc: '站立不动 2 秒后阵内攻击力 +20%，移动则消失。' }
+      { id: 'arcane_circle', name: '奥能法阵', maxLevel: 3, desc: '周期生成法阵，阵内提供伤害增幅。' },
+      { id: 'arcane_circle_range', name: '法阵扩张', maxLevel: 3, desc: '扩大奥能法阵的覆盖范围。' },
+      { id: 'arcane_fire_circle', name: '烈焰法阵', maxLevel: 3, desc: '法阵结束时爆炸，造成范围伤害。' },
+      { id: 'arcane_frost_circle', name: '冰霜法阵', maxLevel: 3, desc: '法阵内敌人减速。' },
+      { id: 'arcane_resonance_mark', name: '共鸣刻印', maxLevel: 3, desc: '进一步扩大奥能法阵的增伤幅度。' },
+      { id: 'arcane_flowcasting', name: '流动施法', maxLevel: 3, desc: '离开法阵后短时间保留法阵增益。' }
     ],
     ultimate: { id: 'arcane_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -107,11 +111,14 @@ export const TREE_DEFS = [
     id: 'ranger',
     name: '猎人-副',
     color: resolveClassColor('archer'),
-    core: { id: 'off_ranger', name: '选择：游侠', maxLevel: 1, desc: '作为副职业，提供暴击、闪避与先手压制。' },
+    core: { id: 'off_ranger', name: '选择：游侠', maxLevel: 1, desc: '作为副职业，获得陷阱体系：自动布置陷阱，提供控制与标记。' },
     nodes: [
-      { id: 'ranger_precise', name: '精准', maxLevel: 1, desc: '暴击率 +10%。' },
-      { id: 'ranger_agile', name: '灵巧', maxLevel: 1, desc: '闪避率 +8%。' },
-      { id: 'ranger_hunter', name: '猎手', maxLevel: 1, desc: '对生命值高于 80% 的敌人暴击率额外 +15%。' }
+      { id: 'ranger_snaretrap', name: '绊索陷阱', maxLevel: 3, desc: '自动布置陷阱，触发后定身敌人。' },
+      { id: 'ranger_huntmark', name: '猎手印记', maxLevel: 3, desc: '被陷阱触发的敌人受到你的伤害提高。' },
+      { id: 'ranger_spiketrap', name: '钉刺陷阱', maxLevel: 3, desc: '陷阱触发后造成伤害与减速。' },
+      { id: 'ranger_blasttrap', name: '爆裂陷阱', maxLevel: 3, desc: '陷阱触发时额外爆炸。' },
+      { id: 'ranger_trapcraft', name: '熟练布置', maxLevel: 3, desc: '强化陷阱覆盖能力。' },
+      { id: 'ranger_pack_hunter', name: '围猎本能', maxLevel: 3, desc: '强化你对被控制或被标记目标的暴击收益。' }
     ],
     ultimate: { id: 'ranger_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -119,11 +126,14 @@ export const TREE_DEFS = [
     id: 'unyielding',
     name: '战士-副',
     color: resolveClassColor('warrior'),
-    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，提供逆境增伤与绝境反击。' },
+    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，获得不屈战意：提供受伤增益、贴身压迫与收割能力。' },
     nodes: [
-      { id: 'unyielding_bloodrage', name: '血怒', maxLevel: 1, desc: '生命值每降低 10%，造成的伤害 +3%。' },
-      { id: 'unyielding_battlecry', name: '战吼', maxLevel: 1, desc: '受伤时 20% 概率触发：3 秒内伤害 +15%。' },
-      { id: 'unyielding_duel', name: '死斗', maxLevel: 1, desc: '生命值低于 30% 时，攻击速度 +25%。' }
+      { id: 'unyielding_bloodrage', name: '血怒', maxLevel: 3, desc: '生命越低伤害越高。' },
+      { id: 'unyielding_battlecry', name: '战吼', maxLevel: 3, desc: '受伤后短时间提高伤害。' },
+      { id: 'unyielding_hamstring', name: '断筋', maxLevel: 3, desc: '近距离命中使敌人减速。' },
+      { id: 'unyielding_sunder', name: '破甲', maxLevel: 3, desc: '持续命中同一目标时提高对其伤害。' },
+      { id: 'unyielding_standfast', name: '不退', maxLevel: 3, desc: '近距离时获得减伤与抗击退。' },
+      { id: 'unyielding_executioner', name: '处决本能', maxLevel: 3, desc: '对低血敌人造成额外伤害。' }
     ],
     ultimate: { id: 'unyielding_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -131,10 +141,14 @@ export const TREE_DEFS = [
     id: 'curse',
     name: '术士-副',
     color: resolveClassColor('warlock'),
-    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，获得死灵共鸣：召唤物伤害 +12%、生命值 +10%，并解锁亡灵召唤强化。' },
+    core: { id: 'off_curse', name: '选择：诅咒', maxLevel: 1, desc: '作为副职业，获得亡灵军势：逐步召唤骷髅，并通过死亡触发滚雪球收益。' },
     nodes: [
+      { id: 'curse_necrotic_vitality', name: '死灵共鸣', maxLevel: 3, desc: '提高召唤物生命。' },
       { id: 'curse_skeleton_guard', name: '骷髅卫士', maxLevel: 3, desc: '召唤骷髅卫士协同近战。等级 1/2/3 时上限为 1/3/5。' },
-      { id: 'curse_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '召唤骷髅法师跟随作战。等级 1/2/3 时上限为 1/3/5。' }
+      { id: 'curse_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '召唤骷髅法师跟随作战。等级 1/2/3 时上限为 1/3/5。' },
+      { id: 'curse_mage_empower', name: '白骨灌能', maxLevel: 3, desc: '强化骷髅法师输出。' },
+      { id: 'curse_guard_bulwark', name: '骸骨壁垒', maxLevel: 3, desc: '强化骷髅卫士生存与拦截能力。' },
+      { id: 'curse_ember_echo', name: '魂火余烬', maxLevel: 3, desc: '召唤物死亡后为你提供短时间增伤或减伤。' }
     ],
     ultimate: { id: 'curse_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -142,11 +156,14 @@ export const TREE_DEFS = [
     id: 'guardian',
     name: '圣骑士-副',
     color: resolveClassColor('paladin'),
-    core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，提供格挡、减伤与反击。' },
+    core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，获得格挡与圣印：承伤会转化为反击和护盾收益。' },
     nodes: [
-      { id: 'guardian_block', name: '坚盾', maxLevel: 1, desc: '5% 概率格挡，格挡时减伤 50%。' },
-      { id: 'guardian_armor', name: '护甲', maxLevel: 1, desc: '所有受到的伤害 -3（固定减伤）。' },
-      { id: 'guardian_counter', name: '反制', maxLevel: 1, desc: '格挡成功后反击造成 100% 攻击力伤害。' }
+      { id: 'guardian_block', name: '坚盾', maxLevel: 3, desc: '概率格挡，格挡时减伤。' },
+      { id: 'guardian_armor', name: '护甲', maxLevel: 3, desc: '固定减伤。' },
+      { id: 'guardian_counter', name: '反制', maxLevel: 3, desc: '格挡成功后触发反击。' },
+      { id: 'guardian_sacred_seal', name: '庇护圣印', maxLevel: 3, desc: '受击或格挡时积累圣印。' },
+      { id: 'guardian_holy_rebuke', name: '神圣回击', maxLevel: 3, desc: '消耗圣印触发范围冲击。' },
+      { id: 'guardian_light_fortress', name: '光铸壁垒', maxLevel: 3, desc: '低血时把圣印转为护盾。' }
     ],
     ultimate: { id: 'guardian_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   },
@@ -154,14 +171,14 @@ export const TREE_DEFS = [
     id: 'nature',
     name: '德鲁伊-副',
     color: resolveClassColor('druid'),
-    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，获得自然亲和：受到治疗效果 +12%，并逐步召唤熊灵、战鹰、树精。' },
+    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，获得自然伙伴：逐步召唤熊灵、战鹰、树精协同作战。' },
     nodes: [
-      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 1, desc: '召唤熊灵协同作战，负责扛伤与近战压制。' },
-      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 1, desc: '召唤战鹰协同作战，负责持续高频打击。' },
-      { id: 'druid_pet_treant', name: '树精', maxLevel: 1, desc: '召唤树精协同作战，负责周期治疗与续航。' },
-      { id: 'nature_bear_vitality', name: '熊灵厚甲', maxLevel: 3, desc: '熊灵生命值提高 +25%/+50%/+75%。' },
-      { id: 'nature_hawk_swiftness', name: '鹰击疾掠', maxLevel: 3, desc: '战鹰攻击间隔缩短 12%/24%/36%。' },
-      { id: 'nature_treant_bloom', name: '林灵繁茂', maxLevel: 3, desc: '树精单次治疗量提高 +2/+4/+6。' }
+      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 3, desc: '召唤熊灵协同作战，负责前排拦截。' },
+      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 3, desc: '召唤战鹰协同作战，负责高频输出。' },
+      { id: 'druid_pet_treant', name: '树精', maxLevel: 3, desc: '召唤树精协同作战，负责治疗与护盾。' },
+      { id: 'nature_bear_guard', name: '熊灵守护', maxLevel: 3, desc: '强化熊灵承担伤害与拦截能力。' },
+      { id: 'nature_hawk_huntmark', name: '战鹰猎印', maxLevel: 3, desc: '强化战鹰标记与增伤。' },
+      { id: 'nature_treant_bloom', name: '树精繁茂', maxLevel: 3, desc: '强化树精治疗与护盾。' }
     ],
     ultimate: { id: 'nature_ultimate', name: '（预留）', maxLevel: 1, desc: '预留。' }
   }
@@ -236,31 +253,49 @@ export const SKILL_TO_TREE = {
   off_ranger: 'ranger',
   off_unyielding: 'unyielding',
   off_curse: 'curse',
+  curse_necrotic_vitality: 'curse',
   off_guardian: 'guardian',
   off_nature: 'nature',
 
   // 副职业通用：奥术
-  arcane_swift: 'arcane',
   arcane_circle: 'arcane',
+  arcane_circle_range: 'arcane',
+  arcane_fire_circle: 'arcane',
+  arcane_frost_circle: 'arcane',
+  arcane_resonance_mark: 'arcane',
+  arcane_flowcasting: 'arcane',
 
   // 副职业通用：游侠
-  ranger_precise: 'ranger',
-  ranger_agile: 'ranger',
-  ranger_hunter: 'ranger',
+  ranger_snaretrap: 'ranger',
+  ranger_huntmark: 'ranger',
+  ranger_spiketrap: 'ranger',
+  ranger_blasttrap: 'ranger',
+  ranger_trapcraft: 'ranger',
+  ranger_pack_hunter: 'ranger',
 
   // 副职业通用：不屈
   unyielding_bloodrage: 'unyielding',
   unyielding_battlecry: 'unyielding',
-  unyielding_duel: 'unyielding',
+  unyielding_hamstring: 'unyielding',
+  unyielding_sunder: 'unyielding',
+  unyielding_standfast: 'unyielding',
+  unyielding_executioner: 'unyielding',
 
   // 副职业通用：诅咒
+  off_curse: 'curse',
   curse_skeleton_guard: 'curse',
   curse_skeleton_mage: 'curse',
+  curse_mage_empower: 'curse',
+  curse_guard_bulwark: 'curse',
+  curse_ember_echo: 'curse',
 
   // 副职业通用：守护
   guardian_block: 'guardian',
   guardian_armor: 'guardian',
   guardian_counter: 'guardian',
+  guardian_sacred_seal: 'guardian',
+  guardian_holy_rebuke: 'guardian',
+  guardian_light_fortress: 'guardian',
 
   // 副职业通用：自然伙伴（契约）
   druid_pet_bear: 'nature',
@@ -268,8 +303,8 @@ export const SKILL_TO_TREE = {
   druid_pet_treant: 'nature',
 
   // 副职业通用：自然伙伴（宠物强化）
-  nature_bear_vitality: 'nature',
-  nature_hawk_swiftness: 'nature',
+  nature_bear_guard: 'nature',
+  nature_hawk_huntmark: 'nature',
   nature_treant_bloom: 'nature'
   ,
 

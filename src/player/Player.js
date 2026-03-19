@@ -219,6 +219,11 @@ export default class Player extends Phaser.GameObjects.Container {
     // 通用被动（副职业派系）
     this.universalFireRateMult = 1;
     this.universalDamageMult = 1;
+    this.offEntryDamageMult = 1;
+    this.offEntryDamageReduction = 0;
+    this.offEntryDodgeChance = 0;
+    this.offEntryCritChance = 0;
+    this.offEntryRegenRatioPerSec = 0;
     this.dodgeChance = 0;
     this.equipmentDodgeChance = 0;
     this.blockChance = 0;
@@ -231,18 +236,70 @@ export default class Player extends Phaser.GameObjects.Container {
     // 约定：itemId -> cooldownUntilGameplayMs（可暂停的局内时钟）
     this.itemCooldowns = Object.create(null);
 
-    // 奥术：法阵（站立不动 2 秒后启用）
+    // 副职业：奥术法阵、陷阱、圣印、魂火等运行态
     this.arcaneCircleEnabled = false;
-    this._arcaneStillMs = 0;
-    this.arcaneCircleActive = false;
+    this.arcaneCircleLevel = 0;
+    this.arcaneCircleRangeLevel = 0;
+    this.arcaneFireCircleLevel = 0;
+    this.arcaneFrostCircleLevel = 0;
+    this.arcaneResonanceMarkLevel = 0;
+    this.arcaneFlowcastingLevel = 0;
+    this.arcaneCircleState = null;
+    this.arcaneCircleBuffActive = false;
+    this.arcaneFlowUntil = 0;
+    this.arcaneCircleInsideLastFrame = false;
+
+    this.rangerSnareTrapLevel = 0;
+    this.rangerHuntmarkLevel = 0;
+    this.rangerSpikeTrapLevel = 0;
+    this.rangerBlastTrapLevel = 0;
+    this.rangerTrapcraftLevel = 0;
+    this.rangerPackHunterLevel = 0;
+
+    this.guardianBlockLevel = 0;
+    this.guardianBlockBonus = 0;
+    this.guardianCounterLevel = 0;
+    this.guardianSacredSealLevel = 0;
+    this.guardianSealStacks = 0;
+    this.guardianSealMaxStacks = 0;
+    this.guardianSealUntil = 0;
+    this.guardianHolyRebukeLevel = 0;
+    this.guardianLightFortressLevel = 0;
+    this.guardianBarrierHp = 0;
+    this.curseSkeletonGuardLevel = 0;
+    this.curseSkeletonMageLevel = 0;
+    this.unyieldingBloodrageLevel = 0;
+    this.unyieldingBattlecryLevel = 0;
+    this.unyieldingHamstringLevel = 0;
+    this.unyieldingSunderLevel = 0;
+    this.unyieldingStandfastLevel = 0;
+    this.unyieldingExecutionerLevel = 0;
+    this.unyieldingStandfastActive = false;
+
+    this.curseNecroticVitalityLevel = 0;
+    this.curseMageEmpowerLevel = 0;
+    this.curseGuardBulwarkLevel = 0;
+    this.curseEmberEchoLevel = 0;
+    this.curseEmberStacks = 0;
+    this.curseEmberUntil = 0;
+
+    this.druidPetBearLevel = 0;
+    this.druidPetHawkLevel = 0;
+    this.druidPetTreantLevel = 0;
+    this.natureBearGuardLevel = 0;
+    this.natureHawkHuntmarkLevel = 0;
+    this.natureTreantBloomLevel = 0;
 
     // 不屈：战吼（受伤触发临时增伤）
     this.battlecryEnabled = false;
     this.battlecryUntil = 0;
+    this.battlecryBonus = 0.15;
 
     // 不屈：死斗（低血加速）
     this.deathDuelEnabled = false;
     this.deathDuelFireRateMult = 1;
+    this.bloodrageEnabled = false;
+    this.bloodragePerStack = 0.03;
 
     // 主职业保命 CD：低血临时状态
     this.emergencyMitigationUntil = 0;
@@ -1064,24 +1121,52 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   updateArcaneCircle(delta, isMoving) {
-    if (!this.arcaneCircleEnabled) return;
-
-    if (isMoving) {
-      this._arcaneStillMs = 0;
-      if (this.arcaneCircleActive) {
-        this.arcaneCircleActive = false;
-        this.universalDamageMult = 1;
-        this.applyStatMultipliers(this.equipmentMods);
-      }
+    if (!this.arcaneCircleEnabled || (this.arcaneCircleLevel || 0) <= 0) {
+      this.arcaneFlowUntil = 0;
+      this.arcaneCircleInsideLastFrame = false;
+      this.setArcaneCircleBuffActive(false);
       return;
     }
 
-    this._arcaneStillMs = (this._arcaneStillMs || 0) + delta;
-    if (!this.arcaneCircleActive && this._arcaneStillMs >= 2000) {
-      this.arcaneCircleActive = true;
-      this.universalDamageMult = 1.2;
-      this.applyStatMultipliers(this.equipmentMods);
+    const state = this.arcaneCircleState;
+    if (!state || !Number.isFinite(state.x) || !Number.isFinite(state.y) || !Number.isFinite(state.radius)) {
+      this.arcaneFlowUntil = 0;
+      this.arcaneCircleInsideLastFrame = false;
+      this.setArcaneCircleBuffActive(false);
+      return;
     }
+
+    const now = this.scene?.time?.now ?? 0;
+    const circleActive = (state.endsAt || 0) > now;
+
+    const dx = this.x - state.x;
+    const dy = this.y - state.y;
+    const inside = (dx * dx + dy * dy) <= (state.radius * state.radius);
+    const retainMs = [0, 1200, 2000, 3000][Math.max(0, Math.min(3, this.arcaneFlowcastingLevel || 0))] || 0;
+
+    if (circleActive && !inside && this.arcaneCircleInsideLastFrame && retainMs > 0) {
+      this.arcaneFlowUntil = now + retainMs;
+    }
+
+    if (inside) {
+      this.arcaneFlowUntil = Math.max(this.arcaneFlowUntil || 0, now + 120);
+    }
+
+    this.arcaneCircleInsideLastFrame = inside && circleActive;
+    const retainActive = (this.arcaneFlowUntil || 0) > now;
+    this.setArcaneCircleBuffActive(inside || retainActive);
+  }
+
+  setArcaneCircleBuffActive(active) {
+    const nextActive = !!active;
+    if (this.arcaneCircleBuffActive === nextActive) return;
+
+    this.arcaneCircleBuffActive = nextActive;
+
+    const baseBonus = [0, 0.08, 0.16, 0.24][Math.max(0, Math.min(3, this.arcaneCircleLevel || 0))] || 0;
+    const resonanceBonus = [0, 0.06, 0.12, 0.18][Math.max(0, Math.min(3, this.arcaneResonanceMarkLevel || 0))] || 0;
+    this.universalDamageMult = nextActive ? (1 + baseBonus + resonanceBonus) : 1;
+    this.applyStatMultipliers(this.equipmentMods || {});
   }
 
   updateDirection(velocityX, velocityY) {
@@ -1291,6 +1376,49 @@ export default class Player extends Phaser.GameObjects.Container {
 
     let finalDamage = resolved.finalDamage;
     const blocked = !!resolved.blocked;
+
+    const bearGuardLevel = Math.max(0, Math.min(3, Math.round(this.natureBearGuardLevel || 0)));
+    const bearGuardPet = bearGuardLevel > 0 ? this.scene?.petManager?.getTankPet?.() : null;
+    if (finalDamage > 0 && bearGuardPet?.active && (bearGuardPet.currentHp || 0) > 0) {
+      const shareRatio = [0, 0.08, 0.16, 0.24][bearGuardLevel] || 0;
+      const sharedDamage = Math.min(
+        Math.max(0, Math.round(finalDamage * shareRatio)),
+        Math.max(0, Math.round(bearGuardPet.currentHp || 0))
+      );
+      if (sharedDamage > 0) {
+        finalDamage = Math.max(0, finalDamage - sharedDamage);
+        bearGuardPet.currentHp = Math.max(0, Math.round((bearGuardPet.currentHp || 0) - sharedDamage));
+        if (this.scene?.showDamageNumber) {
+          this.scene.showDamageNumber(bearGuardPet.x, bearGuardPet.y - 34, `替${sharedDamage}`, { color: '#caa472', fontSize: 18, whisper: true });
+        }
+        if ((bearGuardPet.currentHp || 0) <= 0) {
+          this.scene?.petManager?.onPetKilled?.(bearGuardPet.petType);
+        } else if (bearGuardLevel >= 3) {
+          this.scene?.triggerNatureBearGuardQuake?.(bearGuardPet);
+        }
+      }
+    }
+
+    if (this.guardianSacredSealLevel > 0) {
+      this.guardianSealMaxStacks = 2 + this.guardianSacredSealLevel;
+      this.guardianSealStacks = Math.min(this.guardianSealMaxStacks, (this.guardianSealStacks || 0) + 1);
+      this.guardianSealUntil = gameplayNow + 6000;
+    }
+
+    this.tryTriggerGuardianLightFortress(finalDamage);
+
+    if ((this.guardianBarrierHp || 0) > 0 && finalDamage > 0) {
+      const absorbed = Math.min(finalDamage, Math.max(0, Math.round(this.guardianBarrierHp || 0)));
+      this.guardianBarrierHp = Math.max(0, Math.round((this.guardianBarrierHp || 0) - absorbed));
+      finalDamage -= absorbed;
+      if (absorbed > 0 && this.scene?.showDamageNumber) {
+        this.scene.showDamageNumber(this.x, this.y - 60, `盾${absorbed}`, { color: '#9bd7ff', fontSize: 18, whisper: true });
+      }
+    }
+
+    if (this.guardianHolyRebukeLevel > 0 && this.guardianSealStacks >= this.guardianSealMaxStacks) {
+      this.scene?.triggerGuardianHolyRebuke?.({ blocked, source: 'guardian_sacred_seal' });
+    }
 
     if (this.shieldCharges > 0) {
       console.log('[takeDamage] 护盾挡住了伤害');
@@ -1536,7 +1664,8 @@ export default class Player extends Phaser.GameObjects.Container {
 
   updatePassiveRegen(delta) {
     if (!this.isAlive) return;
-    const regenPerSec = Math.max(0, Number(this.passiveRegenPerSec || 0));
+    const regenPerSec = Math.max(0, Number(this.passiveRegenPerSec || 0))
+      + Math.max(0, Number(this.offEntryRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0));
     if (regenPerSec <= 0 || this.hp >= this.maxHp) return;
     this.heal(regenPerSec * Math.max(0, Number(delta || 0)) / 1000);
   }
@@ -1728,7 +1857,7 @@ export default class Player extends Phaser.GameObjects.Container {
   applyEquipmentEffects(effects) {
     // 非派生型数值（暴击、吸血、护盾、闪避）仍然统一从规范化结果回写
     const resolved = normalizeStatMods(effects);
-    this.critChance = this.baseCritChance + resolved.critChance;
+    this.critChance = this.baseCritChance + resolved.critChance + Math.max(0, Number(this.offEntryCritChance || 0));
     this.critMultiplier = this.baseCritMultiplier + resolved.critMultiplier;
     this.lifestealPercent = resolved.lifestealPercent;
     this.magnetRadius = this.baseMagnetRadius + resolved.magnetRadius;
@@ -1906,6 +2035,38 @@ export default class Player extends Phaser.GameObjects.Container {
     if (healAmount > 0) {
       this.heal(healAmount);
     }
+  }
+
+  onUndeadSummonDeath() {
+    if ((this.curseEmberEchoLevel || 0) <= 0 || !this.scene?.time) return;
+
+    const addStacks = [0, 1, 1, 2][Math.max(0, Math.min(3, this.curseEmberEchoLevel || 0))] || 0;
+    const maxStacks = [0, 3, 5, 6][Math.max(0, Math.min(3, this.curseEmberEchoLevel || 0))] || 0;
+    this.curseEmberStacks = Math.min(maxStacks, (this.curseEmberStacks || 0) + addStacks);
+    this.curseEmberUntil = (this.scene.time.now || 0) + 6000;
+  }
+
+  tryTriggerGuardianLightFortress(incomingDamage = 0) {
+    if ((this.guardianLightFortressLevel || 0) <= 0) return 0;
+    if ((this.guardianSealStacks || 0) <= 0) return 0;
+    if ((this.guardianBarrierHp || 0) > 0) return 0;
+
+    const predictedHp = Math.max(0, (this.hp || 0) - Math.max(0, Number(incomingDamage || 0)));
+    if (predictedHp > (this.maxHp || 1) * 0.3) return 0;
+
+    const perSealRatio = [0, 0.04, 0.06, 0.08][Math.max(0, Math.min(3, this.guardianLightFortressLevel || 0))] || 0;
+    const barrier = Math.max(0, Math.round((this.maxHp || 1) * perSealRatio * (this.guardianSealStacks || 0)));
+    if (barrier <= 0) return 0;
+
+    this.guardianBarrierHp = barrier;
+    this.guardianSealStacks = 0;
+    this.guardianSealUntil = 0;
+
+    if (this.scene?.showDamageNumber) {
+      this.scene.showDamageNumber(this.x, this.y - 68, `护盾+${barrier}`, { color: '#b8f2ff', fontSize: 18, whisper: true });
+    }
+
+    return barrier;
   }
 
   /**

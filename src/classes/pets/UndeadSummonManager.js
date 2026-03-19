@@ -56,11 +56,24 @@ export default class UndeadSummonManager {
   }
 
   getSummonHealthMultiplier() {
-    return Math.max(0.1, Number(this.player?.summonHealthMultiplier) || 1);
+    const necroticBonus = [0, 0.12, 0.24, 0.36][Math.max(0, Math.min(3, Math.round(this.player?.curseNecroticVitalityLevel || 0)))] || 0;
+    return Math.max(0.1, (Number(this.player?.summonHealthMultiplier) || 1) * (1 + necroticBonus));
   }
 
   getSummonDamageMultiplier() {
     return Math.max(0.1, Number(this.player?.summonDamageMultiplier) || 1);
+  }
+
+  getGuardBonusHealthMultiplier() {
+    return [1, 1.2, 1.4, 1.6][Math.max(0, Math.min(3, Math.round(this.player?.curseGuardBulwarkLevel || 0)))] || 1;
+  }
+
+  getGuardDamageTakenMultiplier() {
+    return [1, 0.9, 0.85, 0.8][Math.max(0, Math.min(3, Math.round(this.player?.curseGuardBulwarkLevel || 0)))] || 1;
+  }
+
+  getMageBonusDamageMultiplier() {
+    return [1, 1.15, 1.3, 1.45][Math.max(0, Math.min(3, Math.round(this.player?.curseMageEmpowerLevel || 0)))] || 1;
   }
 
   refreshSummonStats() {
@@ -71,9 +84,12 @@ export default class UndeadSummonManager {
 
         let nextMaxHp = unit.maxHp || 1;
         if (unit.summonType === SUMMON_TYPES.guard) {
-          nextMaxHp = Math.max(24, Math.round((this.player?.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier()));
+          nextMaxHp = Math.max(24, Math.round((this.player?.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier() * this.getGuardBonusHealthMultiplier()));
+          unit.damageTakenMult = this.getGuardDamageTakenMultiplier();
         } else if (unit.summonType === SUMMON_TYPES.mage) {
           nextMaxHp = Math.max(12, Math.round((this.player?.maxHp || 100) * 0.18 * this.getSummonHealthMultiplier()));
+          unit.damageMult = 0.42 * this.getMageBonusDamageMultiplier();
+          unit.attackCooldownMs = Math.round(1450 * ((this.player?.curseMageEmpowerLevel || 0) >= 3 ? 0.85 : 1));
         }
 
         const missing = Math.max(0, (unit.maxHp || nextMaxHp) - (unit.currentHp || 0));
@@ -243,6 +259,7 @@ export default class UndeadSummonManager {
     const next = list.filter((entry) => entry !== unit && entry?.active);
     this.units.set(type, next);
     this.destroyUnit(unit);
+    this.player?.onUndeadSummonDeath?.();
 
     if (this.getDesiredCount(type) > next.length) {
       const now = this.scene.time?.now ?? 0;
@@ -276,12 +293,13 @@ export default class UndeadSummonManager {
     unit.summonType = SUMMON_TYPES.guard;
     unit.isUndeadSummon = true;
     unit.hitRadius = 13;
-    unit.maxHp = Math.max(24, Math.round((this.player.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier()));
+    unit.maxHp = Math.max(24, Math.round((this.player.maxHp || 100) * 0.32 * this.getSummonHealthMultiplier() * this.getGuardBonusHealthMultiplier()));
     unit.currentHp = unit.maxHp;
     unit.moveSpeed = 210;
     unit.attackRange = 20;
     unit.attackCooldownMs = 950;
     unit.damageMult = 0.52;
+    unit.damageTakenMult = this.getGuardDamageTakenMultiplier();
     unit.attackWindupMs = 150;
     unit.attackArcRadius = 28;
     unit.attackArcThickness = 10;
@@ -313,9 +331,9 @@ export default class UndeadSummonManager {
     unit.maxHp = Math.max(12, Math.round((this.player.maxHp || 100) * 0.18 * this.getSummonHealthMultiplier()));
     unit.currentHp = unit.maxHp;
     unit.followLerp = 0.12;
-    unit.attackCooldownMs = 1450;
+    unit.attackCooldownMs = Math.round(1450 * ((this.player?.curseMageEmpowerLevel || 0) >= 3 ? 0.85 : 1));
     unit.projectileSpeed = 320;
-    unit.damageMult = 0.42;
+    unit.damageMult = 0.42 * this.getMageBonusDamageMultiplier();
     unit.orbitPhase = angle;
     unit.orbitRadius = 58;
     unit.lastAttackAt = 0;

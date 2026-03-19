@@ -106,6 +106,8 @@ export default class PetManager {
       const missing = Math.max(0, (bear.maxHp || nextMaxHp) - (bear.currentHp || 0));
       bear.maxHp = nextMaxHp;
       bear.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+      bear.moveSpeed = 205 + (this.player.druidPetBearLevel || 0) * 12;
+      bear.damageMult = 0.92 + (this.player.druidPetBearLevel || 0) * 0.2 + (this.player.natureBearGuardLevel || 0) * 0.05;
     }
 
     const treant = this.active.get(PET_TYPES.treant);
@@ -118,13 +120,15 @@ export default class PetManager {
   }
 
   getBearMaxHp() {
-    const vitalityLevel = this.player?.natureBearVitalityLevel || 0;
-    const hpMultiplier = 0.85 + vitalityLevel * 0.25;
+    const petLevel = this.player?.druidPetBearLevel || 0;
+    const guardLevel = this.player?.natureBearGuardLevel || 0;
+    const hpMultiplier = 0.72 + petLevel * 0.18 + guardLevel * 0.08;
     return Math.max(25, Math.round((this.player?.maxHp || 100) * hpMultiplier));
   }
 
   getTreantMaxHp() {
-    return Math.max(10, Math.round((this.player?.maxHp || 100) * 0.18));
+    const petLevel = this.player?.druidPetTreantLevel || 0;
+    return Math.max(10, Math.round((this.player?.maxHp || 100) * (0.18 + petLevel * 0.03)));
   }
 
   getTankPet() {
@@ -545,15 +549,27 @@ export default class PetManager {
 
     // 100% 命中：直接结算伤害（超快弹道风味）
     const focusMult = (this.focusUntil && time < this.focusUntil) ? 0.75 : 1;
-    const hawkSwiftnessLevel = this.player?.natureHawkSwiftnessLevel || 0;
-    const hawkAttackCd = Math.max(220, Math.round(this.hawkAttackCd * (1 - hawkSwiftnessLevel * 0.12)));
+    const hawkLevel = this.player?.druidPetHawkLevel || 0;
+    const hawkAttackCd = Math.max(220, Math.round(this.hawkAttackCd * (1 - hawkLevel * 0.12)));
     if (time - this.lastHawkAttackAt >= hawkAttackCd * focusMult) {
       this.lastHawkAttackAt = time;
       if (!target.isInvincible) {
-        const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * 0.22)), now: time });
+        const damageScale = 0.18 + hawkLevel * 0.05;
+        const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: Math.max(1, Math.round((this.player.bulletDamage || 30) * damageScale)), now: time });
         target.takeDamage(damageResult.amount);
         this.player?.onDealDamage?.(damageResult.amount);
         this.scene.showDamageNumber(target.x, target.y - 34, damageResult.amount, { color: '#aee8ff', fontSize: 22, whisper: true, isCrit: damageResult.isCrit });
+
+        const huntmarkLevel = Math.max(0, Math.min(3, this.player?.natureHawkHuntmarkLevel || 0));
+        if (huntmarkLevel > 0) {
+          const againstBoss = !!target?.bossSize;
+          const bossChance = [0, 0.45, 0.7, 1][huntmarkLevel] || 0;
+          if (!againstBoss || Math.random() < bossChance) {
+            target.debuffs = target.debuffs || {};
+            target.debuffs.natureHawkMarkUntil = time + 2600 + huntmarkLevel * 400;
+            target.debuffs.natureHawkMarkMult = [1, 1.08, 1.16, 1.24][huntmarkLevel] || 1.08;
+          }
+        }
 
         // 一道极短的“啄击光线”
         const line = this.scene.add.line(0, 0, pet.x, pet.y, target.x, target.y, 0xaee8ff, 0.55);
@@ -591,15 +607,23 @@ export default class PetManager {
     if (now < (pet.healPausedUntil || 0)) return;
 
     // 树精：回春（影响治疗节奏）
+    const petLevel = this.player?.druidPetTreantLevel || 0;
     const bloomLevel = this.player?.natureTreantBloomLevel || 0;
-    this.treantHealCd = 3000;
+    this.treantHealCd = Math.max(1700, 3000 - petLevel * 260);
 
     if (now - this.lastTreantHealAt >= this.treantHealCd) {
       this.lastTreantHealAt = now;
-      const amount = 3 + bloomLevel * 2;
+      const amount = Math.max(1, Math.round((4 + petLevel * 2) * (1 + bloomLevel * 0.15)));
       if (this.player?.heal) {
         this.player.heal(amount);
         this.scene.showDamageNumber(this.player.x, this.player.y - 60, `+${amount}`, { color: '#88ffcc', fontSize: 22, whisper: true });
+
+        const shieldChance = [0, 0.15, 0.30, 0.45][Math.max(0, Math.min(3, bloomLevel))] || 0;
+        if (shieldChance > 0 && Math.random() < shieldChance) {
+          const barrierAmount = Math.max(1, Math.round((this.player.maxHp || 100) * 0.02));
+          this.player.guardianBarrierHp = Math.max(0, Math.round((this.player.guardianBarrierHp || 0) + barrierAmount));
+          this.scene.showDamageNumber(this.player.x, this.player.y - 82, `盾+${barrierAmount}`, { color: '#b4f0d3', fontSize: 18, whisper: true });
+        }
 
         const ring = this.scene.add.circle(this.player.x, this.player.y, 16, 0x88ffcc, 0.12);
         ring.setStrokeStyle(2, 0x88ffcc, 0.35);
