@@ -136,7 +136,8 @@ export default class Player extends Phaser.GameObjects.Container {
     
     // 玩家属性
     this.hp = 100;
-    this.maxHp = 100;
+    this.baseMaxHp = 100;
+    this.maxHp = this.baseMaxHp;
     this.isAlive = true;
     this.isInvincible = false; // 受伤后短暂无敌
     this.invincibleTime = 1500; // 无敌时长（毫秒）- 增加到1.5秒以避免持续扣血
@@ -222,6 +223,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.equipmentDodgeChance = 0;
     this.blockChance = 0;
     this.flatDamageReduction = 0;
+    this.damageReductionPercent = 0;
+    this.dodgePercent = 0;
     this.counterOnBlock = false;
 
     // 物品（消耗品）冷却
@@ -252,6 +255,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.emergencyRegenPerMs = 0;
     this.emergencyRegenRemaining = 0;
     this.emergencyRegenCarry = 0;
+    this.passiveRegenPerSec = 0;
     this.regenPerSec = 0;
     this._emergencyFxAngle = 0;
 
@@ -277,6 +281,12 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 术士：剧毒新星半径（范围圈提示脚下 AoE）
     this.warlockPoisonNovaRadiusBase = 96;
+    this.warlockPoisonNovaRadius = this.warlockPoisonNovaRadiusBase;
+    this.warlockRange = this.warlockPoisonNovaRadiusBase;
+
+    // 战士：近战基础索敌/挥砍范围
+    this.warriorRangeBase = 220;
+    this.warriorRange = this.warriorRangeBase;
 
     // 猎人基础技能（箭矢连射）
     this.archerEnabled = true;
@@ -300,10 +310,10 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerArrowBounce = 0;
 
     // 装备倍率缓存
-    this.equipmentMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1 };
+    this.equipmentMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1, maxHpFlat: 0, regenPerSec: 0, damageReductionPercent: 0, blockChance: 0 };
 
-    // 局内战利品（碎片等）倍率缓存：一次性，本局结束清空；不进入装备系统
-    this.runLootMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1 };
+    // 局内战利品倍率缓存：一次性，本局结束清空；不进入局外装备系统
+    this.runLootMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1, maxHpFlat: 0, regenPerSec: 0, damageReductionPercent: 0, blockChance: 0 };
 
     // 装备效果属性
     this.baseCritChance = 0.05;
@@ -938,6 +948,7 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     this.updateEmergencyRegen(delta, gameplayNow);
+    this.updatePassiveRegen(delta);
 
     if (this.weaponType === 'warlock_poisonnova' && this._warlockPoisonNovaForceRefresh) {
       this._warlockPoisonNovaForceRefresh = false;
@@ -1473,7 +1484,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.emergencyRegenPerMs = totalHeal / totalDurationMs;
     this.emergencyRegenRemaining = totalHeal;
     this.emergencyRegenCarry = 0;
-    this.regenPerSec = this.emergencyRegenPerMs * 1000;
+    this.regenPerSec = this.passiveRegenPerSec + this.emergencyRegenPerMs * 1000;
 
     const pulse = this.scene.add.circle(this.x, this.y, this.visualRadius + 10, 0x22c55e, 0.18).setDepth(38);
     pulse.setStrokeStyle(3, 0x86efac, 0.92);
@@ -1492,7 +1503,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.emergencyRegenPerMs = 0;
     this.emergencyRegenRemaining = 0;
     this.emergencyRegenCarry = 0;
-    this.regenPerSec = 0;
+    this.regenPerSec = this.passiveRegenPerSec;
   }
 
   updateEmergencyRegen(delta, gameplayNow) {
@@ -1521,6 +1532,13 @@ export default class Player extends Phaser.GameObjects.Container {
     if (restored > 0 && this.scene?.showDamageNumber) {
       this.scene.showDamageNumber(this.x, this.y - 52, `+${restored}`, { color: '#86efac', fontSize: 20 });
     }
+  }
+
+  updatePassiveRegen(delta) {
+    if (!this.isAlive) return;
+    const regenPerSec = Math.max(0, Number(this.passiveRegenPerSec || 0));
+    if (regenPerSec <= 0 || this.hp >= this.maxHp) return;
+    this.heal(regenPerSec * Math.max(0, Number(delta || 0)) / 1000);
   }
 
   updateEmergencyStatusEffects(time, delta, gameplayNow) {
@@ -1670,6 +1688,9 @@ export default class Player extends Phaser.GameObjects.Container {
     });
 
     // 这些字段会被武器发射、范围提示圈和 DOT 逻辑直接读取，因此统一在这里回写
+    const hpRatio = this.maxHp > 0 ? (this.hp / this.maxHp) : 1;
+    this.maxHp = derived.maxHp;
+    this.hp = Math.max(1, Math.min(this.maxHp, Math.round(this.maxHp * hpRatio)));
     this.bulletDamage = derived.bulletDamage;
     this.fireRate = derived.fireRate;
     this.moveSpeed = derived.moveSpeed;
@@ -1677,7 +1698,13 @@ export default class Player extends Phaser.GameObjects.Container {
     this.moonfireRange = derived.moonfireRange;
     this.druidStarfallRange = derived.druidStarfallRange;
     this.mageMissileRange = derived.mageMissileRange;
+    this.warriorRange = derived.warriorRange;
     this.warlockPoisonNovaRadius = derived.warlockPoisonNovaRadius;
+    this.warlockRange = derived.warlockRange;
+
+    if (this.scene?.meleeEnabled) {
+      this.scene.meleeRange = derived.warriorRange;
+    }
 
     if (this.fireTimer) {
       this.fireTimer.delay = this.fireRate;
@@ -1707,6 +1734,11 @@ export default class Player extends Phaser.GameObjects.Container {
     this.magnetRadius = this.baseMagnetRadius + resolved.magnetRadius;
     this.shieldCharges = resolved.shieldCharges;
     this.equipmentDodgeChance = resolved.dodgeChance;
+    this.dodgePercent = resolved.dodgeChance;
+    this.damageReductionPercent = resolved.damageReductionPercent;
+    this.blockChance = resolved.blockChance;
+    this.passiveRegenPerSec = resolved.regenPerSec;
+    this.regenPerSec = this.passiveRegenPerSec + (((this.emergencyRegenPerMs || 0) > 0) ? this.emergencyRegenPerMs * 1000 : 0);
     this.updateShieldIndicator();
   }
 

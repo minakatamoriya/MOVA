@@ -1,58 +1,235 @@
+export const OUTRUN_ITEM_SLOT_COUNT = 6;
+
 export const ITEM_DEFS = [
-  { id: 'damage_up', name: 'Damage +', desc: '提升攻击力', icon: '⚔️', price: 120, effects: { damageMult: 1.15 } },
-  { id: 'fire_rate', name: 'Fire Rate', desc: '提升射速', icon: '⚡', price: 140, effects: { fireRateMult: 0.85 } },
-  { id: 'move_speed', name: 'Move Speed', desc: '提升移速', icon: '👟', price: 100, effects: { speedMult: 1.15 } },
-  { id: 'shield', name: 'Shield', desc: '获得护盾', icon: '🛡️', price: 180, effects: { shieldCharges: 1 } },
-  { id: 'crit', name: 'Crit', desc: '提升暴击率', icon: '🎯', price: 160, effects: { critChance: 0.1, critMultiplier: 0.5 } },
-  { id: 'range', name: 'Range', desc: '提升攻击范围', icon: '🏹', price: 110, effects: { rangeMult: 1.12 } },
-  { id: 'lifesteal', name: 'Lifesteal', desc: '攻击吸血', icon: '🩸', price: 200, effects: { lifestealPercent: 0.05 } },
-  { id: 'magnet', name: 'Magnet', desc: '吸附掉落物', icon: '🧲', price: 90, effects: { magnetRadius: 100 } },
-
-  // ====== 局内战利品（一次性，死亡/退出清空，不进入装备系统） ======
-  // 约定：shard.pct 表示“每个碎片提供的百分比（0.01=1%）”，可叠加。
-  { id: 'shard_fire', name: '火元素碎片', desc: '攻击力 +1%（可叠加）', icon: '🔥', price: 0, kind: 'shard', effects: {}, shard: { stat: 'damage', pct: 0.01 } },
-  { id: 'shard_water', name: '水元素碎片', desc: '移动速度 +1%（可叠加）', icon: '💧', price: 0, kind: 'shard', effects: {}, shard: { stat: 'moveSpeed', pct: 0.01 } },
-  { id: 'shard_wind', name: '风元素碎片', desc: '攻击速度 +1%（可叠加）', icon: '🌪️', price: 0, kind: 'shard', effects: {}, shard: { stat: 'attackSpeed', pct: 0.01 } },
-
-  // ====== 消耗品（装备后自动触发） ======
   {
     id: 'potion_small',
     name: '血瓶',
-    desc: '生命低于50%自动使用，回复30%生命（10秒冷却）',
+    desc: '生命低于 10% 时自动使用，回复 50% 生命，30 秒冷却。可携带多个。',
     icon: '🧪',
-    price: 0,
+    price: 120,
     kind: 'consumable',
+    stackable: true,
+    maxOwned: 5,
+    carryLimit: 5,
     effects: {},
-    consumable: { mode: 'autoHeal', thresholdPct: 0.5, healPct: 0.3, cooldownMs: 10000 }
-  },
-  {
-    id: 'potion_big',
-    name: '大血瓶',
-    desc: '生命低于30%自动使用，回复50%生命（60秒冷却）',
-    icon: '🧴',
-    price: 0,
-    kind: 'consumable',
-    effects: {},
-    consumable: { mode: 'autoHeal', thresholdPct: 0.3, healPct: 0.5, cooldownMs: 60000 }
+    consumable: { mode: 'autoHeal', thresholdPct: 0.10, healPct: 0.50, cooldownMs: 30000 }
   },
   {
     id: 'revive_cross',
-    name: '复活十字章',
-    desc: '死亡后自动复活（一次性），保留当前经验/金币',
-    icon: '✝️',
-    price: 0,
+    name: '复活十字',
+    desc: '死亡后立即原地复活并回满生命。每局最多携带 1 个。',
+    icon: '✚',
+    price: 320,
     kind: 'consumable',
+    stackable: false,
+    maxOwned: 1,
+    carryLimit: 1,
     effects: {},
-    consumable: { mode: 'revive', reviveHpPct: 0.4 }
+    consumable: { mode: 'revive', reviveHpPct: 1 }
   },
-
-  // ====== 被动增益（装备后生效） ======
-  { id: 'passive_move10', name: '轻盈短靴', desc: '移动速度 +10%', icon: '移', price: 0, kind: 'passive', effects: { speedMult: 1.10 } },
-  { id: 'passive_damage10', name: '强袭徽记', desc: '攻击力 +10%', icon: '攻', price: 0, kind: 'passive', effects: { damageMult: 1.10 } },
-  { id: 'passive_as15', name: '急速指环', desc: '攻击速度 +15%', icon: '速', price: 0, kind: 'passive', effects: { fireRateMult: 0.87 } },
-  { id: 'passive_dodge5', name: '闪避饰品', desc: '闪避 +5%（触发 MISS）', icon: '闪', price: 0, kind: 'passive', effects: { dodgeChance: 0.05 } }
+  {
+    id: 'magnet',
+    name: '吸金石',
+    desc: '扩大金币吸附范围，跑图时更容易把散落金币一口气收掉。',
+    icon: '◉',
+    price: 150,
+    kind: 'utility',
+    stackable: false,
+    maxOwned: 1,
+    carryLimit: 1,
+    effects: { magnetRadius: 132 }
+  },
+  {
+    id: 'bounty_badge',
+    name: '赏金徽',
+    desc: '本局获得的金币提高 25%，偏资源型，不直接加战斗属性。',
+    icon: '¤',
+    price: 180,
+    kind: 'utility',
+    stackable: false,
+    maxOwned: 1,
+    carryLimit: 1,
+    effects: {},
+    support: { sessionCoinMult: 1.25 }
+  },
+  {
+    id: 'lucky_clover',
+    name: '幸运符',
+    desc: '提升精英与 Boss 的战利品掉率，并让高品质装备更容易出现。',
+    icon: '✧',
+    price: 220,
+    kind: 'utility',
+    stackable: false,
+    maxOwned: 1,
+    carryLimit: 1,
+    effects: {},
+    support: {
+      lootDropChanceBonus: 0.08,
+      rarityWeightBonus: { rare: 4, epic: 10, legendary: 8 }
+    }
+  },
+  {
+    id: 'boss_contract',
+    name: '讨伐契',
+    desc: 'Boss 额外掉落 1 件战利品，偏向高风险后的稳定回报。',
+    icon: '◇',
+    price: 260,
+    kind: 'utility',
+    stackable: false,
+    maxOwned: 1,
+    carryLimit: 1,
+    effects: {},
+    support: { bossExtraDropCount: 1 }
+  }
 ];
 
+const ITEM_INDEX = Object.fromEntries(ITEM_DEFS.map((item) => [item.id, item]));
+
+function clampPositiveInt(value, fallback = 0) {
+  const resolved = Math.floor(Number(value));
+  if (!Number.isFinite(resolved)) return Math.max(0, fallback);
+  return Math.max(0, resolved);
+}
+
 export function getItemById(id) {
-  return ITEM_DEFS.find(item => item.id === id) || null;
+  return ITEM_INDEX[String(id || '')] || null;
+}
+
+export function getItemMaxOwned(itemOrId) {
+  const item = typeof itemOrId === 'string' ? getItemById(itemOrId) : itemOrId;
+  if (!item) return 0;
+  return Math.max(1, clampPositiveInt(item.maxOwned, 1));
+}
+
+export function getItemCarryLimit(itemOrId) {
+  const item = typeof itemOrId === 'string' ? getItemById(itemOrId) : itemOrId;
+  if (!item) return 0;
+  return Math.max(1, clampPositiveInt(item.carryLimit, 1));
+}
+
+export function getOwnedItemCount(items, itemId) {
+  if (!Array.isArray(items) || !itemId) return 0;
+  let count = 0;
+  for (let i = 0; i < items.length; i += 1) {
+    if (items[i] === itemId) count += 1;
+  }
+  return count;
+}
+
+export function getEquippedItemCount(items, itemId) {
+  if (!Array.isArray(items) || !itemId) return 0;
+  let count = 0;
+  for (let i = 0; i < items.length; i += 1) {
+    if (items[i] === itemId) count += 1;
+  }
+  return count;
+}
+
+export function getOwnedItemIds(rawItems) {
+  if (!Array.isArray(rawItems)) return [];
+
+  const counts = Object.create(null);
+  const normalized = [];
+  for (let i = 0; i < rawItems.length; i += 1) {
+    const id = String(rawItems[i] || '');
+    const item = getItemById(id);
+    if (!item) continue;
+
+    const nextCount = (counts[id] || 0) + 1;
+    if (nextCount > getItemMaxOwned(item)) continue;
+    counts[id] = nextCount;
+    normalized.push(id);
+  }
+
+  return normalized;
+}
+
+export function normalizeEquippedItems(rawItems, ownedItems) {
+  const normalizedOwned = getOwnedItemIds(ownedItems);
+  const ownedCounts = Object.create(null);
+  normalizedOwned.forEach((id) => {
+    ownedCounts[id] = (ownedCounts[id] || 0) + 1;
+  });
+
+  const result = new Array(OUTRUN_ITEM_SLOT_COUNT).fill(null);
+  const equippedCounts = Object.create(null);
+  const source = Array.isArray(rawItems) ? rawItems : [];
+
+  for (let i = 0; i < OUTRUN_ITEM_SLOT_COUNT; i += 1) {
+    const id = String(source[i] || '');
+    const item = getItemById(id);
+    if (!item) continue;
+
+    const ownedCount = ownedCounts[id] || 0;
+    if (ownedCount <= 0) continue;
+
+    const nextCount = (equippedCounts[id] || 0) + 1;
+    if (nextCount > ownedCount) continue;
+    if (nextCount > getItemCarryLimit(item)) continue;
+
+    equippedCounts[id] = nextCount;
+    result[i] = id;
+  }
+
+  return result;
+}
+
+export function getPurchaseState(itemOrId, ownedItems, globalCoins = 0) {
+  const item = typeof itemOrId === 'string' ? getItemById(itemOrId) : itemOrId;
+  if (!item) return { ok: false, reason: 'missing' };
+
+  const ownedCount = getOwnedItemCount(ownedItems, item.id);
+  const maxOwned = getItemMaxOwned(item);
+  const price = Math.max(0, Number(item.price || 0));
+  if (ownedCount >= maxOwned) return { ok: false, reason: 'max_owned', ownedCount, maxOwned, price };
+  if (Number(globalCoins || 0) < price) return { ok: false, reason: 'not_enough_coins', ownedCount, maxOwned, price };
+  return { ok: true, reason: '', ownedCount, maxOwned, price };
+}
+
+export function getEquipState(itemOrId, ownedItems, equippedItems) {
+  const item = typeof itemOrId === 'string' ? getItemById(itemOrId) : itemOrId;
+  if (!item) return { ok: false, reason: 'missing' };
+
+  const ownedCount = getOwnedItemCount(ownedItems, item.id);
+  const equippedCount = getEquippedItemCount(equippedItems, item.id);
+  const carryLimit = getItemCarryLimit(item);
+
+  if (ownedCount <= equippedCount) {
+    return { ok: false, reason: 'no_free_copy', ownedCount, equippedCount, carryLimit };
+  }
+  if (equippedCount >= carryLimit) {
+    return { ok: false, reason: 'carry_limit', ownedCount, equippedCount, carryLimit };
+  }
+  return { ok: true, reason: '', ownedCount, equippedCount, carryLimit };
+}
+
+export function getEquippedSupportSummary(equippedItems) {
+  const list = Array.isArray(equippedItems) ? equippedItems : [];
+  const summary = {
+    sessionCoinMult: 1,
+    lootDropChanceBonus: 0,
+    rarityWeightBonus: { rare: 0, epic: 0, legendary: 0 },
+    bossExtraDropCount: 0
+  };
+
+  list.forEach((id) => {
+    const item = getItemById(id);
+    const support = item?.support;
+    if (!support) return;
+
+    if (support.sessionCoinMult) summary.sessionCoinMult *= Number(support.sessionCoinMult || 1);
+    if (support.lootDropChanceBonus) summary.lootDropChanceBonus += Number(support.lootDropChanceBonus || 0);
+    if (support.bossExtraDropCount) summary.bossExtraDropCount += clampPositiveInt(support.bossExtraDropCount, 0);
+
+    const rarityBonus = support.rarityWeightBonus;
+    if (rarityBonus && typeof rarityBonus === 'object') {
+      Object.keys(summary.rarityWeightBonus).forEach((key) => {
+        if (rarityBonus[key]) {
+          summary.rarityWeightBonus[key] += Number(rarityBonus[key] || 0);
+        }
+      });
+    }
+  });
+
+  return summary;
 }

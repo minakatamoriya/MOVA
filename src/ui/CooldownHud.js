@@ -21,9 +21,11 @@ export default class CooldownHud {
     this.depth = opts.depth ?? 2450;
     this.slotSize = opts.slotSize ?? 74;
     this.gap = opts.gap ?? 14;
+    this.leftPadding = opts.leftPadding ?? 18;
     this.rightPadding = opts.rightPadding ?? 18;
     this.bottomPadding = opts.bottomPadding ?? 8;
     this.labelGap = opts.labelGap ?? 8;
+    this.rowGap = opts.rowGap ?? 22;
 
     this.order = [];
     this.slots = new Map();
@@ -163,13 +165,12 @@ export default class CooldownHud {
     const count = visibleIds.length;
     if (!count) return;
 
-    const leftBlocked = this._getLeftBlockedWidth();
-    const leftLimit = leftBlocked + 14 + this.slotSize * 0.5;
+    const leftLimit = this.leftPadding + this.slotSize * 0.5;
     const rightLimit = cam.width - this.rightPadding - this.slotSize * 0.5;
     const availableWidth = Math.max(this.slotSize, rightLimit - leftLimit);
-    const effectiveGap = count <= 1
-      ? 0
-      : Math.max(4, Math.min(this.gap, Math.floor((availableWidth - count * this.slotSize) / Math.max(1, count - 1))));
+    const minGap = Math.max(4, this.gap);
+    const columns = Math.max(1, Math.floor((availableWidth + minGap) / (this.slotSize + minGap)));
+    const rowPitch = this.slotSize + this.labelGap + this.rowGap;
 
     const squareCenterY = cam.height - this.bottomPadding - 18 - this.slotSize * 0.5;
 
@@ -184,15 +185,15 @@ export default class CooldownHud {
     visibleIds.forEach((id, index) => {
       const slot = this.slots.get(id);
       if (!slot?.container) return;
-      slot.container.setVisible(true);
-      slot.container.setPosition(rightLimit - index * (this.slotSize + effectiveGap), squareCenterY);
-    });
-  }
 
-  _getLeftBlockedWidth() {
-    const miniMap = this.scene?.miniMap;
-    if (!miniMap) return 0;
-    return Math.max(0, Number(miniMap.x0 || 0) + Number(miniMap.w || 0) + 12);
+      const row = Math.floor(index / columns);
+      const col = index % columns;
+      const x = leftLimit + col * (this.slotSize + minGap);
+      const y = squareCenterY - row * rowPitch;
+
+      slot.container.setVisible(true);
+      slot.container.setPosition(x, y);
+    });
   }
 
   _createSlotState(config) {

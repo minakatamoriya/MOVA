@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { getItemById } from '../../data/items';
-import { calculateResolvedDamage, normalizeStatMods } from '../../combat/damageModel';
+import { getEquippedSupportSummary, getItemById } from '../../data/items';
+import { calculateResolvedDamage, combineStatMods, normalizeStatMods } from '../../combat/damageModel';
+import { formatLootEffectLines, formatLootPickupLine, getLootRarity, getLootSourceProfile, rollLootEquipment } from '../../data/lootItems';
 
 /**
- * 掉落物/背包/碎片 相关方法
+ * 掉落物/背包 相关方法
  */
 export function applyDropsInventoryMixin(GameScene) {
   Object.assign(GameScene.prototype, {
@@ -17,12 +18,16 @@ export function applyDropsInventoryMixin(GameScene) {
         fireRateMult: 1,
         speedMult: 1,
         rangeMult: 1,
+        maxHpFlat: 0,
         critChance: 0,
         critMultiplier: 0,
         lifestealPercent: 0,
         magnetRadius: 0,
         shieldCharges: 0,
-        dodgeChance: 0
+        dodgeChance: 0,
+        regenPerSec: 0,
+        damageReductionPercent: 0,
+        blockChance: 0
       };
 
       this.inventoryEquipped.forEach((item) => {
@@ -37,12 +42,143 @@ export function applyDropsInventoryMixin(GameScene) {
         if (item.effects.magnetRadius) mods.magnetRadius += item.effects.magnetRadius;
         if (item.effects.shieldCharges) mods.shieldCharges += item.effects.shieldCharges;
         if (item.effects.dodgeChance) mods.dodgeChance += item.effects.dodgeChance;
+        if (item.effects.maxHpFlat) mods.maxHpFlat += item.effects.maxHpFlat;
+        if (item.effects.regenPerSec) mods.regenPerSec += item.effects.regenPerSec;
+        if (item.effects.damageReductionPercent) mods.damageReductionPercent += item.effects.damageReductionPercent;
+        if (item.effects.blockChance) mods.blockChance += item.effects.blockChance;
       });
 
       // 规范化后可同时兼容伤害、攻速、范围和各种附加属性
       const resolvedMods = normalizeStatMods(mods);
+      const combinedMods = combineStatMods(resolvedMods, this.player.runLootMods || {});
       this.player.applyStatMultipliers(resolvedMods);
-      this.player.applyEquipmentEffects(resolvedMods);
+      this.player.applyEquipmentEffects(combinedMods);
+    },
+
+    ensureRunLootState() {
+      if (!Array.isArray(this._runLootGearItems)) this._runLootGearItems = [];
+      if (!Number.isFinite(this._runLootItemSeq)) this._runLootItemSeq = 0;
+    },
+
+    nextRunLootItemInstanceId(baseId = 'loot') {
+      this.ensureRunLootState();
+      this._runLootItemSeq += 1;
+      return `runloot_${baseId}_${this._runLootItemSeq}`;
+    },
+
+    rebuildRunLootInventory() {
+      this.ensureRunLootState();
+
+      const mergedGearMap = new Map();
+      [...this._runLootGearItems].forEach((item) => {
+        const key = `${item?.baseId || item?.id || 'loot'}::${item?.rarityId || 'common'}`;
+        if (!mergedGearMap.has(key)) {
+          mergedGearMap.set(key, {
+            ...item,
+            count: 1,
+            mergedInstanceIds: [item?.instanceId || item?.id]
+          });
+          return;
+        }
+
+        const entry = mergedGearMap.get(key);
+        entry.count = Math.max(1, Number(entry.count || 1) + 1);
+        entry.mergedInstanceIds = [...(entry.mergedInstanceIds || []), item?.instanceId || item?.id];
+        entry.desc = `${item?.rarityLabel || ''} ${item?.categoryLabel || ''}装备 x${entry.count}`.trim();
+        entry.shortDesc = `${(item?.shortDesc || '').trim()} ×${entry.count}`.trim();
+        entry.statLines = Array.isArray(item?.statLines) ? [...item.statLines] : [];
+      });
+
+      const gearItems = [...mergedGearMap.values()]
+        .sort((left, right) => {
+          const rarityDiff = Number(right?.raritySort || 0) - Number(left?.raritySort || 0);
+          if (rarityDiff !== 0) return rarityDiff;
+          const orderDiff = Number(left?.sortOrder || 0) - Number(right?.sortOrder || 0);
+          if (orderDiff !== 0) return orderDiff;
+          return String(left?.name || '').localeCompare(String(right?.name || ''), 'zh-Hans-CN');
+        });
+
+      this.inventoryAcquired = [...gearItems];
+    },
+
+    applyRunLootBonuses() {
+      const p = this.player;
+      if (!p) return;
+
+      this.ensureRunLootState();
+
+      const gearMods = this._runLootGearItems.map((item) => normalizeStatMods(item?.effects || {}));
+
+      p.runLootMods = combineStatMods(...gearMods);
+      this.applyEquippedEffects();
+      this.events.emit('updatePlayerInfo');
+    },
+
+    rollAndSpawnEquipmentDrops(source, x, y, options = {}) {
+      this.ensureRunLootState();
+      const profile = getLootSourceProfile(source);
+      const equippedIds = Array.isArray(this.registry?.get?.('equippedItems')) ? this.registry.get('equippedItems') : [];
+      const support = getEquippedSupportSummary(equippedIds);
+      const rng = typeof options.rng === 'function' ? options.rng : Math.random;
+      const count = Math.max(
+        0,
+        Number.isFinite(options.count)
+          ? Number(options.count)
+          : Phaser.Math.Between(profile.minCount, profile.maxCount) + (source === 'boss' ? Number(support.bossExtraDropCount || 0) : 0)
+      );
+      const dropChance = Phaser.Math.Clamp(Number(profile.dropChance || 0) + Number(support.lootDropChanceBonus || 0), 0, 1);
+      const rarityWeights = (Array.isArray(profile.rarityWeights) ? profile.rarityWeights : []).map((entry) => ({
+        id: entry.id,
+        weight: Math.max(0, Number(entry.weight || 0) + Number(support.rarityWeightBonus?.[entry.id] || 0))
+      }));
+      let spawned = 0;
+
+      const pickRarityId = () => {
+        const totalWeight = rarityWeights.reduce((sum, entry) => sum + Math.max(0, Number(entry.weight || 0)), 0);
+        if (totalWeight <= 0) return null;
+        let roll = rng() * totalWeight;
+        for (let i = 0; i < rarityWeights.length; i += 1) {
+          roll -= Math.max(0, Number(rarityWeights[i].weight || 0));
+          if (roll <= 0) return rarityWeights[i].id;
+        }
+        return rarityWeights[rarityWeights.length - 1]?.id || null;
+      };
+
+      if (source === 'boss') {
+        const guaranteedLegendary = rollLootEquipment({
+          source,
+          rng,
+          instanceId: this.nextRunLootItemInstanceId(source),
+          rarityId: 'legendary'
+        });
+        if (guaranteedLegendary) {
+          this.spawnItemDrop(
+            x + Phaser.Math.Between(-40, 40),
+            y + Phaser.Math.Between(-18, 22),
+            guaranteedLegendary
+          );
+          spawned += 1;
+        }
+      }
+
+      for (let index = 0; index < count; index += 1) {
+        if (rng() > dropChance) continue;
+        const item = rollLootEquipment({
+          source,
+          rng,
+          instanceId: this.nextRunLootItemInstanceId(source),
+          rarityId: pickRarityId() || undefined
+        });
+        if (!item) continue;
+        this.spawnItemDrop(
+          x + Phaser.Math.Between(-48, 48),
+          y + Phaser.Math.Between(-18, 28),
+          item
+        );
+        spawned += 1;
+      }
+
+      return spawned;
     },
 
     testAttackBoss(pointer) {
@@ -71,21 +207,9 @@ export function applyDropsInventoryMixin(GameScene) {
         this.spawnCoinDrop(dropX + Phaser.Math.Between(-40, 40), dropY + Phaser.Math.Between(-20, 20), coinValue);
       }
 
-      {
-        const shardPool = Array.isArray(this.itemPool) ? this.itemPool.filter((it) => it && it.kind === 'shard' && it.shard) : [];
-        if (shardPool.length > 0) {
-          const phases = Array.isArray(boss?.attackPatterns) ? boss.attackPatterns.length : 1;
-          const dropCount = Phaser.Math.Clamp(phases, 1, 4);
-          for (let i = 0; i < dropCount; i++) {
-            const item = Phaser.Math.RND.pick(shardPool);
-            this.spawnItemDrop(
-              dropX + Phaser.Math.Between(-60, 60),
-              dropY + Phaser.Math.Between(6, 46),
-              item
-            );
-          }
-        }
-      }
+      this.rollAndSpawnEquipmentDrops('boss', dropX, dropY, {
+        count: Phaser.Math.Between(2, 3)
+      });
     },
 
     spawnCoinDrop(x, y, amount) {
@@ -119,17 +243,84 @@ export function applyDropsInventoryMixin(GameScene) {
     },
 
     spawnItemDrop(x, y, item) {
-      const bg = this.add.rectangle(0, 0, 34, 34, 0x2b2b3f);
-      bg.setStrokeStyle(2, 0xffd700);
-      const label = this.add.text(0, 0, '🧰', {
-        fontSize: '14px',
-        color: '#ffffff'
-      }).setOrigin(0.5);
+      const rarity = getLootRarity(item?.rarityId || 'common');
+      let container = null;
 
-      const container = this.add.container(x, y, [bg, label]);
+      if (item?.kind === 'run_loot_equipment') {
+        const aura = this.add.circle(0, 0, 24, rarity.auraColor, rarity.id === 'legendary' ? 0.22 : 0.15);
+        aura.setStrokeStyle(2, rarity.borderColor, 0.55);
+
+        const base = this.add.rectangle(0, 6, 34, 22, rarity.bgColor, 0.96);
+        base.setStrokeStyle(2, rarity.borderColor, 1);
+        const lid = this.add.rectangle(0, -8, 30, 12, rarity.color, 0.92);
+        lid.setStrokeStyle(2, rarity.borderColor, 1);
+        const clasp = this.add.rectangle(0, 1, 8, 10, 0xf9e7a8, 0.95);
+        const icon = this.add.text(0, -2, item?.icon || '✦', {
+          fontSize: '16px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5);
+        const name = this.add.text(0, 26, item?.name || '', {
+          fontSize: '11px',
+          color: rarity.textColor,
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 3,
+          align: 'center'
+        }).setOrigin(0.5);
+        const showGroundName = rarity.id === 'epic' || rarity.id === 'legendary';
+        name.setAlpha(showGroundName ? 0.92 : 0);
+        name.setVisible(showGroundName);
+
+        container = this.add.container(x, y, [aura, base, lid, clasp, icon, name]);
+        aura.setBlendMode(Phaser.BlendModes.ADD);
+
+        this.tweens.add({
+          targets: lid,
+          angle: { from: -4, to: 4 },
+          duration: rarity.id === 'legendary' ? 820 : 1200,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.InOut'
+        });
+
+        if (rarity.id !== 'common') {
+          this.tweens.add({
+            targets: aura,
+            alpha: { from: 0.12, to: rarity.id === 'legendary' ? 0.35 : 0.22 },
+            duration: rarity.id === 'legendary' ? 560 : 880,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+      } else {
+        const crystal = this.add.circle(0, 0, 13, 0x243852, 0.92);
+        crystal.setStrokeStyle(2, 0x8fdcff, 1);
+        const shard = this.add.rectangle(0, 0, 10, 20, 0xbef3ff, 0.92);
+        shard.setAngle(18);
+        const label = this.add.text(0, 0, item?.icon || '✦', {
+          fontSize: '14px',
+          color: '#ffffff',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5);
+        container = this.add.container(x, y, [crystal, shard, label]);
+      }
 
       container.setScale(0.7);
+      container.setDepth(18);
       this.tweens.add({ targets: container, scale: 1, duration: 200, ease: 'Back.Out' });
+      this.tweens.add({
+        targets: container,
+        y: y - 5,
+        duration: 820,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut'
+      });
 
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const sp = Phaser.Math.Between(60, 120);
@@ -139,6 +330,7 @@ export function applyDropsInventoryMixin(GameScene) {
       const spawnData = {
         type: 'item',
         item,
+        rarity,
         sprite: container,
         velocity: { x: vx, y: vy },
         spawnX: x,
@@ -202,7 +394,7 @@ export function applyDropsInventoryMixin(GameScene) {
         const dy = drop.sprite.y - this.player.y;
         const distSq = dx * dx + dy * dy;
 
-        if (pickupRadius > 28 && distSq < pickupRadiusSq && distSq > basePickupRadiusSq) {
+        if (drop.type === 'coin' && pickupRadius > 28 && distSq < pickupRadiusSq && distSq > basePickupRadiusSq) {
           const dist = Math.sqrt(distSq) || 1;
           const speed = 320;
           drop.sprite.x -= (dx / dist) * speed * (delta / 1000);
@@ -221,6 +413,20 @@ export function applyDropsInventoryMixin(GameScene) {
         this.addSessionCoins(drop.amount);
       } else if (drop.type === 'item') {
         this.addItemToInventory(drop.item);
+
+        const burstColor = drop?.item?.kind === 'run_loot_equipment'
+          ? (drop?.rarity?.beamColor || 0xffffff)
+          : 0x8fdcff;
+        const ring = this.add.circle(drop.sprite.x, drop.sprite.y, 12, burstColor, 0.16).setDepth(22);
+        ring.setStrokeStyle(3, burstColor, 0.9);
+        this.tweens.add({
+          targets: ring,
+          scale: drop?.item?.kind === 'run_loot_equipment' ? 2.8 : 2.1,
+          alpha: 0,
+          duration: drop?.item?.kind === 'run_loot_equipment' ? 340 : 240,
+          ease: 'Cubic.Out',
+          onComplete: () => ring.destroy()
+        });
       }
 
       if (drop.sprite) {
@@ -229,28 +435,40 @@ export function applyDropsInventoryMixin(GameScene) {
     },
 
     addSessionCoins(amount) {
-      this.sessionCoins += amount;
+      const equippedIds = Array.isArray(this.registry?.get?.('equippedItems')) ? this.registry.get('equippedItems') : [];
+      const support = getEquippedSupportSummary(equippedIds);
+      const resolvedAmount = Math.max(0, Math.round(Number(amount || 0) * Number(support.sessionCoinMult || 1)));
+      this.sessionCoins += resolvedAmount;
       this.updateInfoPanel();
     },
 
     addItemToInventory(item) {
       if (!item) return;
 
-      if (item.kind === 'shard' && item.shard) {
-        if (!this._runLootShardCounts) this._runLootShardCounts = Object.create(null);
-        const prev = Math.max(0, Number(this._runLootShardCounts[item.id] || 0));
-        const next = prev + 1;
-        this._runLootShardCounts[item.id] = next;
+      this.ensureRunLootState();
 
-        this.rebuildRunLootShardInventory();
-        this.applyRunLootShardBonuses();
+      if (item.kind === 'run_loot_equipment') {
+        const gearItem = {
+          ...item,
+          id: item.instanceId || item.id || this.nextRunLootItemInstanceId(item.baseId || 'gear'),
+          instanceId: item.instanceId || item.id || this.nextRunLootItemInstanceId(item.baseId || 'gear'),
+          statLines: Array.isArray(item.statLines) && item.statLines.length > 0
+            ? item.statLines
+            : formatLootEffectLines(item.effects || {})
+        };
 
-        const text = this.formatShardPickupToast(item);
-        if (text) {
-          this.toast?.show?.({ icon: item.icon || '📦', text });
-        } else {
-          this.toast?.show?.({ icon: item.icon || '📦', text: `拾取了 ${item.name || '道具'}` });
-        }
+        this._runLootGearItems.push(gearItem);
+        this.rebuildRunLootInventory();
+        this.applyRunLootBonuses();
+
+        const pickupLine = formatLootPickupLine(gearItem.effects || {}) || gearItem.statLines[0] || '';
+        this.toast?.show?.({
+          icon: gearItem.icon || '✦',
+          title: gearItem.name,
+          value: pickupLine,
+          text: [gearItem.name, pickupLine].filter(Boolean).join(' · '),
+          variant: 'loot'
+        }, { durationMs: 2600 });
 
         this.updateInventoryUI();
         return;
@@ -268,75 +486,6 @@ export function applyDropsInventoryMixin(GameScene) {
       }
 
       this.updateInventoryUI();
-    },
-
-    rebuildRunLootShardInventory() {
-      const counts = this._runLootShardCounts || Object.create(null);
-      const getCount = (id) => Math.max(0, Number(counts[id] || 0));
-
-      const shardIdsInOrder = ['shard_fire', 'shard_water', 'shard_wind'];
-      const list = [];
-      shardIdsInOrder.forEach((id) => {
-        const c = getCount(id);
-        if (c <= 0) return;
-        const def = getItemById(id);
-        if (!def) return;
-
-        const pct = Math.round((def?.shard?.pct || 0) * 100);
-        const total = pct * c;
-        let totalText = '';
-        if (def.shard.stat === 'damage') totalText = `攻击力 +${total}%`;
-        else if (def.shard.stat === 'moveSpeed') totalText = `移动速度 +${total}%`;
-        else if (def.shard.stat === 'attackSpeed') totalText = `攻击速度 +${total}%`;
-        else totalText = `加成 +${total}%`;
-
-        list.push({
-          id: def.id,
-          icon: def.icon,
-          name: def.name,
-          desc: totalText,
-          effects: { stacks: c, totalPct: total },
-          count: c,
-          kind: def.kind,
-          shard: def.shard
-        });
-      });
-
-      this.inventoryAcquired = list;
-    },
-
-    applyRunLootShardBonuses() {
-      const p = this.player;
-      if (!p) return;
-      const counts = this._runLootShardCounts || Object.create(null);
-      const fire = Math.max(0, Number(counts.shard_fire || 0));
-      const water = Math.max(0, Number(counts.shard_water || 0));
-      const wind = Math.max(0, Number(counts.shard_wind || 0));
-
-      const damageMult = 1 + fire * 0.01;
-      const speedMult = 1 + water * 0.01;
-      const attackSpeedBonus = wind * 0.01;
-      const fireRateMult = 1 / (1 + attackSpeedBonus);
-
-      p.runLootMods = {
-        damageMult: Math.max(0.1, damageMult),
-        speedMult: Math.max(0.1, speedMult),
-        fireRateMult: Math.max(0.1, fireRateMult),
-        rangeMult: 1
-      };
-
-      p.applyStatMultipliers(p.equipmentMods || { damageMult: 1, fireRateMult: 1, speedMult: 1 });
-      this.events.emit('updatePlayerInfo');
-    },
-
-    formatShardPickupToast(item) {
-      const stat = item?.shard?.stat || '';
-      const pct = Math.round((Number(item?.shard?.pct || 0)) * 100);
-      if (!pct) return '';
-      if (stat === 'damage') return `攻击力 +${pct}%`;
-      if (stat === 'moveSpeed') return `移动速度 +${pct}%`;
-      if (stat === 'attackSpeed') return `攻击速度 +${pct}%`;
-      return `属性 +${pct}%`;
     },
 
     hasEquippedItem(itemId) {
@@ -379,6 +528,7 @@ export function applyDropsInventoryMixin(GameScene) {
       if (!this._itemCooldownReadyNotified) this._itemCooldownReadyNotified = Object.create(null);
       this._itemCooldownReadyNotified[itemId] = false;
       this.player.heal(healAmount);
+      this.consumeEquippedItem(itemId);
       this.toast?.show?.({ icon: def?.icon || '🧪', text: `使用了 ${def?.name || '消耗品'}` });
       return true;
     },
@@ -421,7 +571,7 @@ export function applyDropsInventoryMixin(GameScene) {
       if (!consumed) return false;
 
       this.player.isAlive = true;
-      this.player.hp = Math.max(1, Math.round((this.player.maxHp || 1) * 0.4));
+      this.player.hp = Math.max(1, Math.round((this.player.maxHp || 1) * Number(getItemById('revive_cross')?.consumable?.reviveHpPct || 1)));
       this.player.isInvincible = false;
       this.player.becomeInvincible();
 
@@ -456,8 +606,7 @@ export function applyDropsInventoryMixin(GameScene) {
         return this.useAutoHealConsumable(itemId, { nowMs: now });
       };
 
-      if (tryAutoHeal('potion_small')) return;
-      tryAutoHeal('potion_big');
+      tryAutoHeal('potion_small');
     },
 
     checkEquippedItemCooldownReadyToasts(nowMs) {

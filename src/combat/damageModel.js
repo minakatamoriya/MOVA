@@ -35,12 +35,16 @@ export function normalizeStatMods(mods = {}) {
     fireRateMult,
     speedMult: toMultiplier(mods.speedMult, 1),
     rangeMult: toMultiplier(mods.rangeMult, 1),
+    maxHpFlat: toNumber(mods.maxHpFlat, 0),
     critChance: toNumber(mods.critChance, 0),
     critMultiplier: toNumber(mods.critMultiplier, 0),
     lifestealPercent: toNumber(mods.lifestealPercent, 0),
     magnetRadius: toNumber(mods.magnetRadius, 0),
     shieldCharges: Math.max(0, Math.round(toNumber(mods.shieldCharges, 0))),
-    dodgeChance: toNumber(mods.dodgeChance, 0)
+    dodgeChance: toNumber(mods.dodgeChance, 0),
+    regenPerSec: toNumber(mods.regenPerSec, 0),
+    damageReductionPercent: toNumber(mods.damageReductionPercent, 0),
+    blockChance: toNumber(mods.blockChance, 0)
   };
 }
 
@@ -52,12 +56,16 @@ export function combineStatMods(...modsList) {
     acc.fireRateMult *= current.fireRateMult;
     acc.speedMult *= current.speedMult;
     acc.rangeMult *= current.rangeMult;
+    acc.maxHpFlat += current.maxHpFlat;
     acc.critChance += current.critChance;
     acc.critMultiplier += current.critMultiplier;
     acc.lifestealPercent += current.lifestealPercent;
     acc.magnetRadius += current.magnetRadius;
     acc.shieldCharges += current.shieldCharges;
     acc.dodgeChance += current.dodgeChance;
+    acc.regenPerSec += current.regenPerSec;
+    acc.damageReductionPercent += current.damageReductionPercent;
+    acc.blockChance += current.blockChance;
     return acc;
   }, normalizeStatMods());
 }
@@ -101,14 +109,17 @@ export function buildPlayerDerivedStats(player, options = {}) {
     fireRateMult,
     speedMult,
     rangeMult,
+    maxHp: Math.max(1, Math.round(toNumber(player?.baseMaxHp, player?.maxHp || 100) + equipmentMods.maxHpFlat + lootMods.maxHpFlat)),
     bulletDamage: roundDamage(toNumber(player?.baseBulletDamage, 1) * damageMult),
     fireRate: Math.max(60, Math.round(toNumber(player?.baseFireRate, 60) * fireRateMult)),
     moveSpeed: Math.max(50, Math.round(toNumber(player?.baseMoveSpeed, 50) * speedMult)),
+    warriorRange: Math.max(90, Math.round(toNumber(player?.warriorRangeBase, 220) * rangeMult)),
     archerArrowRange: Math.min(420, Math.round(archerBaseRange * rangeMult)),
     moonfireRange: Math.max(80, Math.round(toNumber(player?.moonfireRangeBase, 300) * rangeMult)),
     druidStarfallRange: Math.max(80, Math.round(toNumber(player?.druidStarfallRangeBase, 310) * rangeMult)),
     mageMissileRange: Math.max(80, Math.round(toNumber(player?.mageMissileRangeBase, player?.mageMissileRange || 280) * rangeMult)),
-    warlockPoisonNovaRadius: Math.max(24, Math.round(toNumber(player?.warlockPoisonNovaRadiusBase, 96) * rangeMult))
+    warlockPoisonNovaRadius: Math.max(24, Math.round(toNumber(player?.warlockPoisonNovaRadiusBase, 96) * rangeMult)),
+    warlockRange: Math.max(24, Math.round(toNumber(player?.warlockPoisonNovaRadiusBase, 96) * rangeMult))
   };
 }
 
@@ -226,6 +237,7 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
   }
 
   let finalDamage = Math.max(0, Math.round(toNumber(incomingDamage, 0) - toNumber(defender?.flatDamageReduction, 0)));
+  finalDamage = Math.max(0, Math.round(finalDamage * (1 - clampChance(toNumber(defender?.damageReductionPercent, 0)))));
   finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.natureDamageTakenMult, 1)));
 
   if (toNumber(defender?.emergencyMitigationUntil, 0) > now) {

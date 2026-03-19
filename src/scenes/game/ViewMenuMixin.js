@@ -513,14 +513,16 @@ export function applyViewMenuMixin(GameScene) {
 
       const createCell = (cx, cy, item, size) => {
         const container = this.add.container(cx, cy);
+        const rarityColor = Number.isFinite(Number(item?.rarityColor)) ? Number(item.rarityColor) : 0x2a2a3a;
+        const isLootGear = item?.kind === 'run_loot_equipment';
         const bg = this.textures.exists('ui_slot')
           ? this.add.image(0, 0, 'ui_slot').setDisplaySize(size, size)
-          : this.add.rectangle(0, 0, size, size, 0x1a1a2a, 0.95);
+          : this.add.rectangle(0, 0, size, size, isLootGear ? 0x121629 : 0x1a1a2a, 0.95);
         if (bg.type === 'Rectangle') {
-          bg.setStrokeStyle(2, 0x2a2a3a);
+          bg.setStrokeStyle(2, isLootGear ? rarityColor : 0x2a2a3a);
         }
         const icon = this.add.text(0, -Math.floor(size * 0.10), item?.icon || '', { fontSize: `${Math.max(18, Math.floor(size * 0.30))}px`, color: '#ffffff' }).setOrigin(0.5);
-        const name = this.add.text(0, Math.floor(size * 0.32), item?.name || '', { fontSize: `${Math.max(14, Math.floor(size * 0.18))}px`, color: '#cccccc', align: 'center', wordWrap: { width: Math.max(90, Math.floor(size * 1.6)) } }).setOrigin(0.5);
+        const name = this.add.text(0, Math.floor(size * 0.32), item?.name || '', { fontSize: `${Math.max(14, Math.floor(size * 0.18))}px`, color: item?.rarityTextColor || '#cccccc', align: 'center', wordWrap: { width: Math.max(90, Math.floor(size * 1.6)) } }).setOrigin(0.5);
 
         let badge = null;
         const count = item?.count ? Math.max(0, Number(item.count || 0)) : 0;
@@ -570,8 +572,11 @@ export function applyViewMenuMixin(GameScene) {
             return;
           }
 
-          const eff = item.effects ? JSON.stringify(item.effects) : '{}';
-          this.viewItemDetailText?.setText(`${item.icon || ''} ${item.name}\n${item.desc || ''}\n效果: ${eff}`);
+          const lines = Array.isArray(item?.statLines) && item.statLines.length > 0
+            ? item.statLines.join('\n')
+            : (item.desc || '');
+          const rarityLine = item?.rarityLabel ? `品质: ${item.rarityLabel}` : '';
+          this.viewItemDetailText?.setText(`${item.icon || ''} ${item.name}\n${rarityLine}\n${lines}`.trim());
         });
 
         return { container };

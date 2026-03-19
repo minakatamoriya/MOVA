@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ITEM_DEFS, getItemById } from '../data/items';
+import { ITEM_DEFS, getEquipState, getItemById, getOwnedItemCount, getOwnedItemIds, normalizeEquippedItems, OUTRUN_ITEM_SLOT_COUNT } from '../data/items';
 import { uiBus } from '../ui/bus';
 
 /**
@@ -15,8 +15,7 @@ export default class EquipmentScene extends Phaser.Scene {
   }
 
   getUiSnapshot() {
-    const equippedItems = Array.isArray(this.equippedItems) ? [...this.equippedItems].slice(0, 6) : new Array(6).fill(null);
-    while (equippedItems.length < 6) equippedItems.push(null);
+    const equippedItems = normalizeEquippedItems(this.equippedItems, this.ownedItems);
     return {
       ownedItems: Array.isArray(this.ownedItems) ? this.ownedItems : [],
       equippedItems
@@ -42,10 +41,23 @@ export default class EquipmentScene extends Phaser.Scene {
 
       this._uiSetSlotHandler = (slotIndex, itemId) => {
         const idx = Number(slotIndex);
-        if (!Number.isFinite(idx) || idx < 0 || idx >= 6) return;
-        if (itemId && !this.ownedItems.includes(itemId)) return;
+        if (!Number.isFinite(idx) || idx < 0 || idx >= OUTRUN_ITEM_SLOT_COUNT) return;
 
-        this.equippedItems[idx] = itemId || null;
+        if (!itemId) {
+          this.equippedItems[idx] = null;
+          this.equippedItems = normalizeEquippedItems(this.equippedItems, this.ownedItems);
+          this.registry.set('equippedItems', this.equippedItems);
+          this.emitUiSnapshot();
+          return;
+        }
+
+        const trial = normalizeEquippedItems(this.equippedItems, this.ownedItems);
+        trial[idx] = null;
+        const equipState = getEquipState(itemId, this.ownedItems, trial);
+        if (!equipState.ok) return;
+
+        trial[idx] = itemId;
+        this.equippedItems = normalizeEquippedItems(trial, this.ownedItems);
         this.registry.set('equippedItems', this.equippedItems);
         this.emitUiSnapshot();
       };
@@ -103,29 +115,13 @@ export default class EquipmentScene extends Phaser.Scene {
     }
 
     if (!this.registry.has('equippedItems')) {
-      this.registry.set('equippedItems', new Array(6).fill(null));
+      this.registry.set('equippedItems', new Array(OUTRUN_ITEM_SLOT_COUNT).fill(null));
     }
 
-    // 测试物品：默认加入背包（不强制携带），便于玩家在装备界面自行测试
-    const seeded = Array.isArray(this.registry.get('ownedItems')) ? [...this.registry.get('ownedItems')] : [];
-    const testItemIds = [
-      'potion_small',
-      'potion_big',
-      'revive_cross',
-      'passive_move10',
-      'passive_damage10',
-      'passive_as15',
-      'passive_dodge5'
-    ];
-    testItemIds.forEach((id) => {
-      if (!seeded.includes(id) && getItemById(id)) seeded.push(id);
-    });
-    this.registry.set('ownedItems', seeded);
-
-    this.ownedItems = seeded;
-    const raw = this.registry.get('equippedItems') || new Array(6).fill(null);
-    this.equippedItems = [...raw].slice(0, 6);
-    while (this.equippedItems.length < 6) this.equippedItems.push(null);
+    this.ownedItems = getOwnedItemIds(this.registry.get('ownedItems'));
+    this.equippedItems = normalizeEquippedItems(this.registry.get('equippedItems'), this.ownedItems);
+    this.registry.set('ownedItems', this.ownedItems);
+    this.registry.set('equippedItems', this.equippedItems);
   }
 
   createPanels() {
@@ -135,8 +131,8 @@ export default class EquipmentScene extends Phaser.Scene {
 
     this.ownedEntries = [];
 
-    ITEM_DEFS.forEach((item, index) => {
-      if (!this.ownedItems.includes(item.id)) return;
+    ITEM_DEFS.forEach((item) => {
+      if (getOwnedItemCount(this.ownedItems, item.id) <= 0) return;
       const y = listY + this.ownedEntries.length * listSpacing;
       const entry = this.createOwnedEntry(listX, y, item);
       this.ownedEntries.push(entry);
@@ -168,6 +164,7 @@ export default class EquipmentScene extends Phaser.Scene {
 
   createOwnedEntry(x, y, item) {
     const container = this.add.container(x, y);
+    const ownedCount = getOwnedItemCount(this.ownedItems, item.id);
 
     const bg = this.textures.exists('ui_card')
       ? this.add.image(0, 0, 'ui_card').setDisplaySize(360, 56)
@@ -190,7 +187,13 @@ export default class EquipmentScene extends Phaser.Scene {
       color: '#cccccc'
     }).setOrigin(0, 0.5);
 
-    container.add([bg, border, icon, name, desc]);
+    const count = this.add.text(150, 0, `x${ownedCount}`, {
+      fontSize: '18px',
+      color: '#ffd36b',
+      fontStyle: 'bold'
+    }).setOrigin(1, 0.5);
+
+    container.add([bg, border, icon, name, desc, count]);
     container.setSize(360, 56);
     container.setInteractive({ useHandCursor: true });
 
@@ -331,11 +334,17 @@ export default class EquipmentScene extends Phaser.Scene {
       if (!entry) return;
       const item = entry.getData('item');
       if (!item) return;
-      this.equippedItems[this.selectedSlotIndex] = item.id;
+      const trial = normalizeEquippedItems(this.equippedItems, this.ownedItems);
+      trial[this.selectedSlotIndex] = null;
+      const equipState = getEquipState(item.id, this.ownedItems, trial);
+      if (!equipState.ok) return;
+      trial[this.selectedSlotIndex] = item.id;
+      this.equippedItems = normalizeEquippedItems(trial, this.ownedItems);
       this.registry.set('equippedItems', this.equippedItems);
       this.refreshEquippedUI();
     } else {
       this.equippedItems[this.selectedSlotIndex] = null;
+      this.equippedItems = normalizeEquippedItems(this.equippedItems, this.ownedItems);
       this.registry.set('equippedItems', this.equippedItems);
       this.refreshEquippedUI();
     }

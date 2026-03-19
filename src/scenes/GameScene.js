@@ -4,7 +4,7 @@ import BossManager from '../managers/BossManager';
 import CollisionManager from '../managers/CollisionManager';
 import BulletManager from '../managers/BulletManager';
 import Player from '../player/Player';
-import { ITEM_DEFS, getItemById } from '../data/items';
+import { ITEM_DEFS, getItemById, getOwnedItemIds, normalizeEquippedItems } from '../data/items';
 import PetManager from '../classes/pets/PetManager';
 import UndeadSummonManager from '../classes/pets/UndeadSummonManager';
 import SummonRegistry from '../classes/pets/SummonRegistry';
@@ -186,7 +186,7 @@ import { applyBuildClassMixin } from './game/BuildClassMixin';
  * 逻辑按模块拆分到 ./game/ 目录下的 Mixin 文件：
  *   HudMixin              – HUD、血条、经验条、伤害数字、按钮
  *   MapFogMixin            – 大地图、迷雾、小地图、起始房间
- *   DropsInventoryMixin    – 掉落物、背包、碎片、消耗品
+ *   DropsInventoryMixin    – 掉落物、背包、消耗品
  *   LevelProgressionMixin  – 升级、经验、关卡流程、路径选择
  *   ViewMenuMixin          – 查看菜单（天赋/统计/背包面板）
  *   BuildClassMixin        – 职业/流派/无人机/战士/法师/圣骑/术士
@@ -472,10 +472,30 @@ class GameScene extends Phaser.Scene {
     const naturePetType = this.registry.get('naturePetType') || null;
 
     const inventoryEquipped = Array.isArray(this.inventoryEquipped)
-      ? this.inventoryEquipped.map(i => (i ? { id: i.id, name: i.name, desc: i.desc, icon: i.icon, effects: i.effects, count: i.count } : null))
+      ? this.inventoryEquipped.map(i => (i ? { id: i.id, name: i.name, desc: i.desc, icon: i.icon, effects: i.effects, count: i.count, rarityId: i.rarityId, rarityLabel: i.rarityLabel, rarityTextColor: i.rarityTextColor, statLines: i.statLines } : null))
       : [];
     const inventoryAcquired = Array.isArray(this.inventoryAcquired)
-      ? this.inventoryAcquired.map(i => (i ? { id: i.id, name: i.name, desc: i.desc, icon: i.icon, effects: i.effects, count: i.count } : null))
+      ? this.inventoryAcquired.map(i => (i ? {
+        id: i.id,
+        instanceId: i.instanceId,
+        baseId: i.baseId,
+        name: i.name,
+        desc: i.desc,
+        shortDesc: i.shortDesc,
+        icon: i.icon,
+        effects: i.effects,
+        count: i.count,
+        kind: i.kind,
+        category: i.category,
+        categoryLabel: i.categoryLabel,
+        rarityId: i.rarityId,
+        rarityLabel: i.rarityLabel,
+        rarityColor: i.rarityColor,
+        rarityTextColor: i.rarityTextColor,
+        raritySort: i.raritySort,
+        statLines: i.statLines,
+        source: i.source
+      } : null))
       : [];
 
     const p = this.player || {};
@@ -490,6 +510,7 @@ class GameScene extends Phaser.Scene {
       moveSpeed: p.moveSpeed,
       damageReductionPercent: p.damageReductionPercent,
       dodgePercent: p.dodgePercent,
+      blockChance: p.blockChance,
       regenPerSec: p.regenPerSec
     };
 
@@ -586,6 +607,7 @@ class GameScene extends Phaser.Scene {
       if (this.viewMenuOpen) this.closeViewMenu();
       // 本局战利品/掉落：退出时立刻清空（本局制，不进入装备系统）
       this.inventoryAcquired = [];
+      this._runLootGearItems = [];
       this.drops = [];
       this.scene.start('MenuScene');
     };
@@ -1282,6 +1304,7 @@ class GameScene extends Phaser.Scene {
 
     // 本局掉落/战利品是一次性的：死亡或退出导致场景关闭时清空
     this.inventoryAcquired = [];
+    this._runLootGearItems = [];
     this.drops = [];
 
     // 清理三选一 UI
@@ -2479,35 +2502,15 @@ class GameScene extends Phaser.Scene {
     // 背包与携带栏
     // - 携带：固定 6 格
     // - 拾取：不限制个数（查看菜单默认展示前 12 个）
-    const equippedIdsRaw = this.registry.get('equippedItems') || new Array(6).fill(null);
-    const equippedIds = [...equippedIdsRaw].slice(0, 6);
-    while (equippedIds.length < 6) equippedIds.push(null);
+    const owned = getOwnedItemIds(this.registry.get('ownedItems'));
+    const equippedIds = normalizeEquippedItems(this.registry.get('equippedItems'), owned);
+    this.registry.set('ownedItems', owned);
+    this.registry.set('equippedItems', equippedIds);
 
     this.inventoryAcquired = [];
     this.inventoryEquipped = equippedIds.map(id => (id ? getItemById(id) : null));
-
-    // 局内战利品（碎片等）：堆叠计数，本局结束清空，不进入装备系统
-    this._runLootShardCounts = Object.create(null);
-
-    // 物品（测试用）：仅用于装备系统测试。
-    // 注意：游戏内"战利品"(inventoryAcquired) 是本局打怪掉落的临时列表，应当开局为空，且本局结束后清空。
-    const testItemIds = [
-      'potion_small',
-      'potion_big',
-      'revive_cross',
-      'shield',
-      'crit',
-      'lifesteal',
-      'magnet',
-      'move_speed'
-    ];
-
-    // 2) EquipmentScene 使用 registry.ownedItems
-    const owned = Array.isArray(this.registry.get('ownedItems')) ? [...this.registry.get('ownedItems')] : [];
-    testItemIds.forEach((id) => {
-      if (!owned.includes(id)) owned.push(id);
-    });
-    this.registry.set('ownedItems', owned);
+    this._runLootGearItems = [];
+    this._runLootItemSeq = 0;
 
     // 掉落物列表
     this.drops = [];
@@ -2642,18 +2645,14 @@ class GameScene extends Phaser.Scene {
         );
       }
 
-      // 小怪/精英：小概率掉落"碎片宝箱"（局内一次性叠加属性）
+      // 小怪/精英：掉落局内装备
       {
-        const shardChance = payload?.isElite ? 0.10 : 0.035;
-        const shardPool = Array.isArray(this.itemPool) ? this.itemPool.filter((it) => it && it.kind === 'shard' && it.shard) : [];
-        if (shardPool.length > 0 && Math.random() < shardChance) {
-          const item = Phaser.Math.RND.pick(shardPool);
-          this.spawnItemDrop(
-            (payload?.x ?? 0) + Phaser.Math.Between(-22, 22),
-            (payload?.y ?? 0) + Phaser.Math.Between(-14, 14),
-            item
-          );
-        }
+        const equipmentSource = payload?.isElite ? 'elite' : 'minion';
+        this.rollAndSpawnEquipmentDrops?.(
+          equipmentSource,
+          (payload?.x ?? 0),
+          (payload?.y ?? 0)
+        );
       }
 
       this.events.emit('updatePlayerInfo');

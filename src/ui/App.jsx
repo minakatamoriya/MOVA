@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { uiBus } from './bus';
 import { useUiStore } from './store';
 import { TREE_DEFS, buildThirdTalentTreePlaceholder, getMaxLevel } from '../classes/talentTrees';
-import { ITEM_DEFS } from '../data/items';
+import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
 
 export default function App() {
@@ -147,13 +147,10 @@ export default function App() {
 
   // 装备系统（React 版）交互：点击=查看详情；详情卡片右侧按钮操作（装备/卸载）
   const [equipDetail, setEquipDetail] = useState(null);
-  const equipDetailTimerRef = useRef(null);
 
   // 道具商店（React 版）交互：点击=查看详情（风格与装备查看类似）
   const [shopDetailItem, setShopDetailItem] = useState(null);
-  const shopDetailTimerRef = useRef(null);
 
-  const DETAIL_AUTO_HIDE_MS = 3000;
   const LONG_PRESS_MS = 420;
 
   const pressStateRef = useRef({ timer: null, fired: false, key: null });
@@ -202,16 +199,7 @@ export default function App() {
   };
 
   const showShopDetail = (item) => {
-    if (!item) return;
-    setShopDetailItem(item);
-    if (shopDetailTimerRef.current) {
-      clearTimeout(shopDetailTimerRef.current);
-      shopDetailTimerRef.current = null;
-    }
-    shopDetailTimerRef.current = setTimeout(() => {
-      setShopDetailItem(null);
-      shopDetailTimerRef.current = null;
-    }, DETAIL_AUTO_HIDE_MS);
+    setShopDetailItem(item || null);
   };
 
   const showEquipDetail = (payload) => {
@@ -226,42 +214,35 @@ export default function App() {
       kind: payload?.kind === 'equipped' ? 'equipped' : 'owned',
       slotIndex: Number.isFinite(Number(payload?.slotIndex)) ? Number(payload.slotIndex) : null
     });
-
-    if (equipDetailTimerRef.current) {
-      clearTimeout(equipDetailTimerRef.current);
-      equipDetailTimerRef.current = null;
-    }
-    equipDetailTimerRef.current = setTimeout(() => {
-      setEquipDetail(null);
-      equipDetailTimerRef.current = null;
-    }, DETAIL_AUTO_HIDE_MS);
   };
 
   useEffect(() => {
     return () => {
-      if (shopDetailTimerRef.current) {
-        clearTimeout(shopDetailTimerRef.current);
-        shopDetailTimerRef.current = null;
-      }
-      if (equipDetailTimerRef.current) {
-        clearTimeout(equipDetailTimerRef.current);
-        equipDetailTimerRef.current = null;
-      }
       clearPressState();
     };
   }, []);
 
+  useEffect(() => {
+    if (sceneKey !== 'EquipmentScene') {
+      setEquipDetail(null);
+    }
+    if (sceneKey !== 'ItemShopScene') {
+      setShopDetailItem(null);
+    }
+  }, [sceneKey]);
+
+  const getOwnedCount = (itemId) => getOwnedItemCount(ownedItems, itemId);
+  const getEquippedCount = (itemId) => getOwnedItemCount(equippedItems, itemId);
+
   const attemptPurchaseShopItem = (item) => {
     if (!item?.id) return;
-    const isOwned = ownedItems.includes(item.id);
-    if (isOwned) {
-      showFloatingInfo('已拥有');
-      return;
-    }
-    const coins = Number(viewData?.globalCoins || 0);
-    const price = Number(item.price || 0);
-    if (coins < price) {
-      showFloatingInfo('金币不足');
+    const purchaseState = getPurchaseState(item, ownedItems, viewData?.globalCoins || 0);
+    if (!purchaseState.ok) {
+      if (purchaseState.reason === 'max_owned') {
+        showFloatingInfo(`已达购买上限 ${purchaseState.maxOwned}`);
+      } else if (purchaseState.reason === 'not_enough_coins') {
+        showFloatingInfo('金币不足');
+      }
       return;
     }
     uiBus.emit('ui:itemShop:purchase', item.id);
@@ -277,12 +258,11 @@ export default function App() {
 
   const autoEquipOwnedItem = (itemId) => {
     if (!itemId) return;
-    const list = Array.isArray(equippedItems) ? equippedItems : [];
-    // 禁止重复装备相同道具
-    if (list.includes(itemId)) return;
     // 每次都从左到右补第一个空槽位
     const slot = getNextAutoEquipSlot();
     if (slot < 0) return;
+    const equipState = getEquipState(itemId, ownedItems, equippedItems);
+    if (!equipState.ok) return;
     uiBus.emit('ui:equipment:setSlot', slot, itemId);
   };
 
@@ -292,10 +272,200 @@ export default function App() {
     uiBus.emit('ui:equipment:setSlot', idx, null);
   };
 
+  const formatPercent = (value, digits = 1) => `${(Number(value || 0) * 100).toFixed(digits)}%`;
+
+  const getUnifiedRangeMultiplier = (p = {}) => {
+    const candidates = [
+      [p.warriorRange, p.warriorRangeBase],
+      [p.archerArrowRange, p.archerArrowRangeBase],
+      [p.mageMissileRange, p.mageMissileRangeBase],
+      [p.moonfireRange, p.moonfireRangeBase],
+      [p.warlockRange, p.warlockPoisonNovaRadiusBase],
+      [p.druidStarfallRange, p.druidStarfallRangeBase]
+    ];
+
+    for (let i = 0; i < candidates.length; i += 1) {
+      const [current, base] = candidates[i];
+      const currentValue = Number(current || 0);
+      const baseValue = Number(base || 0);
+      if (currentValue > 0 && baseValue > 0) return currentValue / baseValue;
+    }
+
+    return 1;
+  };
+
+  const buildStatSummaryGroups = (p = {}, opts = {}) => {
+    const includeExtended = opts.includeExtended === true;
+    const maxHp = Number(p.maxHp || 0);
+    const fireRate = Number(p.fireRate || 0);
+    const bulletDamage = Number(p.bulletDamage || 0);
+    const critChance = Number(p.critChance || 0);
+    const critMultiplier = Number(p.critMultiplier || 1);
+    const moveSpeed = Number(p.moveSpeed || 0);
+    const regenPerSec = Number(p.regenPerSec || 0);
+    const damageReduction = Number(p.damageReductionPercent || 0);
+    const dodgeChance = Number(p.dodgeChance || p.dodgePercent || 0);
+    const blockChance = Number(p.blockChance || 0);
+    const lifesteal = Number(p.lifestealPercent || 0);
+    const shields = Number(p.shieldCharges || 0);
+    const rangeMult = getUnifiedRangeMultiplier(p);
+    const attacksPerSecond = fireRate > 0 ? (1000 / fireRate) : 0;
+    const critBonusPct = Math.max(0, (critMultiplier - 1) * 100);
+
+    const groups = [
+      {
+        title: '十大属性',
+        items: [
+          { label: '攻击', value: `${Math.round(bulletDamage)}` },
+          { label: '攻速', value: `${attacksPerSecond.toFixed(2)}/秒` },
+          { label: '移速', value: `${Math.round(moveSpeed)}` },
+          { label: '范围', value: `${rangeMult >= 1 ? '+' : ''}${Math.round((rangeMult - 1) * 100)}%` },
+          { label: '生命', value: `${Math.round(maxHp)}` },
+          { label: '减伤', value: formatPercent(damageReduction) },
+          { label: '回复', value: `${regenPerSec.toFixed(1)}/秒` },
+          { label: '暴击', value: formatPercent(critChance) },
+          { label: '闪避', value: formatPercent(dodgeChance) },
+          { label: '暴伤', value: `${critBonusPct >= 0 ? '+' : ''}${Math.round(critBonusPct)}%` }
+        ]
+      },
+    ];
+
+    if (includeExtended) {
+      groups.push({
+        title: '扩展属性',
+        items: [
+          { label: '吸血', value: formatPercent(lifesteal) },
+          { label: '格挡', value: formatPercent(blockChance) },
+          { label: '护盾', value: `${Math.round(shields)}` }
+        ]
+      });
+    }
+
+    return groups;
+  };
+
+  const buildRuntimeStatGroups = (p = {}) => {
+    const maxHp = Number(p.maxHp || 0);
+    const fireRate = Number(p.fireRate || 0);
+    const dmg = Number(p.bulletDamage || 0);
+    const critChance = Number(p.critChance || 0);
+    const critMult = Number(p.critMultiplier || 1);
+    const lifesteal = Number(p.lifestealPercent || 0);
+    const shields = Number(p.shieldCharges || 0);
+    const speed = Number(p.moveSpeed || 0);
+    const damageReduction = Number(p.damageReductionPercent || 0);
+    const dodge = Number(p.dodgeChance || p.dodgePercent || 0);
+    const regenPerSec = Number(p.regenPerSec || 0);
+    const blockChance = Number(p.blockChance || 0);
+    const rangeMult = getUnifiedRangeMultiplier(p);
+    const attacksPerSecond = fireRate > 0 ? (1000 / fireRate) : 0;
+    const baseDps = fireRate > 0 ? (dmg * attacksPerSecond) : 0;
+    const critFactor = 1 + critChance * Math.max(0, (critMult - 1));
+    const approxDps = baseDps * critFactor;
+    const powerScore = Math.max(0, Math.round(
+      approxDps * 6 +
+      maxHp * 1.2 +
+      shields * 35 +
+      lifesteal * 800 +
+      speed * 0.15
+    ));
+
+    return [
+      {
+        title: '概览',
+        items: [
+          { label: '局内金币', value: `${viewData?.sessionCoins || 0}` },
+          { label: '参考战力', value: `${powerScore}` }
+        ]
+      },
+      ...buildStatSummaryGroups(p, { includeExtended: false }),
+      {
+        title: '输出估算',
+        items: [
+          { label: '单发伤害', value: `${Math.round(dmg)}` },
+          { label: '射速', value: `${attacksPerSecond.toFixed(2)}/秒` },
+          { label: '基础DPS', value: `${Math.round(baseDps)}` },
+          { label: '期望DPS', value: `${Math.round(approxDps)}` },
+          { label: '范围加成', value: `${rangeMult >= 1 ? '+' : ''}${Math.round((rangeMult - 1) * 100)}%` },
+          { label: '减伤', value: formatPercent(damageReduction) },
+          { label: '回复', value: `${regenPerSec.toFixed(1)}/秒` },
+          { label: '格挡', value: formatPercent(blockChance) },
+          { label: '闪避', value: formatPercent(dodge) },
+          { label: '暴击系数', value: `${critFactor.toFixed(2)}x` }
+        ]
+      }
+    ];
+  };
+
+  const renderMetricGroups = (groups = [], opts = {}) => {
+    const compact = opts.compact !== false;
+    const asGrid = opts.asGrid === true;
+
+    return (
+      <div
+        style={asGrid ? {
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: compact ? 10 : 14,
+          alignContent: 'start'
+        } : {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: compact ? 10 : 14
+        }}
+      >
+        {groups.map((group) => (
+          <div
+            key={group.title}
+            style={{
+              borderRadius: compact ? 16 : 18,
+              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'rgba(255,255,255,0.04)',
+              padding: compact ? '12px 12px 10px' : '14px 14px 12px'
+            }}
+          >
+            <div style={{ fontSize: compact ? 13 : 14, fontWeight: 900, opacity: 0.92, marginBottom: 10 }}>
+              {group.title}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: compact ? 8 : 10 }}>
+              {group.items.map((item) => (
+                <div
+                  key={item.label}
+                  style={{
+                    borderRadius: 12,
+                    background: 'rgba(11, 11, 24, 0.58)',
+                    padding: compact ? '10px 10px 8px' : '12px 12px 10px',
+                    minWidth: 0
+                  }}
+                >
+                  <div style={{ fontSize: compact ? 12 : 13, opacity: 0.7 }}>{item.label}</div>
+                  <div style={{ fontSize: compact ? 15 : 17, fontWeight: 900, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderStatSummaryGrid = (p = {}, opts = {}) => renderMetricGroups(buildStatSummaryGroups(p, opts), opts);
+
   const renderTalentPanel = () => {
     if (!selectedTrees || selectedTrees.length === 0) {
       return (
-        <div style={{ opacity: 0.85, lineHeight: 1.6 }}>
+        <div
+          style={{
+            borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(255,255,255,0.04)',
+            padding: 14,
+            lineHeight: 1.6,
+            opacity: 0.85
+          }}
+        >
           尚未获得任何技能。首次三选一后将出现主修路线。
         </div>
       );
@@ -314,9 +484,9 @@ export default function App() {
     });
 
     const panels = [
-      { key: 'main', title: mainDef ? mainDef.name : '主职业（未选择）', def: mainDef },
-      { key: 'off', title: offDef ? offDef.name : '副职业（未选择）', def: offDef },
-      { key: 'third', title: thirdDef ? thirdDef.name : '第三天赋（未解锁）', def: thirdDef }
+      { key: 'left', title: mainDef ? mainDef.name : '主职业（未选择）', def: mainDef },
+      { key: 'mid', title: offDef ? offDef.name : '副职业（未选择）', def: offDef },
+      { key: 'right', title: thirdDef ? thirdDef.name : '第三天赋（未解锁）', def: thirdDef }
     ];
 
     const toCssHex = (n) => {
@@ -342,179 +512,351 @@ export default function App() {
       return `+${level}`;
     };
 
-    const TalentCard = ({ node, def }) => {
+    const getNodeKind = (node, def) => {
+      if (node.id === def.core?.id) return 'core';
+      if (node.id === def.ultimate?.id) return 'ultimate';
+      return 'talent';
+    };
+
+    const getNodeBadgeText = (node, def) => {
+      const kind = getNodeKind(node, def);
+      if (kind === 'core') return '初始';
+      if (kind === 'ultimate') return '终极';
+      const cleaned = String(node.name || '')
+        .replace(/^初始：/, '')
+        .replace(/^终极：/, '')
+        .replace(/^选择：/, '')
+        .replace(/^（预留）/, '预留')
+        .trim();
+      return cleaned.slice(0, 2) || '天赋';
+    };
+
+    const TalentIconButton = ({ node, def }) => {
       const level = skillTreeLevels?.[node.id] || 0;
       const maxLevel = node.maxLevel || getMaxLevel(node.id) || 1;
-      const isCore = node.id === def.core?.id;
-      const isUltimate = node.id === def.ultimate?.id;
-      const symbol = isUltimate ? '◎' : isCore ? '★' : '◆';
+      const kind = getNodeKind(node, def);
       const badge = badgeTextFor(level, maxLevel);
       const borderColor = toCssHex(def?.color);
+      const iconText = getNodeBadgeText(node, def);
+      const isSelected = selectedTalent?.node?.id === node.id;
+      const hintText = kind === 'core'
+        ? '起点'
+        : (kind === 'ultimate' ? '终极' : String(node.name || '').replace(/^初始：|^终极：|^选择：/, '').trim().slice(0, 4));
 
       return (
         <button
           type="button"
-          onClick={() => {
-            setSelectedTalent({ node, def, level, maxLevel });
-            showFloatingInfo(`${node.name}\n${node.desc || ''}\n等级: ${level}/${maxLevel}`);
+          onPointerDown={(e) => {
+            startLongPress(`talent:${node.id}`, () => setSelectedTalent({ node, def, level, maxLevel }), e);
+          }}
+          onPointerUp={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearPressState();
+            setSelectedTalent(null);
+          }}
+          onPointerCancel={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearPressState();
+            setSelectedTalent(null);
+          }}
+          onPointerLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearPressState();
+            setSelectedTalent(null);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
           }}
           style={{
             cursor: 'pointer',
-            borderRadius: 12,
-            border: '2px solid rgba(255,255,255,0.14)',
-            background: 'rgba(11, 11, 24, 0.62)',
+            borderRadius: 0,
+            border: 'none',
+            background: 'transparent',
             color: '#fff',
-            padding: 10,
+            padding: 0,
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-            position: 'relative',
-            minHeight: 110
+            alignItems: 'stretch',
+            justifyContent: 'flex-start',
+            gap: 6,
+            width: '100%',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            touchAction: 'none'
           }}
-          title={node.desc || node.name}
+          title={node.name}
         >
-          {badge ? (
-            <div
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                padding: '2px 6px',
-                borderRadius: 999,
-                border: `1px solid ${borderColor}`,
-                background: 'rgba(0,0,0,0.35)',
-                fontSize: 11,
-                fontWeight: 900
-              }}
-            >
-              {badge}
-            </div>
-          ) : null}
-
           <div
             style={{
-              width: 52,
-              height: 52,
-              borderRadius: 12,
-              border: `2px solid ${borderColor}`,
+              width: '100%',
+              aspectRatio: '1 / 1',
+              borderRadius: 0,
+              border: isSelected ? `2px solid ${borderColor}` : `1px solid ${borderColor}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 900,
-              fontSize: 22,
-              background: 'rgba(0,0,0,0.25)'
+              fontSize: kind === 'talent' ? 16 : 14,
+              background: isSelected ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
+              color: '#fff',
+              letterSpacing: '0.04em',
+              position: 'relative',
+              boxShadow: isSelected ? `0 0 0 1px ${borderColor}33 inset` : 'none'
             }}
           >
-            {symbol}
+            {badge ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 6,
+                  right: 6,
+                  minWidth: 20,
+                  height: 20,
+                  padding: '0 5px',
+                  borderRadius: 0,
+                  border: 'none',
+                  background: isSelected ? '#ffffff' : toCssRgba(def?.color, 0.92),
+                  color: isSelected ? '#111827' : '#ffffff',
+                  fontSize: 10,
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {badge.replace('+', '')}
+              </div>
+            ) : null}
+            {iconText}
           </div>
 
-          <div style={{ fontSize: 16, fontWeight: 900, textAlign: 'center', lineHeight: 1.15 }}>
-            {node.name}
+          <div
+            style={{
+              fontSize: 11,
+              lineHeight: 1.2,
+              opacity: 0.78,
+              textAlign: 'center',
+              padding: '0 2px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              userSelect: 'none',
+              WebkitUserSelect: 'none'
+            }}
+          >
+            {hintText || node.name}
           </div>
         </button>
       );
     };
 
     return (
-      <>
-        <style>{`
-          @keyframes rainbowBorderShift {
-            0% { background-position: 0% 50%; }
-            100% { background-position: 200% 50%; }
-          }
-        `}</style>
-        <div style={{ display: 'flex', gap: 12, height: '100%' }}>
-          {panels.map((p) => {
-          const def = p.def;
-          const borderColor = toCssHex(def?.color);
-          const glowA = toCssRgba(def?.color, 0.30);
-          const glowB = toCssRgba(def?.color, 0.16);
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, minHeight: '100%' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 12,
+            alignContent: 'start'
+          }}
+        >
+          {panels.map((panel) => {
+            const def = panel.def;
+            const borderColor = toCssHex(def?.color);
+            const allNodes = def ? [def.core, ...(def.nodes || []), def.ultimate].filter(Boolean) : [];
+            const acquired = def ? allNodes.filter((n) => (skillTreeLevels?.[n.id] || 0) > 0) : [];
 
-          const allNodes = def ? [def.core, ...(def.nodes || []), def.ultimate].filter(Boolean) : [];
-          const acquired = def ? allNodes.filter((n) => (skillTreeLevels?.[n.id] || 0) > 0) : [];
-
-          const isThird = p.key === 'third';
-          const thirdVariant = isThird ? def?.variant : null;
-
-          const innerPanelStyle = {
-            borderRadius: 12,
-            border: `2px solid ${def ? borderColor : 'rgba(42,42,58,1)'}`,
-            background: 'rgba(11, 11, 24, 0.35)',
-            padding: 10,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            flex: 1,
-            minHeight: 0,
-            boxShadow: (isThird && thirdVariant === 'depth' && def)
-              ? `0 0 16px ${glowA}, 0 0 38px ${glowB}`
-              : undefined
-          };
-
-          const renderPanelBody = () => {
-            if (!def) return <div style={{ opacity: 0.7, lineHeight: 1.6 }}>等待选择</div>;
-            if (acquired.length === 0) return <div style={{ opacity: 0.7, lineHeight: 1.6 }}>尚未获得天赋</div>;
             return (
               <div
+                key={panel.key}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                  gap: 10
+                  borderRadius: 0,
+                  border: `1px solid ${def ? toCssRgba(def.color, 0.5) : 'rgba(255,255,255,0.10)'}`,
+                  background: panel.key === 'right' && def?.variant === 'dual'
+                    ? 'linear-gradient(180deg, rgba(38,16,52,0.72), rgba(18,20,34,0.9))'
+                    : (panel.key === 'right' && def?.variant === 'depth'
+                      ? 'linear-gradient(180deg, rgba(6,22,18,0.82), rgba(8,14,18,0.92))'
+                      : `linear-gradient(180deg, ${def ? toCssRgba(def.color, 0.18) : 'rgba(255,255,255,0.05)'}, rgba(12,14,24,0.88))`),
+                  padding: 12,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  minHeight: 0,
+                  boxShadow: panel.key === 'right' && def?.variant === 'dual'
+                    ? '0 0 0 1px rgba(255,255,255,0.08) inset, 0 0 24px rgba(168,85,247,0.18)'
+                    : (panel.key === 'right' && def?.variant === 'depth'
+                      ? `0 0 0 1px ${toCssRgba(def?.color, 0.18)} inset, 0 0 28px ${toCssRgba(def?.color, 0.18)}`
+                      : `0 0 0 1px ${def ? toCssRgba(def.color, 0.10) : 'rgba(255,255,255,0.04)'} inset`),
+                  position: 'relative',
+                  overflow: 'hidden'
                 }}
               >
-                {acquired.map((n) => (
-                  <TalentCard key={n.id} node={n} def={def} />
-                ))}
+                {panel.key === 'right' && def?.variant === 'dual' ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: 3,
+                      background: 'linear-gradient(90deg, #ff6b6b, #ffb84d, #ffe066, #59f0a7, #66b3ff, #c084fc)'
+                    }}
+                  />
+                ) : null}
+                {panel.key === 'right' && def?.variant === 'depth' ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      height: 3,
+                      background: `linear-gradient(90deg, ${toCssRgba(def?.color, 0.28)}, ${toCssRgba(def?.color, 0.92)})`
+                    }}
+                  />
+                ) : null}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0, fontSize: 15, fontWeight: 900, lineHeight: 1.2, color: def ? toCssHex(def.color) : '#ffffff' }}>
+                    {panel.title}
+                  </div>
+                  {panel.key === 'right' && def?.variant ? (
+                    <div
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        letterSpacing: '0.06em',
+                        color: panel.key === 'right' && def.variant === 'dual' ? '#f5d0fe' : toCssHex(def.color),
+                        opacity: 0.92
+                      }}
+                    >
+                      {def.variant === 'dual' ? '双职业' : '深度专精'}
+                    </div>
+                  ) : null}
+                </div>
+
+                {!def ? (
+                  <div style={{ borderRadius: 0, background: 'rgba(11, 11, 24, 0.58)', padding: 12, fontSize: 13, lineHeight: 1.6, opacity: 0.75 }}>
+                    等待选择
+                  </div>
+                ) : acquired.length === 0 ? (
+                  <div style={{ borderRadius: 0, background: 'rgba(11, 11, 24, 0.58)', padding: 12, fontSize: 13, lineHeight: 1.6, opacity: 0.75 }}>
+                    尚未获得天赋
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gap: 10,
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none'
+                    }}
+                  >
+                    {acquired.map((node) => (
+                      <TalentIconButton key={node.id} node={node} def={def} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
-          };
-
-          return (
-            <div
-              key={p.key}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                minHeight: 0
-              }}
-            >
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{p.title}</div>
-
-              {isThird && thirdVariant === 'dual' ? (
-                <div
-                  style={{
-                    borderRadius: 14,
-                    padding: 2,
-                    backgroundImage: 'linear-gradient(90deg, #ff3b2f, #ff8a00, #ffe600, #2cff7a, #4aa3ff, #a46bff, #ff3b2f)',
-                    backgroundSize: '200% 200%',
-                    animation: 'rainbowBorderShift 2.8s linear infinite',
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex'
-                  }}
-                >
-                  <div style={{ ...innerPanelStyle, border: 'none', flex: 1 }}>
-                    {renderPanelBody()}
-                  </div>
-                </div>
-              ) : (
-                <div style={innerPanelStyle}>
-                  {renderPanelBody()}
-                </div>
-              )}
-            </div>
-          );
           })}
         </div>
-      </>
+
+        {selectedTalent?.node ? (
+          <div
+            style={{
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'rgba(255,255,255,0.04)',
+              padding: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>天赋详情</div>
+            <div style={{ borderRadius: 12, background: 'rgba(11, 11, 24, 0.58)', padding: 12, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 14,
+                  border: `1px solid ${toCssHex(selectedTalent?.def?.color)}`,
+                  background: 'rgba(255,255,255,0.06)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 900,
+                  fontSize: 14,
+                  flexShrink: 0
+                }}
+              >
+                {getNodeBadgeText(selectedTalent.node, selectedTalent.def)}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1.2 }}>{selectedTalent.node.name}</div>
+                <div style={{ fontSize: 12, opacity: 0.66, marginTop: 4 }}>
+                  {`${selectedTalent.level || 0}/${selectedTalent.maxLevel || 1} · ${getNodeKind(selectedTalent.node, selectedTalent.def) === 'core' ? '职业起点' : (getNodeKind(selectedTalent.node, selectedTalent.def) === 'ultimate' ? '终局强化' : '普通节点')}`}
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9, marginTop: 8 }}>{selectedTalent.node.desc || '暂无描述'}</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.04)', padding: 12, fontSize: 13, opacity: 0.74, lineHeight: 1.5 }}>
+            长按任意图标查看详情，松手后详情会自动隐藏。
+          </div>
+        )}
+      </div>
     );
   };
 
   const renderBagPanel = () => {
-    const Slot = ({ item, onClick, label }) => {
+    const showBagDetail = (item, slot) => {
+      if (!item) {
+        setSelectedItem(null);
+        return;
+      }
+      setSelectedItem({ ...item, slot });
+    };
+
+    const getItemTheme = (item) => {
+      const rarityColor = item?.rarityTextColor || '#d8dee8';
+      const kind = item?.kind || '';
+      if (kind === 'run_loot_equipment') {
+        return {
+          border: `2px solid ${rarityColor}`,
+          background: `linear-gradient(180deg, rgba(18,20,34,0.96), rgba(10,12,22,0.84))`,
+          boxShadow: `0 0 0 1px ${rarityColor}22 inset, 0 0 18px ${rarityColor}22`
+        };
+      }
+      return {
+        border: '2px solid rgba(42,42,58,1)',
+        background: 'rgba(11, 11, 24, 0.62)',
+        boxShadow: 'none'
+      };
+    };
+
+    const getItemInfoText = (item, fallbackLabel = '') => {
+      if (!item) return `${fallbackLabel}\n空`;
+      const lines = Array.isArray(item?.statLines) && item.statLines.length > 0
+        ? item.statLines
+        : [item?.desc || ''];
+      const rarityLine = item?.rarityLabel ? `品质: ${item.rarityLabel}` : '';
+      return [
+        `${item.icon || ''} ${item.name || ''}`.trim(),
+        rarityLine,
+        ...lines
+      ].filter(Boolean).join('\n');
+    };
+
+    const Slot = ({ item, slotLabel, label }) => {
       const def = item?.id ? ITEM_DEFS.find((d) => d.id === item.id) : null;
       const cdMs = Math.max(0, Number(def?.consumable?.cooldownMs || 0));
       const until = item?.id ? Math.max(0, Number(itemCooldowns?.[item.id] || 0)) : 0;
@@ -538,25 +880,40 @@ export default function App() {
           opacity: 0.85
         }
         : null;
+      const theme = getItemTheme(item);
 
       return (
       <button
         type="button"
-        onClick={() => {
-          if (typeof onClick === 'function') onClick();
-          if (item) {
-            showFloatingInfo(`${item.icon || ''} ${item.name || ''}\n${item.desc || ''}\n效果: ${item.effects ? JSON.stringify(item.effects) : '{}'}`);
-          } else if (label) {
-            showFloatingInfo(`${label}\n空`);
-          }
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onPointerDown={(e) => {
+          if (!item) return;
+          startLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => showBagDetail(item, slotLabel), e);
         }}
+        onPointerUp={(e) => {
+          if (!item) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearPressState();
+            if (label) showFloatingInfo(`${label}\n空`);
+            return;
+          }
+
+          endLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => {
+            showFloatingInfo(getItemInfoText(item, slotLabel || label));
+          }, e);
+        }}
+        onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+        onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
         style={{
           cursor: 'pointer',
           width: 92,
           height: 92,
           borderRadius: 12,
-          border: '2px solid rgba(42,42,58,1)',
-          background: 'rgba(11, 11, 24, 0.62)',
+          border: theme.border,
+          background: theme.background,
+          boxShadow: theme.boxShadow,
           color: '#fff',
           display: 'flex',
           flexDirection: 'column',
@@ -565,7 +922,10 @@ export default function App() {
           gap: 6,
           padding: 8,
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          touchAction: 'none'
         }}
       >
         {cdOverlayStyle ? <div style={cdOverlayStyle} /> : null}
@@ -595,91 +955,192 @@ export default function App() {
         ) : null}
         <div style={{ fontWeight: 900, fontSize: 16, ...(dimStyle || {}) }}>{item?.icon || label || ''}</div>
         <div style={{ opacity: 0.8, fontSize: 12, textAlign: 'center', ...(dimStyle || {}) }}>{item?.name || ''}</div>
+        {item?.rarityLabel ? (
+          <div style={{ position: 'absolute', left: 7, bottom: 6, fontSize: 10, fontWeight: 900, color: item.rarityTextColor || '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.45)' }}>
+            {item.rarityLabel}
+          </div>
+        ) : null}
       </button>
       );
     };
 
     const equipped6 = new Array(6).fill(null).map((_, i) => inventoryEquipped?.[i] || null);
-    const loot12 = new Array(12).fill(null).map((_, i) => inventoryAcquired?.[i] || null);
+    const lootList = Array.isArray(inventoryAcquired) ? inventoryAcquired.filter(Boolean) : [];
+    const groupedLoot = [
+      { key: 'legendary', title: '传说', color: '#ff9f2e', items: lootList.filter((it) => it?.kind === 'run_loot_equipment' && it?.rarityId === 'legendary') },
+      { key: 'epic', title: '史诗', color: '#b56cff', items: lootList.filter((it) => it?.kind === 'run_loot_equipment' && it?.rarityId === 'epic') },
+      { key: 'rare', title: '稀有', color: '#3aa0ff', items: lootList.filter((it) => it?.kind === 'run_loot_equipment' && it?.rarityId === 'rare') },
+      { key: 'common', title: '普通', color: '#f4f7fb', items: lootList.filter((it) => it?.kind === 'run_loot_equipment' && it?.rarityId === 'common') }
+    ].filter((group) => group.items.length > 0);
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%' }}>
-        <div>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>携带（固定 6 格）</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: '100%', padding: 12 }}>
+        <div
+          style={{
+            borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(255,255,255,0.04)',
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>携带栏</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {equipped6.map((it, idx) => (
               <Slot
                 key={`eq-${idx}`}
                 item={it}
+                slotLabel={`携带 ${idx + 1}`}
                 label={it ? undefined : '空'}
-                onClick={() => setSelectedItem(it ? { ...it, slot: `携带 ${idx + 1}` } : { name: '空', desc: '' })}
               />
             ))}
           </div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>战利品（默认展示前 12 个）</div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {loot12.map((it, idx) => (
-              <Slot
-                key={`loot-${idx}`}
-                item={it}
-                label={it ? undefined : ''}
-                onClick={() => setSelectedItem(it ? { ...it, slot: `战利品 ${idx + 1}` } : null)}
-              />
+        <div
+          style={{
+            borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(255,255,255,0.04)',
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>战利品</div>
+          <div style={{ fontSize: 12, opacity: 0.62 }}>局内即时生效，不进入携带栏</div>
+          <div className="mobile-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 360, paddingRight: 2 }}>
+            {groupedLoot.length <= 0 ? (
+              <div style={{ borderRadius: 12, background: 'rgba(11, 11, 24, 0.58)', padding: 12, opacity: 0.7 }}>暂未拾取战利品</div>
+            ) : groupedLoot.map((group) => (
+              <div key={group.key} style={{ borderRadius: 12, background: 'rgba(11, 11, 24, 0.58)', padding: 12 }}>
+                <div style={{ fontWeight: 900, color: group.color, marginBottom: 8 }}>{group.title} · {group.items.length}</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {group.items.map((it, idx) => (
+                    <Slot
+                      key={`${group.key}-${it.instanceId || it.id || idx}`}
+                      item={it}
+                      slotLabel={`${group.title}战利品`}
+                      label={it ? undefined : ''}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
+
+        {selectedItem ? (
+          <div
+            style={{
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'rgba(255,255,255,0.04)',
+              padding: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>物品详情</div>
+            <div
+              style={{
+                borderRadius: 12,
+                border: `1px solid ${selectedItem.rarityTextColor || 'rgba(255,255,255,0.12)'}`,
+                background: 'rgba(11, 11, 24, 0.58)',
+                padding: 14,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: 16
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div
+                    style={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 14,
+                      border: `1px solid ${selectedItem.rarityTextColor || 'rgba(255,255,255,0.12)'}`,
+                      background: 'rgba(255,255,255,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 24,
+                      fontWeight: 900,
+                      flexShrink: 0
+                    }}
+                  >
+                    {selectedItem.icon || '✦'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 900, fontSize: 18, color: selectedItem.rarityTextColor || '#ffffff' }}>
+                      {selectedItem.name || '未命名战利品'}
+                    </div>
+                    <div style={{ opacity: 0.78, fontSize: 12, marginTop: 2 }}>
+                      {[selectedItem.slot, selectedItem.rarityLabel, selectedItem.categoryLabel].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(Array.isArray(selectedItem.statLines) && selectedItem.statLines.length > 0
+                    ? selectedItem.statLines
+                    : [selectedItem.desc || ''])
+                    .filter(Boolean)
+                    .map((line, idx) => (
+                      <div key={`detail-line-${idx}`} style={{ fontSize: 13, lineHeight: 1.45, opacity: 0.92 }}>
+                        {line}
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                {selectedItem.count && Number(selectedItem.count) > 1 ? (
+                  <div style={{ fontWeight: 900, color: selectedItem.rarityTextColor || '#ffffff' }}>x{Number(selectedItem.count)}</div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSelectedItem(null)}
+                  style={{
+                    marginTop: 10,
+                    cursor: 'pointer',
+                    height: 30,
+                    padding: '0 12px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 800
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.04)', padding: 12, fontSize: 13, opacity: 0.74, lineHeight: 1.5 }}>
+            长按或点选背包中的物品后，可以在这里查看更完整的说明。
+          </div>
+        )}
       </div>
     );
   };
 
   const renderStatsPanel = () => {
     const p = player || {};
-    const maxHp = Number(p.maxHp || 0);
-    const fireRate = Number(p.fireRate || 0);
-    const dmg = Number(p.bulletDamage || 0);
-    const critChance = Number(p.critChance || 0);
-    const critMult = Number(p.critMultiplier || 1);
-
-    const dps = fireRate > 0 ? (dmg * (1000 / fireRate)) : 0;
-    const critFactor = 1 + critChance * Math.max(0, (critMult - 1));
-    const approxDps = dps * critFactor;
-
-    const lifesteal = Number(p.lifestealPercent || 0);
-    const shields = Number(p.shieldCharges || 0);
-    const speed = Number(p.moveSpeed || 0);
-
-    const damageReduction = Number(p.damageReductionPercent || 0);
-    const dodge = Number(p.dodgePercent || 0);
-    const regenPerSec = Number(p.regenPerSec || 0);
-
-    const powerScore = Math.max(0, Math.round(
-      approxDps * 6 +
-      maxHp * 1.2 +
-      shields * 35 +
-      lifesteal * 800 +
-      speed * 0.15
-    ));
+    const groups = buildRuntimeStatGroups(p);
 
     return (
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, opacity: 0.92 }}>
-        {`金币（局内）: ${viewData?.sessionCoins || 0}    全局金币: ${viewData?.globalCoins || 0}\n\n`}
-        {`总战斗力（参考分）: ${powerScore}\n\n`}
-        {`关键属性汇总：\n`}
-        {`减伤%: ${(damageReduction * 100).toFixed(1)}%\n`}
-        {`闪避%: ${(dodge * 100).toFixed(1)}%\n`}
-        {`暴击率%: ${(critChance * 100).toFixed(1)}%\n`}
-        {`暴击伤害倍率: x${critMult.toFixed(2)}\n`}
-        {`每秒回复: ${regenPerSec.toFixed(1)}\n`}
-        {`吸血%: ${(lifesteal * 100).toFixed(1)}%\n`}
-        {`护盾层数: ${shields}\n`}
-        {`移速: ${Math.round(speed)}\n\n`}
-        {`输出估算：\n`}
-        {`单发伤害: ${Math.round(dmg)}\n`}
-        {`射速(发/秒): ${(fireRate > 0 ? (1000 / fireRate) : 0).toFixed(2)}\n`}
-        {`估算DPS(含暴击期望): ${Math.round(approxDps)}\n`}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: 0.92, padding: 12 }}>
+        {renderMetricGroups(groups, { compact: true, asGrid: true })}
       </div>
     );
   };
@@ -698,6 +1159,19 @@ export default function App() {
           0% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 30px rgba(0,0,0,0.22); }
           50% { box-shadow: 0 0 0 1px rgba(255,255,255,0.22), 0 18px 42px rgba(0,0,0,0.30); }
           100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 30px rgba(0,0,0,0.22); }
+        }
+
+        .mobile-scroll {
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .mobile-scroll::-webkit-scrollbar {
+          width: 0;
+          height: 0;
         }
       `}</style>
       {/* 游戏内：右上角“查看”图标（圆形） */}
@@ -913,7 +1387,7 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点击购买，长按查看</div>
+              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点一下查看，再决定是否购买</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
@@ -938,88 +1412,99 @@ export default function App() {
             </div>
 
             <div
-              className="ui-scroll"
+              className="mobile-scroll"
               style={{
                 flex: 1,
                 minHeight: 0,
-                overflow: 'auto',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, 92px)',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))',
                 gap: 10,
-                justifyContent: 'center',
                 alignContent: 'start',
-                paddingBottom: 84,
+                paddingBottom: 8,
                 userSelect: 'none'
               }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
             >
               {ITEM_DEFS.map((item) => {
-                const isOwned = ownedItems.includes(item.id);
+                const ownedCount = getOwnedCount(item.id);
+                const purchaseState = getPurchaseState(item, ownedItems, viewData?.globalCoins || 0);
+                const selected = shopDetailItem?.id === item.id;
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onPointerDown={(e) => startLongPress(`shop:${item.id}`, () => showShopDetail(item), e)}
-                    onPointerUp={(e) => endLongPress(`shop:${item.id}`, () => attemptPurchaseShopItem(item), e)}
-                    onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                    onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onClick={() => showShopDetail(item)}
                     style={{
                       cursor: 'pointer',
-                      width: 92,
                       border: 'none',
                       background: 'transparent',
                       color: '#fff',
                       padding: 0,
                       textAlign: 'center',
-                      opacity: isOwned ? 0.55 : 1,
-                      filter: isOwned ? 'grayscale(1) brightness(0.9)' : 'none',
                       userSelect: 'none',
-                      WebkitUserSelect: 'none',
-                      touchAction: 'none'
+                      WebkitUserSelect: 'none'
                     }}
                     title={`${item.name}：${item.desc}`}
                   >
                     <div
                       style={{
-                        width: 92,
-                        height: 92,
-                        borderRadius: 12,
-                        border: '2px solid rgba(42,42,58,1)',
-                        background: 'rgba(11, 11, 24, 0.62)',
+                        width: '100%',
+                        aspectRatio: '1 / 1',
+                        borderRadius: 16,
+                        border: selected ? '2px solid rgba(125,211,252,0.95)' : '2px solid rgba(42,42,58,1)',
+                        background: selected ? 'rgba(29, 78, 216, 0.22)' : 'rgba(11, 11, 24, 0.62)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 900,
-                        fontSize: 20,
+                        fontSize: 22,
                         position: 'relative'
                       }}
                     >
                       {item.icon}
-                      {isOwned ? (
+                      {ownedCount > 0 ? (
                         <div
                           style={{
                             position: 'absolute',
-                            left: 6,
+                            top: 6,
                             right: 6,
-                            bottom: 6,
-                            borderRadius: 10,
-                            padding: '2px 6px',
+                            minWidth: 22,
+                            height: 22,
+                            borderRadius: 999,
+                            padding: '0 6px',
                             fontSize: 11,
                             fontWeight: 900,
-                            background: 'rgba(0,0,0,0.35)'
+                            background: 'rgba(0,0,0,0.42)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}
                         >
-                          已拥有
+                          {ownedCount}
                         </div>
                       ) : null}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 6,
+                          right: 6,
+                          bottom: 6,
+                          borderRadius: 10,
+                          padding: '2px 6px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: purchaseState.ok ? 'rgba(37,99,235,0.22)' : 'rgba(0,0,0,0.35)',
+                          opacity: 0.92
+                        }}
+                      >
+                        {`${ownedCount}/${purchaseState.maxOwned || 1}`}
+                      </div>
                     </div>
                     <div
                       style={{
                         marginTop: 6,
                         fontWeight: 900,
-                        fontSize: 16,
+                        fontSize: 15,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
@@ -1036,35 +1521,89 @@ export default function App() {
             {/* 详情卡片：点击道具后出现（风格与装备查看类似），可在此购买 */}
             {shopDetailItem ? (
               (() => {
-                const isOwned = ownedItems.includes(shopDetailItem.id);
+                const ownedCount = getOwnedCount(shopDetailItem.id);
+                const purchaseState = getPurchaseState(shopDetailItem, ownedItems, viewData?.globalCoins || 0);
                 return (
                   <div
                     style={{
-                      position: 'absolute',
-                      left: 18,
-                      right: 18,
-                      bottom: 18,
-                      borderRadius: 12,
+                      borderRadius: 16,
                       border: '2px solid rgba(42,42,58,1)',
                       background: 'rgba(11, 11, 24, 0.92)',
-                      padding: 12,
+                      padding: 14,
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
+                      flexDirection: 'column',
                       gap: 12
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {shopDetailItem.icon} {shopDetailItem.name}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 14,
+                          border: '1px solid rgba(255,255,255,0.14)',
+                          background: 'rgba(255,255,255,0.06)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 28,
+                          flexShrink: 0
+                        }}
+                      >
+                        {shopDetailItem.icon}
                       </div>
-                      <div style={{ opacity: 0.82, fontSize: 15, marginTop: 4 }}>{shopDetailItem.desc}</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 900, fontSize: 18, lineHeight: 1.2 }}>
+                          {shopDetailItem.name}
+                        </div>
+                        <div style={{ opacity: 0.82, fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>{shopDetailItem.desc}</div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
-                      {isOwned ? (
-                        <div style={{ fontWeight: 900, color: '#88ff88' }}>已拥有</div>
-                      ) : null}
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
+                        <div style={{ fontSize: 12, opacity: 0.72 }}>{`已拥有 ${ownedCount}/${purchaseState.maxOwned || 1}`}</div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button
+                          type="button"
+                          disabled={!purchaseState.ok}
+                          onClick={() => attemptPurchaseShopItem(shopDetailItem)}
+                          style={{
+                            cursor: purchaseState.ok ? 'pointer' : 'default',
+                            height: 42,
+                            padding: '0 18px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(255,255,255,0.18)',
+                            background: purchaseState.ok ? 'rgba(59,130,246,0.26)' : 'rgba(255,255,255,0.06)',
+                            color: '#fff',
+                            fontSize: 14,
+                            fontWeight: 900,
+                            opacity: purchaseState.ok ? 1 : 0.55
+                          }}
+                        >
+                          购买
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShopDetailItem(null)}
+                          style={{
+                            cursor: 'pointer',
+                            height: 42,
+                            padding: '0 16px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(255,255,255,0.14)',
+                            background: 'rgba(255,255,255,0.06)',
+                            color: '#fff',
+                            fontSize: 14,
+                            fontWeight: 800
+                          }}
+                        >
+                          关闭
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1105,7 +1644,7 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点击装备/卸载，长按查看</div>
+              <div style={{ fontSize: 18, fontWeight: 900, opacity: 0.9 }}>点一下查看，再决定装备或卸载</div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:gotoScene', 'MenuScene')}
@@ -1125,51 +1664,34 @@ export default function App() {
               </button>
             </div>
 
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 92px)', gap: 10, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>已装备</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                 {new Array(6).fill(null).map((_, idx) => {
                   const itemId = equippedItems?.[idx] || null;
                   const item = itemId ? ITEM_DEFS.find((it) => it.id === itemId) : null;
+                  const selected = equipDetail?.item?.id && item?.id === equipDetail.item.id && equipDetail?.kind === 'equipped' && equipDetail?.slotIndex === idx;
                   return (
                     <button
                       key={`slot-${idx}`}
                       type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                      onPointerDown={(e) => {
-                        if (!item) return;
-                        startLongPress(`equipSlot:${idx}`, () => showEquipDetail({ kind: 'equipped', slotIndex: idx, item }), e);
-                      }}
-                      onPointerUp={(e) => {
-                        if (!item) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          clearPressState();
-                          return;
-                        }
-                        endLongPress(`equipSlot:${idx}`, () => {
-                          unequipSlot(idx);
-                          showFloatingInfo('已卸载');
-                        }, e);
-                      }}
-                      onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                      onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={() => showEquipDetail(item ? { kind: 'equipped', slotIndex: idx, item } : null)}
                       style={{
                         cursor: 'pointer',
-                        width: 92,
-                        height: 92,
-                        borderRadius: 12,
-                        border: '2px solid rgba(42,42,58,1)',
-                        background: 'rgba(11, 11, 24, 0.62)',
+                        width: '100%',
+                        aspectRatio: '1 / 1',
+                        borderRadius: 16,
+                        border: selected ? '2px solid rgba(125,211,252,0.95)' : '2px solid rgba(42,42,58,1)',
+                        background: selected ? 'rgba(29, 78, 216, 0.22)' : 'rgba(11, 11, 24, 0.62)',
                         color: '#fff',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 900,
-                        fontSize: 20,
+                        fontSize: item ? 22 : 15,
                         userSelect: 'none',
                         WebkitUserSelect: 'none',
-                        touchAction: 'none'
+                        boxShadow: selected ? '0 0 0 1px rgba(255,255,255,0.16) inset' : 'none'
                       }}
                       title={item ? item.name : `空槽位 ${idx + 1}`}
                     >
@@ -1180,69 +1702,216 @@ export default function App() {
               </div>
             </div>
 
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {equipDetail?.item ? (
+              (() => {
+                const item = equipDetail.item;
+                const list = Array.isArray(equippedItems) ? equippedItems : [];
+                const equippedSlot = equipDetail?.kind === 'equipped'
+                  ? Number(equipDetail?.slotIndex)
+                  : list.indexOf(item.id);
+                const equippedCount = getEquippedCount(item.id);
+                const ownedCount = getOwnedCount(item.id);
+                const equipState = getEquipState(item.id, ownedItems, equippedItems);
+                const isEquipped = equippedSlot >= 0;
+                const canEquip = equipDetail?.kind === 'owned' && getNextAutoEquipSlot() >= 0 && equipState.ok;
+                const actionLabel = equipDetail?.kind === 'equipped' ? '卸载' : '装备';
+
+                return (
+                  <div
+                    style={{
+                      borderRadius: 16,
+                      border: '2px solid rgba(42,42,58,1)',
+                      background: 'rgba(11, 11, 24, 0.92)',
+                      padding: 14,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 56,
+                          height: 56,
+                          borderRadius: 14,
+                          border: '1px solid rgba(255,255,255,0.14)',
+                          background: 'rgba(255,255,255,0.06)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 28,
+                          flexShrink: 0
+                        }}
+                      >
+                        {item.icon}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 900, fontSize: 18, lineHeight: 1.2 }}>{item.name}</div>
+                        <div style={{ opacity: 0.78, fontSize: 13, marginTop: 4, lineHeight: 1.45 }}>{item.desc}</div>
+                        <div style={{ opacity: 0.62, fontSize: 12, marginTop: 6 }}>{`已拥有 ${ownedCount} · 已携带 ${equippedCount}`}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <button
+                        type="button"
+                        disabled={equipDetail?.kind === 'equipped' ? !isEquipped : !canEquip}
+                        onClick={() => {
+                          if (equipDetail?.kind === 'equipped' && isEquipped) {
+                            unequipSlot(equippedSlot);
+                            showFloatingInfo('已卸载');
+                            setEquipDetail(null);
+                            return;
+                          }
+                          autoEquipOwnedItem(item.id);
+                          showFloatingInfo(canEquip ? '已装备' : '无法继续携带');
+                        }}
+                        style={{
+                          cursor: (equipDetail?.kind === 'equipped' ? isEquipped : canEquip) ? 'pointer' : 'default',
+                          height: 42,
+                          padding: '0 18px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(255,255,255,0.18)',
+                          background: (equipDetail?.kind === 'equipped' ? isEquipped : canEquip) ? 'rgba(59,130,246,0.26)' : 'rgba(255,255,255,0.06)',
+                          color: '#fff',
+                          fontSize: 14,
+                          fontWeight: 900,
+                          opacity: (equipDetail?.kind === 'equipped' ? isEquipped : canEquip) ? 1 : 0.55
+                        }}
+                      >
+                        {actionLabel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEquipDetail(null)}
+                        style={{
+                          cursor: 'pointer',
+                          height: 42,
+                          padding: '0 16px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(255,255,255,0.14)',
+                          background: 'rgba(255,255,255,0.06)',
+                          color: '#fff',
+                          fontSize: 14,
+                          fontWeight: 800
+                        }}
+                      >
+                        关闭
+                      </button>
+                      {(equipDetail?.kind === 'owned' && !canEquip) ? (
+                        <div style={{ fontSize: 12, opacity: 0.72 }}>
+                          {getNextAutoEquipSlot() < 0 ? '没有空槽位' : '已达到携带上限'}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
               <div
+                style={{
+                  borderRadius: 16,
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  background: 'rgba(255,255,255,0.04)',
+                  padding: '14px 16px',
+                  fontSize: 13,
+                  opacity: 0.74,
+                  lineHeight: 1.5
+                }}
+              >
+                点击上方已装备格子或下方背包物品，查看详情后再决定装备或卸载。
+              </div>
+            )}
+
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>已拥有</div>
+              <div
+                className="mobile-scroll"
                 style={{
                   flex: 1,
                   minHeight: 0,
-                  overflow: 'auto',
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, 92px)',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))',
                   gap: 10,
-                  justifyContent: 'center',
                   alignContent: 'start',
-                  paddingBottom: 84,
+                  paddingBottom: 8,
                   userSelect: 'none'
                 }}
                 onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
               >
-                {ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).length === 0 ? (
+                {ITEM_DEFS.filter((it) => getOwnedCount(it.id) > 0).length === 0 ? (
                   <div style={{ opacity: 0.8 }}>暂无已购买道具</div>
                 ) : (
-                  ITEM_DEFS.filter((it) => ownedItems.includes(it.id)).map((item) => (
+                  ITEM_DEFS.filter((it) => getOwnedCount(it.id) > 0).map((item) => (
                     (() => {
-                      const isEquipped = Array.isArray(equippedItems) && equippedItems.includes(item.id);
-                      const equippedSlot = Array.isArray(equippedItems) ? equippedItems.indexOf(item.id) : -1;
+                      const ownedCount = getOwnedCount(item.id);
+                      const equippedCount = getEquippedCount(item.id);
+                      const fullyEquipped = equippedCount > 0 && equippedCount >= ownedCount;
                       return (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                          onPointerDown={(e) => startLongPress(`owned:${item.id}`, () => showEquipDetail({ kind: 'owned', item }), e)}
-                          onPointerUp={(e) => endLongPress(`owned:${item.id}`, () => {
-                            if (equippedSlot >= 0) {
-                              unequipSlot(equippedSlot);
-                              showFloatingInfo('已卸载');
-                              return;
-                            }
-                            autoEquipOwnedItem(item.id);
-                          }, e)}
-                          onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                          onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-                          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onClick={() => showEquipDetail({ kind: 'owned', item })}
                           style={{
                             cursor: 'pointer',
-                            width: 92,
-                            height: 92,
-                            borderRadius: 12,
-                            border: '2px solid rgba(42,42,58,1)',
-                            background: 'rgba(11, 11, 24, 0.62)',
+                            width: '100%',
+                            aspectRatio: '1 / 1',
+                            borderRadius: 16,
+                            border: equipDetail?.item?.id === item.id ? '2px solid rgba(125,211,252,0.95)' : '2px solid rgba(42,42,58,1)',
+                            background: equipDetail?.item?.id === item.id ? 'rgba(29, 78, 216, 0.22)' : 'rgba(11, 11, 24, 0.62)',
                             color: '#fff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontWeight: 900,
-                            fontSize: 20,
+                            fontSize: 22,
                             overflow: 'hidden',
-                            opacity: isEquipped ? 0.35 : 1,
-                            filter: isEquipped ? 'grayscale(1) brightness(0.85)' : 'none',
+                            opacity: fullyEquipped ? 0.52 : 1,
+                            filter: fullyEquipped ? 'grayscale(0.35) brightness(0.92)' : 'none',
                             userSelect: 'none',
                             WebkitUserSelect: 'none',
-                            touchAction: 'none'
+                            boxShadow: equipDetail?.item?.id === item.id ? '0 0 0 1px rgba(255,255,255,0.16) inset' : 'none'
                           }}
                           title={`${item.name}：${item.desc}`}
                         >
                           {item.icon}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              minWidth: 22,
+                              height: 22,
+                              borderRadius: 999,
+                              padding: '0 6px',
+                              fontSize: 11,
+                              fontWeight: 900,
+                              background: 'rgba(0,0,0,0.42)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {ownedCount}
+                          </div>
+                          {equippedCount > 0 ? (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                left: 6,
+                                right: 6,
+                                bottom: 6,
+                                borderRadius: 10,
+                                padding: '2px 6px',
+                                fontSize: 10,
+                                fontWeight: 900,
+                                background: 'rgba(37,99,235,0.22)',
+                                opacity: 0.92
+                              }}
+                            >
+                              {`${equippedCount}/${ownedCount}`}
+                            </div>
+                          ) : null}
                         </button>
                       );
                     })()
@@ -1251,44 +1920,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* 详情卡片：长按展示；3 秒后自动消失 */}
-            {equipDetail?.item ? (
-              (() => {
-                const item = equipDetail.item;
-                const list = Array.isArray(equippedItems) ? equippedItems : [];
-                const isEquipped = list.includes(item.id);
-
-                return (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 18,
-                      right: 18,
-                      bottom: 18,
-                      borderRadius: 12,
-                      border: '2px solid rgba(42,42,58,1)',
-                      background: 'rgba(11, 11, 24, 0.92)',
-                      padding: 12,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {item.icon} {item.name}
-                      </div>
-                      <div style={{ opacity: 0.82, fontSize: 13, marginTop: 4 }}>{item.desc}</div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      {isEquipped ? <div style={{ fontWeight: 900, color: '#88ff88' }}>已装备</div> : null}
-                    </div>
-                  </div>
-                );
-              })()
-            ) : null}
           </div>
         </div>
       ) : null}

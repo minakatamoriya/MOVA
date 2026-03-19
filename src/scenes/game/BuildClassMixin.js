@@ -1426,9 +1426,12 @@ export function applyBuildClassMixin(GameScene) {
       this.meleeEnabled = true;
       this.thornsPercent = Math.max(this.thornsPercent, 0.12);
       // 初始索敌/攻击范围更小（从近到远排序最短）
-      this.meleeRange = 220;
+      this.player.warriorRangeBase = 220;
+      this.meleeRange = this.player.warriorRangeBase;
       this.meleeLifesteal = 0;
       this.player.canFire = false;
+      this.player.baseFireRate = 700;
+      this.player.baseMaxHp += 30;
       this.player.maxHp += 30;
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + 20);
 
@@ -1438,7 +1441,7 @@ export function applyBuildClassMixin(GameScene) {
       this.slashFacingAngle = null;
       this.slashSwingDir = 1;
       this.slashSwingStartTime = 0;
-      this.slashSwingDuration = 650;
+      this.slashSwingDuration = 700;
       // 每一挥开始时只生成一次命中判定（用于修复“第一挥只出动画不出判定”）
       this.slashLastHitSwingStartTime = null;
       // 保证一次挥砍完整性：挥砍进行中不因击杀/重选目标而重置或瞬间改向
@@ -1454,10 +1457,13 @@ export function applyBuildClassMixin(GameScene) {
       if (this._warriorTargetRing) this._warriorTargetRing.destroy();
       this.ensureUnifiedRangeRing('_warriorTargetRing', 'warrior');
 
+      this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
+
       this.events.emit('updatePlayerInfo');
     },
 
     upgradeWarriorHp() {
+      this.player.baseMaxHp += 20;
       this.player.maxHp += 20;
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + 20);
       this.events.emit('updatePlayerInfo');
@@ -1468,7 +1474,8 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradeWarriorRange() {
-      this.meleeRange = Math.min(360, (this.meleeRange || 220) + 25);
+      this.player.warriorRangeBase = Math.min(360, (this.player.warriorRangeBase || 220) + 25);
+      this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
     },
 
     upgradeWarriorLifesteal() {
@@ -1488,7 +1495,7 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_warriorTargetRing', 'warrior');
 
-      const range = this.meleeRange || 150;
+      const range = this.player?.warriorRange || this.meleeRange || 150;
       const hp = this.player.getHitboxPosition?.();
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
@@ -1506,14 +1513,14 @@ export function applyBuildClassMixin(GameScene) {
     updateMelee(time) {
       if (!this.meleeEnabled || !this.player || this.player.isAlive === false) return;
 
-      const range = this.meleeRange || 150;
+      const range = this.player?.warriorRange || this.meleeRange || 150;
 
       const hp = this.player.getHitboxPosition?.();
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
-      const baseSwingDuration = this.slashSwingDuration || 1000;
-      const swingDuration = baseSwingDuration;
+      const baseSwingDuration = this.slashSwingDuration || 700;
+      const swingDuration = Math.max(220, Math.round(this.player?.fireRate || baseSwingDuration));
       const swingElapsed = (this.slashSwingStartTime != null) ? (time - this.slashSwingStartTime) : 0;
       const swingInProgress = Number.isFinite(swingElapsed) && swingElapsed >= 0 && swingElapsed < swingDuration;
 
@@ -2184,7 +2191,11 @@ export function applyBuildClassMixin(GameScene) {
     enableWarlockBuild() {
       this.warlockEnabled = true;
       this.warlockDebuffEnabled = true;
-      if (this.player) this.player.canFire = true;
+      if (this.player) {
+        this.player.canFire = true;
+        this.player.baseFireRate = 2000;
+        this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
+      }
     },
 
     refreshWarlockPoisonNovaState(options = {}) {

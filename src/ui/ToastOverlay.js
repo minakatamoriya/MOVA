@@ -34,10 +34,13 @@ export default class ToastOverlay {
     const resolved = (() => {
       if (payload && typeof payload === 'object') {
         const text = String(payload.text ?? '');
+        const title = String(payload.title ?? '');
+        const value = String(payload.value ?? '');
         const icon = payload.icon == null ? '' : String(payload.icon);
-        return { text, icon: icon || 'ℹ️' };
+        const variant = payload.variant == null ? 'default' : String(payload.variant);
+        return { text, title, value, icon: icon || '✦', variant };
       }
-      return { text: String(payload ?? ''), icon: 'ℹ️' };
+      return { text: String(payload ?? ''), title: '', value: '', icon: '✦', variant: 'default' };
     })();
 
     const durationMs = Math.max(0, opts.durationMs ?? this.durationMs);
@@ -63,7 +66,24 @@ export default class ToastOverlay {
     };
   }
 
-  _createToast({ id, text, icon, durationMs }) {
+  _fitText(textObject, rawText, maxWidth) {
+    const fullText = String(rawText ?? '');
+    textObject.setText(fullText);
+    if (textObject.width <= maxWidth) return fullText;
+
+    let clipped = fullText;
+    while (clipped.length > 1) {
+      clipped = clipped.slice(0, -1);
+      const nextText = `${clipped}…`;
+      textObject.setText(nextText);
+      if (textObject.width <= maxWidth) return nextText;
+    }
+
+    textObject.setText('');
+    return '';
+  }
+
+  _createToast({ id, text, title, value, icon, variant, durationMs }) {
     if (!this.scene) return null;
 
     const { cam, x, y } = this._getAnchor();
@@ -72,6 +92,72 @@ export default class ToastOverlay {
     container.setScrollFactor(0);
     container.setDepth(this.depth);
     container.setAlpha(0);
+
+    if (variant === 'loot' && (title || value)) {
+      const w = Phaser.Math.Clamp(Math.floor(cam.width * 0.36), 252, 312);
+      const h = 52;
+      const padX = 14;
+      const iconW = 22;
+      const sepGap = 12;
+      const nameW = 92;
+      const valueW = w - padX * 2 - iconW - sepGap - nameW - 10;
+
+      const bg = this.scene.add.graphics();
+      bg.fillStyle(0x0b0b18, 0.9);
+      bg.fillRoundedRect(-w, -h / 2, w, h, 10);
+      bg.lineStyle(2, 0xffffff, 0.16);
+      bg.strokeRoundedRect(-w, -h / 2, w, h, 10);
+
+      const divider = this.scene.add.graphics();
+      divider.lineStyle(2, 0xffffff, 0.12);
+      const dividerX = -w + padX + iconW + sepGap + nameW + 4;
+      divider.beginPath();
+      divider.moveTo(dividerX, -12);
+      divider.lineTo(dividerX, 12);
+      divider.strokePath();
+
+      const iconText = this.scene.add.text(0, 0, icon, {
+        fontSize: '18px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0, 0.5);
+
+      const titleText = this.scene.add.text(0, 0, '', {
+        fontSize: '17px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0, 0.5);
+
+      const valueText = this.scene.add.text(0, 0, '', {
+        fontSize: '16px',
+        color: '#dfe6f5',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0, 0.5);
+
+      this._fitText(titleText, title, nameW);
+      this._fitText(valueText, value, valueW);
+
+      const leftX = -w + padX;
+      iconText.setPosition(leftX, 0);
+      titleText.setPosition(leftX + iconW + sepGap, 0);
+      valueText.setPosition(dividerX + 10, 0);
+      container.add([bg, divider, iconText, titleText, valueText]);
+
+      this.scene.tweens.add({
+        targets: container,
+        alpha: 1,
+        duration: 140,
+        ease: 'Cubic.Out'
+      });
+
+      return { id, container, w, h, durationMs, hideTimer: null, _dismissed: false };
+    }
 
     const iconText = icon
       ? this.scene.add.text(0, 0, icon, {

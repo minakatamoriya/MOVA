@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ITEM_DEFS } from '../data/items';
+import { getOwnedItemCount, getOwnedItemIds, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { uiBus } from '../ui/bus';
 
 /**
@@ -104,7 +104,8 @@ export default class ItemShopScene extends Phaser.Scene {
     }
 
     this.globalCoins = this.registry.get('globalCoins') || 0;
-    this.ownedItems = this.registry.get('ownedItems') || [];
+    this.ownedItems = getOwnedItemIds(this.registry.get('ownedItems'));
+    this.registry.set('ownedItems', this.ownedItems);
   }
 
   createShopGrid() {
@@ -356,9 +357,10 @@ export default class ItemShopScene extends Phaser.Scene {
       return;
     }
 
-    const isOwned = this.ownedItems.includes(item.id);
-    const coins = Number(this.globalCoins || 0);
-    const canBuy = !isOwned && coins >= Number(item.price || 0);
+    const purchaseState = getPurchaseState(item, this.ownedItems, this.globalCoins);
+    const ownedCount = getOwnedItemCount(this.ownedItems, item.id);
+    const isOwned = ownedCount > 0;
+    const canBuy = purchaseState.ok;
 
     const title = this._detailPanel.getData('title');
     const desc = this._detailPanel.getData('desc');
@@ -370,7 +372,7 @@ export default class ItemShopScene extends Phaser.Scene {
     title.setText(`${item.icon} ${item.name}`);
     desc.setText(item.desc || '');
     price.setText(`${item.price} G`);
-    owned.setText(isOwned ? '已拥有' : '');
+    owned.setText(isOwned ? `已拥有 x${ownedCount}` : '');
 
     if (buyBtnBg && buyBtnText) {
       buyBtnBg.setFillStyle(0xffffff, canBuy ? 0.10 : 0.05);
@@ -420,7 +422,8 @@ export default class ItemShopScene extends Phaser.Scene {
       const status = entry.getData('status');
       const item = entry.getData('item');
       const isSelected = index === this.selectedIndex;
-      const isOwned = this.ownedItems.includes(item.id);
+      const ownedCount = getOwnedItemCount(this.ownedItems, item.id);
+      const isOwned = ownedCount > 0;
 
       if (bg) {
         bg.setFillStyle(isSelected ? 0x2a2a44 : 0x1c1c2b);
@@ -428,7 +431,7 @@ export default class ItemShopScene extends Phaser.Scene {
       }
 
       if (status) {
-        status.setText(isOwned ? '已拥有' : '');
+        status.setText(isOwned ? `x${ownedCount}` : '');
         status.setColor(isOwned ? '#88ff88' : '#ffffff');
       }
     });
@@ -448,16 +451,12 @@ export default class ItemShopScene extends Phaser.Scene {
   purchaseItem(item) {
     if (!item) return;
 
-    if (this.ownedItems.includes(item.id)) {
-      return;
-    }
-
-    if (this.globalCoins < item.price) {
-      return;
-    }
+    const purchaseState = getPurchaseState(item, this.ownedItems, this.globalCoins);
+    if (!purchaseState.ok) return;
 
     this.globalCoins -= item.price;
     this.ownedItems.push(item.id);
+    this.ownedItems = getOwnedItemIds(this.ownedItems);
 
     this.registry.set('globalCoins', this.globalCoins);
     this.registry.set('ownedItems', this.ownedItems);
