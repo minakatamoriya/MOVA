@@ -236,7 +236,7 @@ export function applyBuildClassMixin(GameScene) {
           break;
 
         case 'archer_bounce':
-          this.player.archerArrowBounce = 1;
+          this.player.archerArrowBounce = Math.min(3, (this.player.archerArrowBounce || 0) + 1);
           break;
         case 'paladin_core':
           applyCoreUpgrade(this, upgrade.id);
@@ -282,7 +282,7 @@ export function applyBuildClassMixin(GameScene) {
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_autoseek':
-          this.player.warlockPoisonAutoSeek = true;
+          this.player.warlockPoisonAutoSeek = Math.min(3, (this.player.warlockPoisonAutoSeek || 0) + 1);
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_contagion':
@@ -465,6 +465,10 @@ export function applyBuildClassMixin(GameScene) {
         case 'third_depth_prep':
           this.player.thirdDepthPrepUnlocked = true;
           applyThirdSpecBonusPackage(this.player, getThirdDepthPrepBonus(normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core))?.bonuses);
+          if (normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core) === 'warlock') {
+            this.player.warlockDepthInfernalUnlocked = true;
+            this.undeadSummonManager?.summonInfernal?.({ persistent: true, level: 3 });
+          }
           break;
         case 'third_dual_prep':
           this.player.thirdDualPrepUnlocked = true;
@@ -476,50 +480,50 @@ export function applyBuildClassMixin(GameScene) {
 
         // === 第三天赋：深度专精 ===
         case 'mage_dualcaster':
-          this.player.mageDualcaster = true;
+          this.player.mageDualcaster = Math.min(3, (this.player.mageDualcaster || 0) + 1);
           break;
         case 'mage_trilaser':
-          this.player.mageTrilaser = true;
+          this.player.mageTrilaser = Math.min(3, (this.player.mageTrilaser || 0) + 1);
           break;
         case 'mage_arcanomorph':
           this.player.mageArcanomorphLevel = Math.min(3, (this.player.mageArcanomorphLevel || 0) + 1);
           break;
         case 'archer_windfury':
-          this.player.archerWindfury = true;
+          this.player.archerWindfury = Math.min(3, (this.player.archerWindfury || 0) + 1);
           break;
         case 'archer_eagleeye':
-          this.player.archerEagleeye = true;
+          this.player.archerEagleeye = Math.min(3, (this.player.archerEagleeye || 0) + 1);
           break;
         case 'warrior_bladestorm':
-          this.player.warriorBladestorm = true;
+          this.player.warriorBladestorm = Math.min(3, (this.player.warriorBladestorm || 0) + 1);
           break;
         case 'warrior_berserkgod':
           this.player.warriorBerserkgodLevel = Math.min(3, (this.player.warriorBerserkgodLevel || 0) + 1);
           break;
         case 'warrior_unyielding':
-          this.player.warriorUnyielding = true;
+          this.player.warriorUnyielding = Math.min(3, (this.player.warriorUnyielding || 0) + 1);
           break;
         case 'warlock_souleater':
           this.player.warlockSouleaterLevel = Math.min(3, (this.player.warlockSouleaterLevel || 0) + 1);
           break;
         case 'warlock_netherlord':
-          this.player.warlockNetherlord = true;
+          this.player.warlockNetherlord = Math.min(3, (this.player.warlockNetherlord || 0) + 1);
           break;
         case 'paladin_avenger':
           this.player.paladinAvengerLevel = Math.min(3, (this.player.paladinAvengerLevel || 0) + 1);
           break;
         case 'paladin_sacredshield':
-          this.player.paladinSacredshield = true;
+          this.player.paladinSacredshield = Math.min(3, (this.player.paladinSacredshield || 0) + 1);
           break;
         case 'paladin_divine':
-          this.player.paladinDivine = true;
+          this.player.paladinDivine = Math.min(3, (this.player.paladinDivine || 0) + 1);
           break;
         case 'druid_kingofbeasts':
-          this.player.druidKingofbeasts = true;
+          this.player.druidKingofbeasts = Math.min(3, (this.player.druidKingofbeasts || 0) + 1);
           this.petManager?.refreshPetStats?.();
           break;
         case 'druid_naturefusion':
-          this.player.druidNaturefusion = true;
+          this.player.druidNaturefusion = Math.min(3, (this.player.druidNaturefusion || 0) + 1);
           break;
         case 'druid_astralstorm':
           this.player.druidAstralstormLevel = Math.min(3, (this.player.druidAstralstormLevel || 0) + 1);
@@ -1720,7 +1724,12 @@ export function applyBuildClassMixin(GameScene) {
       this.spawnWarriorMeleeHit(facingAngle);
 
       const swordQiLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorSwordQiLevel || 0)));
-      if (swordQiLevel <= 0) return;
+      const berserkgodLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBerserkgodLevel || 0)));
+      const bladestormLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBladestorm || 0)));
+      const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
+      const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
+      const allowCrescent = swordQiLevel > 0 || berserkgodLevel > 0;
+      if (!allowCrescent) return;
 
       this.spawnWarriorCrescentProjectile(facingAngle, swingDir);
 
@@ -1729,6 +1738,17 @@ export function applyBuildClassMixin(GameScene) {
           if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
           this.spawnWarriorCrescentProjectile(facingAngle, -swingDir);
         });
+      }
+
+      if (bladestormLevel > 0 && berserkgodLevel > 0) {
+        const extraShots = Math.min(3, berserkgodLevel + Math.max(0, bladestormLevel - 1) + (lowHpRatio <= 0.35 ? unyieldingLevel : 0));
+        for (let i = 0; i < extraShots; i++) {
+          this.time?.delayedCall?.(120 + i * 70, () => {
+            if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
+            const offsetDeg = (i % 2 === 0 ? 1 : -1) * (18 + i * 8);
+            this.spawnWarriorCrescentProjectile(facingAngle + Phaser.Math.DegToRad(offsetDeg), swingDir);
+          });
+        }
       }
     },
 
@@ -1791,7 +1811,12 @@ export function applyBuildClassMixin(GameScene) {
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
       const baseSwingDuration = this.slashSwingDuration || 700;
-      const swingDuration = Math.max(220, Math.round(this.player?.fireRate || baseSwingDuration));
+      const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
+      const bladestormLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBladestorm || 0)));
+      const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
+      const bladestormSpeedMult = ([1, 0.58, 0.50, 0.42][bladestormLevel] || 1);
+      const unyieldingSpeedMult = lowHpRatio <= 0.35 ? ([1, 0.88, 0.78, 0.68][unyieldingLevel] || 1) : 1;
+      const swingDuration = Math.max(140, Math.round((this.player?.fireRate || baseSwingDuration) * bladestormSpeedMult * unyieldingSpeedMult));
       const swingElapsed = (this.slashSwingStartTime != null) ? (time - this.slashSwingStartTime) : 0;
       const swingInProgress = Number.isFinite(swingElapsed) && swingElapsed >= 0 && swingElapsed < swingDuration;
 
@@ -1833,7 +1858,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const dist = Phaser.Math.Distance.Between(px, py, target.x, target.y);
       const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
-      const attackStartRange = this.player.warriorSpin ? range : halfMoonR;
+      const attackStartRange = this.player.warriorSpin || this.player?.warriorBladestorm ? range : halfMoonR;
       const targetR = Number.isFinite(target?.bossSize)
         ? target.bossSize
         : (Number.isFinite(target?.radius) ? target.radius : 0);
@@ -1881,7 +1906,7 @@ export function applyBuildClassMixin(GameScene) {
       const facingAngle = this.slashLockedFacingAngle;
       this.slashFacingAngle = facingAngle;
 
-      this.slashArcSpan = this.player.warriorSpin
+      this.slashArcSpan = (this.player.warriorSpin || this.player?.warriorBladestorm)
         ? Math.PI * 2
         : Phaser.Math.DegToRad(this.getWarriorArcSpanDeg());
 
@@ -1899,7 +1924,7 @@ export function applyBuildClassMixin(GameScene) {
         this.slashLockedFacingAngle = computedFacingAngle;
         this.slashLockUntil = this.slashSwingStartTime + swingDuration;
 
-        if (!this.player.warriorSpin) {
+        if (!(this.player.warriorSpin || this.player?.warriorBladestorm)) {
           this.slashSwingDir *= -1;
         } else {
           this.slashSwingDir = 1;
@@ -2852,7 +2877,157 @@ export function applyBuildClassMixin(GameScene) {
         if (freezeMs > 0 && typeof target.applyFreeze === 'function') {
           target.applyFreeze(freezeMs, { source: 'guardian_holy_rebuke', player, radius });
         }
+
+        if ((player.paladinDivine || 0) > 0) {
+          target.debuffs = target.debuffs || {};
+          target.debuffs.divineJudgementLevel = Math.max(0, Math.min(3, Math.round(player.paladinDivine || 0)));
+          target.debuffs.divineJudgementUntil = now + 2200 + target.debuffs.divineJudgementLevel * 400;
+        }
       }
+
+      if ((player.paladinDivine || 0) > 0) {
+        this.triggerPaladinDivinePulse?.({ blocked: false, damage: Math.round((player.bulletDamage || 1) * damageScale), level: player.paladinDivine || 0, source: 'guardian_holy_rebuke' });
+      }
+    },
+
+    triggerPaladinSacredShield(context = {}) {
+      const player = this.player;
+      const level = Math.max(0, Math.min(3, Math.round(context.level || player?.paladinSacredshield || 0)));
+      if (!player || level <= 0) return;
+
+      const now = this.time?.now ?? 0;
+      const radius = [0, 112, 136, 164][level] || 112;
+      const baseDamage = Math.max(1, Math.round((context.incomingDamage || 0) * ([0, 0.45, 0.62, 0.82][level] || 0.45) + (context.absorbedDamage || 0) * 0.35 + (player.bulletDamage || 1) * 0.35));
+      const targets = this.getOffclassCombatTargets();
+
+      const ring = this.add.circle(player.x, player.y, radius * 0.3, 0xfff4b0, 0.14);
+      ring.setDepth(58);
+      ring.setStrokeStyle(2, 0xffd36b, 0.92);
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 2.2,
+        scaleY: 2.2,
+        duration: 180,
+        onComplete: () => ring.destroy()
+      });
+
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target.isInvincible) continue;
+        const dx = target.x - player.x;
+        const dy = target.y - player.y;
+        if ((dx * dx + dy * dy) > radius * radius) continue;
+
+        const damageResult = calculateResolvedDamage({
+          attacker: player,
+          target,
+          baseDamage,
+          now,
+          canCrit: false
+        });
+        target.takeDamage?.(damageResult.amount, { attacker: player, source: 'paladin_sacredshield', suppressHitReaction: false });
+        player.onDealDamage?.(damageResult.amount);
+        this.showDamageNumber?.(target.x, target.y - 28, damageResult.amount, { color: '#ffe28a', whisper: true });
+      }
+    },
+
+    triggerPaladinDivinePulse(context = {}) {
+      const player = this.player;
+      const level = Math.max(0, Math.min(3, Math.round(context.level || player?.paladinDivine || 0)));
+      if (!player || level <= 0) return;
+
+      const now = this.time?.now ?? 0;
+      const radius = [0, 138, 166, 198][level] || 138;
+      const damageScale = [0, 0.70, 0.95, 1.25][level] || 0.70;
+      const stunChance = level >= 3 ? 0.35 : (level >= 2 ? 0.18 : 0);
+      const targets = this.getOffclassCombatTargets();
+
+      const shock = this.add.circle(player.x, player.y, radius * 0.25, 0xfff0a6, 0.12);
+      shock.setDepth(59);
+      shock.setStrokeStyle(3, 0xffd36b, 0.96);
+      this.tweens.add({
+        targets: shock,
+        alpha: 0,
+        scaleX: 3,
+        scaleY: 3,
+        duration: 240,
+        onComplete: () => shock.destroy()
+      });
+
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target.isInvincible) continue;
+        const dx = target.x - player.x;
+        const dy = target.y - player.y;
+        if ((dx * dx + dy * dy) > radius * radius) continue;
+
+        target.debuffs = target.debuffs || {};
+        target.debuffs.divineJudgementLevel = level;
+        target.debuffs.divineJudgementUntil = now + 2200 + level * 500;
+
+        const damageResult = calculateResolvedDamage({
+          attacker: player,
+          target,
+          baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * damageScale + (context.damage || 0) * 0.20)),
+          now,
+          canCrit: false
+        });
+        target.takeDamage?.(damageResult.amount, { attacker: player, source: context.source || 'paladin_divine', suppressHitReaction: false });
+        player.onDealDamage?.(damageResult.amount);
+        this.showDamageNumber?.(target.x, target.y - 30, damageResult.amount, { color: '#ffd36b', whisper: true });
+
+        if (stunChance > 0 && Math.random() < stunChance && typeof target.applyStun === 'function') {
+          target.applyStun(380 + level * 80);
+        }
+      }
+    },
+
+    triggerWarlockSouleaterBurst(originX, originY) {
+      const player = this.player;
+      const level = Math.max(0, Math.min(3, Math.round(player?.warlockSouleaterLevel || 0)));
+      if (!player || level <= 0) return;
+
+      const now = this.time?.now ?? 0;
+      const radius = [0, 116, 148, 188][level] || 116;
+      const targets = this.getOffclassCombatTargets();
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target.isInvincible) continue;
+        const dx = target.x - originX;
+        const dy = target.y - originY;
+        if ((dx * dx + dy * dy) > radius * radius) continue;
+
+        target.debuffs = target.debuffs || {};
+        const pz = target.debuffs.poisonZone || { stacks: 0, inZoneUntil: 0, nextGainAt: 0, nextDecayAt: 0, nextTickAt: 0 };
+        pz.stacks = Math.min(6 + level, Math.max((pz.stacks || 0) + level, level + 1));
+        pz.inZoneUntil = now + 1600 + level * 300;
+        pz.nextTickAt = Math.min(pz.nextTickAt || 0, now);
+        target.debuffs.poisonZone = pz;
+
+        const damageResult = calculateResolvedDamage({
+          attacker: player,
+          target,
+          baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * ([0, 0.45, 0.62, 0.82][level] || 0.45))),
+          now,
+          canCrit: false
+        });
+        target.takeDamage?.(damageResult.amount, { attacker: player, source: 'warlock_souleater', suppressHitReaction: false });
+        player.onDealDamage?.(damageResult.amount);
+        this.showDamageNumber?.(target.x, target.y - 26, damageResult.amount, { color: '#7dff7a', whisper: true });
+      }
+
+      const ring = this.add.circle(originX, originY, radius * 0.3, 0x66ff99, 0.10);
+      ring.setDepth(57);
+      ring.setStrokeStyle(3, 0x7dff7a, 0.92);
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: 2.6,
+        scaleY: 2.6,
+        duration: 220,
+        onComplete: () => ring.destroy()
+      });
     },
 
     destroyArcaneTurret(turret) {
@@ -3791,7 +3966,8 @@ export function applyBuildClassMixin(GameScene) {
             const atk = Math.max(1, this.player?.bulletDamage || 1);
             const baseAt1 = Math.max(1, Math.round(atk * 0.30 * damageMult));
             const incPerStack = Math.max(1, Math.round(atk * 0.15 * damageMult));
-            const poisonDamage = Math.max(1, Math.round(baseAt1 + (pz.stacks - 1) * incPerStack));
+            const netherlordLevel = Math.max(0, Math.min(3, Math.round(this.player?.warlockNetherlord || 0)));
+            const poisonDamage = Math.max(1, Math.round((baseAt1 + (pz.stacks - 1) * incPerStack) * ([1, 1.10, 1.22, 1.38][netherlordLevel] || 1)));
 
             // 毒圈跳伤统一吃玩家增伤、暴击和目标当前承伤状态
             const damageResult = calculateResolvedDamage({ attacker: this.player, target, baseDamage: poisonDamage, now });

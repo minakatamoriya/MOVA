@@ -191,6 +191,11 @@ function getTargetDamageTakenMultiplier(target, now) {
     multiplier *= (1 + poisonZoneStacks * 0.03);
   }
 
+  const divineJudgementLevel = Math.max(0, Math.min(3, Math.round(target?.debuffs?.divineJudgementLevel || 0)));
+  if (divineJudgementLevel > 0 && (target?.debuffs?.divineJudgementUntil || 0) > now) {
+    multiplier *= [1, 1.05, 1.09, 1.14][divineJudgementLevel] || 1.05;
+  }
+
   return multiplier;
 }
 
@@ -228,12 +233,21 @@ export function calculateResolvedDamage(options = {}) {
   const hasHuntMark = !!(target?.debuffs?.huntMarkEnd && now < target.debuffs.huntMarkEnd);
   const packHunterCritChanceBonus = hasHuntMark ? ([0, 0.06, 0.1, 0.14][packHunterLevel] || 0) : 0;
   const packHunterCritMultBonus = hasHuntMark ? ([0, 0.12, 0.2, 0.3][packHunterLevel] || 0) : 0;
+  const eagleeyeLevel = Math.max(0, Math.min(3, Math.round(attacker?.archerEagleeye || 0)));
+  const eagleeyeCritChanceBonus = eagleeyeLevel > 0
+    ? (hasHuntMark
+      ? ([0, 0.08, 0.14, 0.20][eagleeyeLevel] || 0)
+      : ([0, 0.02, 0.04, 0.06][eagleeyeLevel] || 0))
+    : 0;
+  const eagleeyeCritMultBonus = eagleeyeLevel > 0 && hasHuntMark
+    ? ([0, 0.15, 0.25, 0.40][eagleeyeLevel] || 0)
+    : 0;
 
-  const critChance = canCrit ? clampChance(toNumber(attacker?.critChance, 0) + critChanceBonus + packHunterCritChanceBonus + toNumber(extraCritChance, 0)) : 0;
+  const critChance = canCrit ? clampChance(toNumber(attacker?.critChance, 0) + critChanceBonus + packHunterCritChanceBonus + eagleeyeCritChanceBonus + toNumber(extraCritChance, 0)) : 0;
   const isCrit = forceCrit == null ? (canCrit && Math.random() < critChance) : !!forceCrit;
 
   if (isCrit) {
-    amount = roundDamage(amount * (toMultiplier(attacker?.critMultiplier, 1.5) + packHunterCritMultBonus), minimum);
+    amount = roundDamage(amount * (toMultiplier(attacker?.critMultiplier, 1.5) + packHunterCritMultBonus + eagleeyeCritMultBonus), minimum);
   }
 
   const targetMult = includeTargetModifiers ? getTargetDamageTakenMultiplier(target, now) : 1;

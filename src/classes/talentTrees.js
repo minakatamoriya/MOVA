@@ -81,8 +81,8 @@ export const TREE_DEFS = [
       { id: 'warlock_toxicity', name: '毒性浓度', maxLevel: 3, desc: '剧毒 debuff 最大层数 +1（可叠加）。' },
       { id: 'warlock_corrode', name: '腐蚀', maxLevel: 3, desc: '毒圈持续时间 +1 秒（可叠加）。' },
       { id: 'warlock_spread', name: '扩散', maxLevel: 3, desc: '毒圈范围 +20%（可叠加）。' },
-      { id: 'warlock_infernal', name: '炼狱魔火', maxLevel: 3, desc: '生命低于30%时自动触发：消耗15%生命召唤地狱火 10 秒，冷却30秒。等级会提升地狱火生命、攻击与每击回血。' },
-      { id: 'warlock_infernal_contract', name: '灰烬契约', maxLevel: 3, desc: '强化炼狱魔火：生命消耗降低至10%/5%/0%。' }
+      { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 3, desc: '生命首次跌破30%时自动触发：持续 3/5/10 秒，期间将造成伤害的 30%/50%/100% 转化为生命，冷却30秒。' },
+      { id: 'warlock_infernal_contract', name: '白骨护甲', maxLevel: 3, desc: '强化灵魂虹吸：效果期间过量治疗转化为白骨护盾，护盾上限为最大生命的 10%/20%/30%。' }
     ]
   },
 

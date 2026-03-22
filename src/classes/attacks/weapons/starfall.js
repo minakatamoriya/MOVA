@@ -151,12 +151,15 @@ export function fireStarfall(player) {
   const starfallShapeLevel = Phaser.Math.Clamp(Math.round(player.druidMeteorShowerLevel || 0), 0, 3);
   const impactLevel = Phaser.Math.Clamp(Math.round(player.druidMeteorLevel || 0), 0, 3);
   const starfireLevel = Phaser.Math.Clamp(Math.round(player.druidStarfireLevel || 0), 0, 3);
+  const kingLevel = Phaser.Math.Clamp(Math.round(player.druidKingofbeasts || 0), 0, 3);
+  const naturefusionLevel = Phaser.Math.Clamp(Math.round(player.druidNaturefusion || 0), 0, 3);
+  const astralstormLevel = Phaser.Math.Clamp(Math.round(player.druidAstralstormLevel || 0), 0, 3);
 
   const baseTargetX = target.x;
   const baseTargetY = target.y;
 
   const spawnOne = (aim, opts = {}) => {
-    const { damageMult = 1, allowStarfire = true } = opts;
+    const { damageMult = 1, allowStarfire = true, allowNaturefusion = true } = opts;
 
     const aimTarget = (aim && typeof aim === 'object') ? (aim.target || null) : null;
     const aimOffsetX = (aim && typeof aim === 'object' && Number.isFinite(aim.offsetX)) ? aim.offsetX : 0;
@@ -182,7 +185,7 @@ export function fireStarfall(player) {
     const outlineColor = scheme.accentColor;
     const glowColor = scheme.glowColor;
 
-    const aoeRadius = radiusByLevel[starfallShapeLevel] || 70;
+    const aoeRadius = Math.round((radiusByLevel[starfallShapeLevel] || 70) * ([1, 1.18, 1.34, 1.52][kingLevel] || 1));
     const isHeavyImpact = impactLevel >= 2;
     const glow = scene.add.circle(p0.x, startY, isHeavyImpact ? 28 : 24, glowColor, 0.22);
     glow.setStrokeStyle(1, glowColor, 0.35);
@@ -204,7 +207,7 @@ export function fireStarfall(player) {
       ease: 'Sine.Out'
     });
 
-    const fallMs = fallMsByLevel[impactLevel] || 260;
+    const fallMs = Math.max(120, Math.round((fallMsByLevel[impactLevel] || 260) * ([1, 0.92, 0.82, 0.72][astralstormLevel] || 1)));
     const tracker = { p: 0 };
     scene.tweens.add({
       targets: tracker,
@@ -232,7 +235,7 @@ export function fireStarfall(player) {
         const impactX = pos.x;
         const impactY = pos.y;
 
-        const damage = Math.max(1, Math.round(player.bulletDamage * 0.92 * (impactDamageMultByLevel[impactLevel] || 1) * damageMult));
+        const damage = Math.max(1, Math.round(player.bulletDamage * 0.92 * (impactDamageMultByLevel[impactLevel] || 1) * ([1, 1.16, 1.30, 1.46][kingLevel] || 1) * damageMult));
 
         const aoeBullet = scene.createManagedPlayerAreaBullet?.(
           impactX,
@@ -264,12 +267,36 @@ export function fireStarfall(player) {
         // 性能：星落属于高频普攻，砍掉 sparkles/dust 的对象与 tween 量，避免移动+射击时掉帧
 
         // 星火：30% 概率额外触发一次（不连锁）
-        if (allowStarfire && starfireLevel > 0 && Math.random() < (starfireChanceByLevel[starfireLevel] || 0)) {
+        if (allowStarfire && starfireLevel > 0 && Math.random() < Math.min(0.8, (starfireChanceByLevel[starfireLevel] || 0) + ([0, 0.05, 0.10, 0.16][astralstormLevel] || 0))) {
           spawnOne({ x: impactX, y: impactY }, { damageMult: starfireDamageByLevel[starfireLevel] || 0.45, allowStarfire: false });
+        }
+
+        if (allowNaturefusion && naturefusionLevel > 0) {
+          const extraCount = naturefusionLevel;
+          const extraDamageMult = [0, 0.34, 0.48, 0.62][naturefusionLevel] || 0.34;
+          for (let i = 0; i < extraCount; i++) {
+            scene.time.delayedCall(90 + i * 70, () => {
+              if (!scene?.sys?.isActive?.()) return;
+              const angle = (Math.PI * 2 * i) / Math.max(1, extraCount);
+              const spread = 28 + i * 16;
+              spawnOne(
+                { x: impactX + Math.cos(angle) * spread, y: impactY + Math.sin(angle) * spread },
+                { damageMult: extraDamageMult, allowStarfire: false, allowNaturefusion: false }
+              );
+            });
+          }
         }
       }
     });
   };
 
-  spawnOne({ target, offsetX: 0, offsetY: 0 }, { damageMult: 1, allowStarfire: true });
+  const initialCount = 1 + kingLevel;
+  for (let i = 0; i < initialCount; i++) {
+    const angle = initialCount <= 1 ? 0 : ((Math.PI * 2 * i) / initialCount);
+    const spread = i === 0 ? 0 : 26 + kingLevel * 12;
+    spawnOne(
+      { target, offsetX: Math.cos(angle) * spread, offsetY: Math.sin(angle) * spread },
+      { damageMult: 1, allowStarfire: true, allowNaturefusion: true }
+    );
+  }
 }

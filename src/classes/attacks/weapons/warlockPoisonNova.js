@@ -58,6 +58,8 @@ export function fireWarlockPoisonNova(player) {
   const radiusMult = 1 + 0.2 * Math.max(0, player.warlockPoisonSpreadStacks || 0);
   const durationMs = baseDurationMs + 1000 * Math.max(0, player.warlockPoisonCorrodeStacks || 0);
   const damageMult = 1 + 0.15 * Math.max(0, player.warlockPoisonDiseaseStacks || 0);
+  const autoseekLevel = Phaser.Math.Clamp(Math.round(player.warlockPoisonAutoSeek || 0), 0, 3);
+  const netherlordLevel = Phaser.Math.Clamp(Math.round(player.warlockNetherlord || 0), 0, 3);
 
   // 频率：跟随 fireRate（冷却/攻速天赋会加快节奏）
   const now = scene.time?.now ?? 0;
@@ -74,9 +76,9 @@ export function fireWarlockPoisonNova(player) {
   const bright = scheme.coreBright;
   const stroke = lerpColor(core, 0x000000, 0.25);
 
-  const radiusFinal = Math.round(baseRadiusPx * radiusMult);
+  const radiusFinal = Math.round(baseRadiusPx * radiusMult * ([1, 1.10, 1.22, 1.36][netherlordLevel] || 1));
   const radiusStart = Math.max(26, Math.round(radiusFinal * 0.35));
-  const tickDamage = Math.max(1, Math.round((player.bulletDamage || 1) * baseDamagePctPerSec * damageMult));
+  const tickDamage = Math.max(1, Math.round((player.bulletDamage || 1) * baseDamagePctPerSec * damageMult * ([1, 1.10, 1.24, 1.40][netherlordLevel] || 1)));
 
   const bullet = scene.createManagedPlayerBullet(
     spawn.x,
@@ -84,7 +86,7 @@ export function fireWarlockPoisonNova(player) {
     core,
     {
       radius: radiusStart,
-      speed: player.warlockPoisonAutoSeek ? 58 : 0,
+      speed: autoseekLevel > 0 ? ([0, 58, 82, 110][autoseekLevel] || 58) : 0,
       damage: tickDamage,
       angleOffset: 0,
       isAbsoluteAngle: true,
@@ -94,8 +96,8 @@ export function fireWarlockPoisonNova(player) {
       hasTrail: false,
       strokeColor: stroke,
       trailColor: bright,
-      homing: Boolean(player.warlockPoisonAutoSeek),
-      homingTurn: player.warlockPoisonAutoSeek ? 0.035 : 0.04,
+      homing: autoseekLevel > 0,
+      homingTurn: autoseekLevel > 0 ? ([0, 0.035, 0.05, 0.07][autoseekLevel] || 0.035) : 0.04,
       explode: false,
       skipUpdate: false,
       tags: ['player_warlock_poison_nova']
@@ -133,12 +135,12 @@ export function fireWarlockPoisonNova(player) {
   // 逻辑：按秒跳伤；可叠加（上限由碰撞处逻辑控制）
   bullet.isPoisonZone = true;
   bullet.hitCooldownMs = 1000;
-  bullet.maxLifeMs = durationMs;
+  bullet.maxLifeMs = durationMs + autoseekLevel * 500 + netherlordLevel * 700;
   bullet.noCrit = false;
   bullet.hitEffectType = 'poison_zone';
 
   // 高级专精：索敌（给一个初始朝向，避免第一帧角度为 0）
-  if (player.warlockPoisonAutoSeek) {
+  if (autoseekLevel > 0) {
     const boss = scene?.bossManager?.getCurrentBoss?.();
     if (boss && boss.isAlive) {
       bullet.angleOffset = Phaser.Math.Angle.Between(bullet.x, bullet.y, boss.x, boss.y);
@@ -149,6 +151,7 @@ export function fireWarlockPoisonNova(player) {
 
   // 允许天赋在碰撞层识别
   bullet._poisonZoneOwnerId = 'warlock_poison_nova';
+  bullet.netherlordLevel = netherlordLevel;
 
   // 向后兼容：记录到 player.bullets
   player.bullets.push(bullet);

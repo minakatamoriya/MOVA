@@ -12,7 +12,7 @@
 - 双职预备：主副不同主题时出现，进入双职业专精。
 - 多级节点统一展开为 Lv1 / Lv2 / Lv3；战士的 [warrior_range](src/classes/upgradePools.js) 当前仍是 4 级。
 - 旧 id 别名：mage_refract -> mage_frostbite，mage_arcane_perception -> mage_cold_focus，mage_energy_focus -> mage_ice_veins。
-- 以下 5 个深度节点当前代码只记录等级档位，尚未接入明确数值公式：mage_arcanomorph、warrior_berserkgod、warlock_souleater、paladin_avenger、druid_astralstorm。
+- 以下 2 个深度节点当前仍未完全接入最终数值公式：mage_arcanomorph、paladin_avenger。
 
 ## 猎人
 
@@ -40,9 +40,9 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁猎人深度专精，并获得暴击率 +30%。
-- archer_bounce：Lv1 反射猎场，箭矢可在墙体与边界间反弹，优先继续追猎最近敌人。
-- archer_windfury：Lv1 暴风裂羽，每轮散射额外追加一组延迟二段箭幕。
-- archer_eagleeye：Lv1 终局鹰眼，所有散射箭获得更高暴击权重，并进一步提高对被标记目标的暴击上限。
+- archer_bounce，3级：Lv1 箭矢获得 1 次敌人间弹射追猎；Lv2 1 -> 2 次；Lv3 2 -> 3 次。当前不是墙体物理反弹，而是命中后改向追击下一个目标。
+- archer_windfury，3级：Lv1 主射击改为 360° 箭环，并追加 1 波延迟箭幕；Lv2 箭环密度提高，并追加第 2 波；Lv3 再提高密度，并追加第 3 波。
+- archer_eagleeye，3级：Lv1 箭幕基础伤害提高，并对猎印目标获得额外暴击权重；Lv2 继续提高暴击权重与箭幕伤害；Lv3 对猎印目标的暴击伤害再提升。
 
 ## 德鲁伊
 
@@ -71,9 +71,9 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁德鲁伊深度专精，并获得攻击间隔 -30%。
-- druid_kingofbeasts：Lv1 群星坠世，星落覆盖范围显著扩大，单次施法落点数提升。
-- druid_naturefusion：Lv1 连星陨爆，陨石命中后引发二次流星坠击。
-- druid_astralstorm，3级：Lv1 / Lv2 / Lv3 当前仅记录为星落循环提速档位，代码尚未接入明确数值公式。
+- druid_kingofbeasts，3级：Lv1 星落额外追加 1 颗陨星，并同步放大熊灵、战鹰、树精体型与部分基础面板；Lv2 额外陨星提高到 2 颗；Lv3 提高到 3 颗，范围继续扩大。
+- druid_naturefusion，3级：Lv1 陨石命中后追加 1 段连星陨爆；Lv2 追加数提高到 2；Lv3 提高到 3，并让自然伙伴攻击更容易挂联动状态。
+- druid_astralstorm，3级：Lv1 星落下坠节奏与额外星火触发率提升；Lv2 进一步加速；Lv3 达到最高频率，并继续放大星火追击概率。
 
 ## 战士
 
@@ -103,9 +103,9 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁战士深度专精，并获得造成伤害 +30%。
-- warrior_bladestorm：Lv1 永动旋刃，进入持续旋转状态，移动中也不会中断主攻节奏。
-- warrior_berserkgod，3级：Lv1 / Lv2 / Lv3 当前仅记录为破风利刃密度档位，代码尚未接入明确数值公式。
-- warrior_unyielding：Lv1 暴走战躯，血怒、战吼、处决本能收益上限全部提高，低血时旋转更快、剑刃更多。
+- warrior_bladestorm：Lv1 永动旋刃，近战挥砍改为全周持续旋转，攻击频率显著加快，并持续维持贴身绞杀范围。
+- warrior_berserkgod，3级：Lv1 旋转期间每轮额外追加 1 道延迟破风刃；Lv2 追加数提高到 2 道；Lv3 提高到 3 道，形成连续外放压制。
+- warrior_unyielding：Lv1 暴走战躯，低血量时永动旋刃进一步提速；当前代码阈值为生命低于 35% 时额外加快旋转频率。
 
 ## 法师
 
@@ -136,8 +136,8 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁法师深度专精，并获得攻击间隔 -30%。
-- mage_dualcaster：Lv1 星界贯炮，激光变为巨粗贯穿光束，立刻进入终局主炮手感。
-- mage_trilaser：Lv1 棱镜超载，激光命中后会在主目标后方继续裂出副光束。
+- mage_dualcaster：Lv1 星界贯炮，站定后快速展开超宽贯穿激光，射程扩展到覆盖当前屏幕；移动时光束消失，主束会持续减速命中的敌人。
+- mage_trilaser：Lv1 棱镜超载，主激光命中后会从主目标继续裂出最多 2 条副光束，补打周围后排目标。
 - mage_arcanomorph，3级：Lv1 / Lv2 / Lv3 当前仅记录为奥术叠界强度档位，代码尚未接入明确数值公式。
 
 ## 圣骑士
@@ -168,9 +168,9 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁圣骑士深度专精，并获得造成伤害 +30%。
-- paladin_avenger，3级：Lv1 / Lv2 当前仅记录为震退反制强度档位；Lv3 当前占位说明为可追加眩晕，但代码尚未接入明确数值公式。
-- paladin_sacredshield：Lv1 圣棘回响，格挡、受击、反制时都会反弹一部分神圣伤害。
-- paladin_divine：Lv1 审判禁区，神圣回击、反制、击退彼此联动，在身边形成难以逼近的审判区。
+- paladin_avenger，3级：当前已接入为主锤伤害成长档位，但“震退反制”的终局表现仍需继续补到更鲜明的专属数值链路。
+- paladin_sacredshield，3级：Lv1 受击、格挡、护盾吸收会触发近身神圣回响；Lv2 回响范围与伤害提高；Lv3 进一步提高范围与伤害，形成稳定反制光环。
+- paladin_divine，3级：Lv1 受击、神圣回击与锤击会触发审判波，并给敌人挂审判承伤；Lv2 审判波范围与伤害提高；Lv3 进一步提高，并有概率追加短暂眩晕。
 
 ## 术士
 
@@ -183,8 +183,8 @@
 - warlock_toxicity，3级：Lv1 剧毒最大层数 0 -> 1；Lv2 1 -> 2；Lv3 2 -> 3。
 - warlock_corrode，3级：Lv1 毒圈持续时间加成 0秒 -> 1秒；Lv2 1秒 -> 2秒；Lv3 2秒 -> 3秒。
 - warlock_spread，3级：Lv1 毒圈范围加成 0% -> 20%；Lv2 20% -> 40%；Lv3 40% -> 60%。
-- warlock_infernal，3级：Lv1 地狱火生命系数 0% -> 85%，伤害系数 0% -> 110%，每击回复 0 -> 8；Lv2 生命 85% -> 110%，伤害 110% -> 145%，回复 8 -> 14；Lv3 生命 110% -> 145%，伤害 145% -> 185%，回复 14 -> 22。
-- warlock_infernal_contract，3级：Lv1 生命消耗 15% -> 10%；Lv2 10% -> 5%；Lv3 5% -> 0%。
+- warlock_infernal，3级：Lv1 生命首次跌破 30% 时触发灵魂虹吸，持续 3 秒，造成伤害的 30% 转化为生命；Lv2 持续 5 秒，吸血 50%；Lv3 持续 10 秒，吸血 100%；冷却 30 秒。
+- warlock_infernal_contract，3级：Lv1 灵魂虹吸期间，过量治疗转化为上限 10% 最大生命的白骨护甲；Lv2 上限 20%；Lv3 上限 30%。
 
 ### 作为副职业：召唤
 
@@ -198,10 +198,10 @@
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁术士深度专精，并获得造成伤害 +30%。
-- warlock_autoseek：Lv1 瘟疫疆域，毒圈会主动缓慢索敌并向敌群漂移，多个毒圈靠近时可融合。
-- warlock_souleater，3级：Lv1 / Lv2 / Lv3 当前仅记录为腐灭连环扩散强度档位，代码尚未接入明确数值公式。
-- warlock_netherlord：Lv1 炼狱君王，地狱火显著强化，并持续放大毒圈伤害、范围与压场能力。
+- third_depth_prep：Lv1 解锁术士深度专精，并获得造成伤害 +30%；拿到该卡时会立即召唤 1 只常驻地狱火，地狱火被击杀后 30 秒重生。
+- warlock_autoseek，3级：Lv1 毒圈获得主动索敌漂移；Lv2 漂移速度、持续与覆盖进一步提升；Lv3 继续增强追猎与压场。当前尚未实现毒圈融合。
+- warlock_souleater，3级：Lv1 中毒目标死亡时在尸体位置触发一次腐灭扩散，并补加毒层；Lv2 扩散范围与补层提高；Lv3 继续提高范围、伤害与滚雪球速度。
+- warlock_netherlord，3级：Lv1 地狱火体型、生命、攻速与伤害提升，同时地狱火自带近身灼烧环，对周围敌人持续造成伤害；Lv2 继续放大毒圈伤害与覆盖，并强化地狱火驻场压制；Lv3 达到最高压场档位。
 
 ## 第三天赋预备节点
 

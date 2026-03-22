@@ -85,8 +85,8 @@ export const UPGRADE_POOLS = {
     { id: 'warlock_toxicity', category: 'build', name: '毒性浓度', desc: '剧毒最大层数：0 -> 1 -> 2 -> 3。', icon: '术主', maxLevel: 3 },
     { id: 'warlock_corrode', category: 'build', name: '腐蚀', desc: '毒圈持续时间加成：0秒 -> 1秒 -> 2秒 -> 3秒。', icon: '术主', maxLevel: 3 },
     { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围加成：0% -> 20% -> 40% -> 60%。', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_infernal', category: 'build', name: '炼狱魔火', desc: '地狱火生命系数：0% -> 85% -> 110% -> 145%；伤害系数：0% -> 110% -> 145% -> 185%；每击回复：0 -> 8 -> 14 -> 22。', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_infernal_contract', category: 'build', name: '灰烬契约', desc: '生命消耗：15% -> 10% -> 5% -> 0%。', icon: '术主', maxLevel: 3, requiredSkillId: 'warlock_infernal' }
+    { id: 'warlock_infernal', category: 'build', name: '灵魂虹吸', desc: '低血触发时长：3秒 -> 5秒 -> 10秒；伤害吸血：30% -> 50% -> 100%，冷却 30 秒。', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_infernal_contract', category: 'build', name: '白骨护甲', desc: '灵魂虹吸期间，过量治疗转化护盾上限：0% -> 10% -> 20% -> 30%。', icon: '术主', maxLevel: 3, requiredSkillId: 'warlock_infernal' }
   ]
 };
 
@@ -330,33 +330,33 @@ export function getThirdSpecPrepOption({ specType, mainCoreKey, offFaction }) {
 // 深度专精池：按主职业主题拆分
 export const DEPTH_SPEC_POOLS = {
   mage: [
-    { id: 'mage_dualcaster', category: 'third_depth', name: '星界贯炮', desc: '激光变为巨粗贯穿光束，立刻进入终局主炮手感', icon: '法深', maxLevel: 1 },
-    { id: 'mage_trilaser', category: 'third_depth', name: '棱镜超载', desc: '激光命中后会在主目标后方继续裂出副光束，强化后排延伸打击', icon: '法深', maxLevel: 1 },
+    { id: 'mage_dualcaster', category: 'third_depth', name: '星界贯炮', desc: '激光变为巨粗贯穿光束，持续升级射程、宽度与压制力', icon: '法深', maxLevel: 3 },
+    { id: 'mage_trilaser', category: 'third_depth', name: '棱镜超载', desc: '激光命中后裂出更多副光束，并逐级提高延伸清屏能力', icon: '法深', maxLevel: 3 },
     { id: 'mage_arcanomorph', category: 'third_depth', name: '奥术叠界', desc: '奥能法阵允许重叠，重叠区内法阵增伤与附加效果按层放大', icon: '法深', maxLevel: 3 }
   ],
   archer: [
-    { id: 'archer_bounce', category: 'third_depth', name: '反射猎场', desc: '箭矢可在墙体与边界间反弹，优先继续追猎最近敌人', icon: '猎深', maxLevel: 1 },
-    { id: 'archer_windfury', category: 'third_depth', name: '暴风裂羽', desc: '每轮散射额外追加一组延迟二段箭幕，形成前后两波清屏', icon: '猎深', maxLevel: 1 },
-    { id: 'archer_eagleeye', category: 'third_depth', name: '终局鹰眼', desc: '所有散射箭获得更高暴击权重，对被标记目标进一步提高暴击上限', icon: '猎深', maxLevel: 1 }
+    { id: 'archer_bounce', category: 'third_depth', name: '反射猎场', desc: '箭矢可多次弹射追猎，逐级提高连锁压制能力', icon: '猎深', maxLevel: 3 },
+    { id: 'archer_windfury', category: 'third_depth', name: '暴风裂羽', desc: '主射击进化为 360° 箭环，并逐级追加更多延迟箭幕', icon: '猎深', maxLevel: 3 },
+    { id: 'archer_eagleeye', category: 'third_depth', name: '终局鹰眼', desc: '所有箭幕获得更高暴击权重，对被标记目标进一步提高处决能力', icon: '猎深', maxLevel: 3 }
   ],
   warrior: [
-    { id: 'warrior_bladestorm', category: 'third_depth', name: '永动旋刃', desc: '进入持续旋转状态，移动中也不会中断主攻节奏', icon: '战深', maxLevel: 1 },
+    { id: 'warrior_bladestorm', category: 'third_depth', name: '永动旋刃', desc: '进入持续旋转状态，持续升级旋转伤害与节奏', icon: '战深', maxLevel: 3 },
     { id: 'warrior_berserkgod', category: 'third_depth', name: '破风利刃', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
-    { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '血怒、战吼、处决本能收益上限全部提高，低血时旋转更快、剑刃更多', icon: '战深', maxLevel: 1 }
+    { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '低血时持续提高旋转速度、伤害与追击风刃数量', icon: '战深', maxLevel: 3 }
   ],
   warlock: [
-    { id: 'warlock_autoseek', category: 'third_depth', name: '瘟疫疆域', desc: '毒圈会主动缓慢索敌并向敌群漂移，多个毒圈靠近时可融合', icon: '术深', maxLevel: 1 },
+    { id: 'warlock_autoseek', category: 'third_depth', name: '瘟疫疆域', desc: '毒圈会主动索敌漂移，逐级提升移动速度、持续与覆盖范围', icon: '术深', maxLevel: 3 },
     { id: 'warlock_souleater', category: 'third_depth', name: '腐灭连环', desc: '中毒敌人死亡时向周围扩散更强的腐蚀层，形成稳定滚雪球', icon: '术深', maxLevel: 3 },
-    { id: 'warlock_netherlord', category: 'third_depth', name: '炼狱君王', desc: '地狱火显著强化，并持续放大毒圈伤害、范围与压场能力', icon: '术深', maxLevel: 1 }
+    { id: 'warlock_netherlord', category: 'third_depth', name: '炼狱君王', desc: '地狱火显著强化，并逐级放大毒圈伤害、范围与地狱火压场能力', icon: '术深', maxLevel: 3 }
   ],
   paladin: [
     { id: 'paladin_avenger', category: 'third_depth', name: '震退反制', desc: '反击命中附带明显击退，高等级可追加短暂眩晕', icon: '骑深', maxLevel: 3 },
-    { id: 'paladin_sacredshield', category: 'third_depth', name: '圣棘回响', desc: '格挡、受击、反制时都会反弹一部分神圣伤害', icon: '骑深', maxLevel: 1 },
-    { id: 'paladin_divine', category: 'third_depth', name: '审判禁区', desc: '神圣回击、反制、击退彼此联动，在身边形成难以逼近的审判区', icon: '骑深', maxLevel: 1 }
+    { id: 'paladin_sacredshield', category: 'third_depth', name: '圣棘回响', desc: '格挡、受击、反制时都会反弹神圣伤害，并逐级扩大回响范围', icon: '骑深', maxLevel: 3 },
+    { id: 'paladin_divine', category: 'third_depth', name: '审判禁区', desc: '神圣回击、反制、击退彼此联动，在身边形成逐级扩张的审判区', icon: '骑深', maxLevel: 3 }
   ],
   druid: [
-    { id: 'druid_kingofbeasts', category: 'third_depth', name: '群星坠世', desc: '星落覆盖范围显著扩大，单次施法落点数提升', icon: '德深', maxLevel: 1 },
-    { id: 'druid_naturefusion', category: 'third_depth', name: '连星陨爆', desc: '陨石命中后引发二次流星坠击，形成连续轰炸区', icon: '德深', maxLevel: 1 },
+    { id: 'druid_kingofbeasts', category: 'third_depth', name: '群星坠世', desc: '星落覆盖范围显著扩大，逐级提升落点数，并同步强化自然伙伴体型', icon: '德深', maxLevel: 3 },
+    { id: 'druid_naturefusion', category: 'third_depth', name: '连星陨爆', desc: '陨石命中后引发更多二次流星坠击，形成连续轰炸区', icon: '德深', maxLevel: 3 },
     { id: 'druid_astralstorm', category: 'third_depth', name: '天穹潮汐', desc: '星落循环显著加速，流星雨与陨石能更高频进入战场', icon: '德深', maxLevel: 3 }
   ]
 };

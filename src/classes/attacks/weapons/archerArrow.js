@@ -92,6 +92,9 @@ export function fireArcherArrow(player) {
   })();
 
   const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
+  const bounceLevel = Phaser.Math.Clamp(Math.round(player.archerArrowBounce || 0), 0, 3);
+  const windfuryLevel = Phaser.Math.Clamp(Math.round(player.archerWindfury || 0), 0, 3);
+  const eagleeyeLevel = Phaser.Math.Clamp(Math.round(player.archerEagleeye || 0), 0, 3);
 
   if (shouldArrowRain && target && target.isAlive) {
     // AOE 判定（当前项目以 Boss 为主；用“短寿命大半径子弹”做范围伤害）
@@ -139,6 +142,11 @@ export function fireArcherArrow(player) {
     bullet.glowColor = arrowGlow;
     bullet.strokeColor = arrowAccent;
     bullet.trailColor = arrowCore;
+    if (bounceLevel > 0) {
+      bullet.canBounce = true;
+      bullet.basicEnh = bullet.basicEnh || {};
+      bullet.basicEnh.bounce = Math.max(bullet.basicEnh.bounce || 0, bounceLevel);
+    }
     applyEnhancementsToBullet(bullet, enh, scheme);
   };
 
@@ -157,15 +165,22 @@ export function fireArcherArrow(player) {
     return Math.abs(shotIndex - centerIndex) < 0.25;
   };
 
-  const fireVolley = (allowRapidProc = true) => {
-    if (player.archerVolleyMode === 'ring') {
-      const count = Math.max(1, Math.round(player.archerVolleyRingCount || 8));
+  const fireVolley = (allowRapidProc = true, volleyIndex = 0) => {
+    const useRingVolley = windfuryLevel > 0 || player.archerVolleyMode === 'ring';
+    if (useRingVolley) {
+      const count = windfuryLevel > 0
+        ? Math.max(12, 12 + windfuryLevel * 2)
+        : Math.max(1, Math.round(player.archerVolleyRingCount || 8));
+      const ringOffset = windfuryLevel > 0 ? ((Math.PI / count) * volleyIndex * 0.85) : 0;
       for (let i = 0; i < count; i++) {
-        const shotAngle = (Math.PI * 2 * i) / count;
+        const shotAngle = ((Math.PI * 2 * i) / count) + ringOffset;
         const bullet = player.createBulletAtAngle(shotAngle, true, {
           spawnX: volleyOriginX,
           spawnY: volleyOriginY
         });
+        if (bullet && eagleeyeLevel > 0) {
+          bullet.damage = Math.max(1, Math.round((bullet.damage || 1) * ([1, 1.08, 1.18, 1.32][eagleeyeLevel] || 1.08)));
+        }
         applyArrowVisuals(bullet);
       }
     } else {
@@ -187,13 +202,25 @@ export function fireArcherArrow(player) {
             bullet.fanOffsetRad = 0;
             bullet.homingTurnRadPerSec = Number(player.archerVolleyLockTurn || Phaser.Math.DegToRad(300));
           }
+          if (eagleeyeLevel > 0) {
+            bullet.damage = Math.max(1, Math.round((bullet.damage || 1) * ([1, 1.08, 1.18, 1.32][eagleeyeLevel] || 1.08)));
+          }
         }
         applyArrowVisuals(bullet);
       }
     }
 
+    if (windfuryLevel > 0 && allowRapidProc) {
+      for (let wave = 1; wave <= windfuryLevel; wave++) {
+        scene.time.delayedCall(110 + wave * 80, () => {
+          if (!player?.isAlive || player.scene !== scene) return;
+          fireVolley(false, wave);
+        });
+      }
+    }
+
     if (allowRapidProc && player.archerRapidfire && Math.random() < 0.1) {
-      fireVolley(false);
+      fireVolley(false, volleyIndex + 1);
     }
   };
 

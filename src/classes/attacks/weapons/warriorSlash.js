@@ -41,23 +41,28 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
 
   const arcDegByLevel = [90, 120, 180, 270];
   const arcLevel = Phaser.Math.Clamp(Math.round(player.warriorArcLevel || 0), 0, 3);
-  const arcSpan = player.warriorSpin ? Math.PI * 2 : Phaser.Math.DegToRad(arcDegByLevel[arcLevel] || 90);
+  const bladestormLevel = Phaser.Math.Clamp(Math.round(player.warriorBladestorm || 0), 0, 3);
+  const hasBladestorm = bladestormLevel > 0;
+  const unyieldingLevel = Phaser.Math.Clamp(Math.round(player.warriorUnyielding || 0), 0, 3);
+  const lowHpRatio = (player.maxHp || 0) > 0 ? ((player.hp || 0) / player.maxHp) : 1;
+  const unyieldingDamageMult = lowHpRatio <= 0.35 ? ([1, 1.12, 1.24, 1.40][unyieldingLevel] || 1) : 1;
+  const arcSpan = (player.warriorSpin || hasBladestorm) ? Math.PI * 2 : Phaser.Math.DegToRad(arcDegByLevel[arcLevel] || 90);
   const start = -arcSpan / 2;
   const end = arcSpan / 2;
   const yScale = Phaser.Math.Clamp(scene.slashEllipseYScale ?? 0.78, 0.55, 0.95);
 
   const rawRange = scene.meleeRange || 220;
-  const hitRange = player.warriorSpin ? rawRange : (rawRange * 0.60);
+  const hitRange = (player.warriorSpin || hasBladestorm) ? rawRange : (rawRange * 0.60);
   const spinMax = Phaser.Math.Clamp(rawRange, 90, 420);
   const halfMoonMax = 260;
-  const hitRadius = Phaser.Math.Clamp(Math.floor(hitRange), 46, player.warriorSpin ? spinMax : halfMoonMax);
+  const hitRadius = Phaser.Math.Clamp(Math.floor(hitRange), 46, (player.warriorSpin || hasBladestorm) ? spinMax : halfMoonMax);
 
   // 计算弧形碰撞采样点
   const arcSamples = [];
-  const ringRadii = player.warriorSpin
+  const ringRadii = (player.warriorSpin || hasBladestorm)
     ? [hitRadius * 0.35, hitRadius * 0.70, hitRadius]
     : [hitRadius * 0.45, hitRadius * 0.72, hitRadius];
-  const sampleCount = player.warriorSpin ? 20 : 18;
+  const sampleCount = (player.warriorSpin || hasBladestorm) ? 22 : 18;
 
   for (let r = 0; r < ringRadii.length; r++) {
     const rr = ringRadii[r];
@@ -75,7 +80,7 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
     scheme.coreBright,
     {
       radius: 14,
-      damage: Math.max(1, Math.round((player.bulletDamage || 34) * 1.05)),
+      damage: Math.max(1, Math.round((player.bulletDamage || 34) * (1.05 + bladestormLevel * 0.14) * unyieldingDamageMult)),
       alpha: 0.001,
       maxLifeMs: 140,
       pierce: true,
@@ -87,7 +92,7 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
       flags: {
         followPlayer: true,
         hitShape: 'arcSamples',
-        arcSampleRadius: player.warriorSpin ? 14 : 18,
+        arcSampleRadius: (player.warriorSpin || hasBladestorm) ? 14 : 18,
         arcSamples,
         visualCoreColor: scheme.coreBright,
         visualAccentColor: scheme.coreColor,

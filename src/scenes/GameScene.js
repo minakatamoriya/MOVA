@@ -96,26 +96,20 @@ const EMERGENCY_COOLDOWN_DEFS = {
     talentId: 'warlock_infernal',
     enhancementTalentId: 'warlock_infernal_contract',
     skillId: 'warlock_infernal',
-    label: '炼狱魔火',
-    iconText: '狱',
-    enhancedLabel: '灰烬契约',
-    enhancedIconText: '契',
+    label: '灵魂虹吸',
+    iconText: '魂',
+    enhancedLabel: '白骨护甲',
+    enhancedIconText: '骨',
     accentColor: 0x22c55e,
     cooldownMs: 30000,
-    durationMs: 10000,
-    hpCostPct: 0.15,
-    hpCostPctByEnhancementLevel: [0.15, 0.10, 0.05, 0.0],
-    values: [0, 1, 2, 3],
-    hpScaleByLevel: [0, 0.85, 1.10, 1.45],
-    damageMultByLevel: [0, 1.10, 1.45, 1.85],
-    healPerHitByLevel: [0, 8, 14, 22],
+    values: [0, 0.30, 0.50, 1.0],
+    durationByLevel: [0, 3000, 5000, 10000],
+    overhealBarrierCapRatioByEnhancementLevel: [0, 0.10, 0.20, 0.30],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
-      const level = Math.max(0, Math.round(Number(state.value) || 0));
-      const hpScale = [0, 85, 110, 145][level] || 0;
-      const damageScale = [0, 110, 145, 185][level] || 0;
-      const healPerHit = [0, 8, 14, 22][level] || 0;
-      return `生命低于30%时自动触发：消耗${Math.round((state.hpCostPct || 0) * 100)}%生命召唤地狱火，持续${seconds}秒。当前等级使地狱火生命为玩家${hpScale}%基准、攻击为${damageScale}%基准、每击回复${healPerHit}生命。冷却30秒。`;
+      const barrierCap = Math.round((Number(state.overhealBarrierCapRatio || 0)) * 100);
+      const barrierText = barrierCap > 0 ? ` 过量治疗会转化为上限${barrierCap}%最大生命的白骨护盾。` : '';
+      return `生命首次跌破30%时自动触发：持续${seconds}秒，将造成伤害的${Math.round((state.value || 0) * 100)}%转化为生命。冷却30秒。${barrierText}`;
     }
   },
   druid: {
@@ -2335,6 +2329,9 @@ class GameScene extends Phaser.Scene {
     if (Array.isArray(def.hpCostPctByEnhancementLevel)) {
       hpCostPct = Number(def.hpCostPctByEnhancementLevel[clampTalentLevel(enhancementLevel)] ?? hpCostPct);
     }
+    const overhealBarrierCapRatio = Array.isArray(def.overhealBarrierCapRatioByEnhancementLevel)
+      ? Number(def.overhealBarrierCapRatioByEnhancementLevel[clampTalentLevel(enhancementLevel)] || 0)
+      : Number(def.overhealBarrierCapRatio || 0);
 
     const state = {
       ...def,
@@ -2343,7 +2340,8 @@ class GameScene extends Phaser.Scene {
       value,
       durationMs,
       radiusPx,
-      hpCostPct
+      hpCostPct,
+      overhealBarrierCapRatio
     };
     if (enhancementLevel > 0) {
       state.label = String(def.enhancedLabel || def.label || def.skillId || '');
@@ -2452,7 +2450,10 @@ class GameScene extends Phaser.Scene {
           } else if (coreKey === 'mage') {
             this.triggerMageFrostNova(next);
           } else if (coreKey === 'warlock') {
-            this.triggerWarlockInfernal(next);
+            this.player.emergencyLifestealPercent = next.value;
+            this.player.emergencyLifestealUntil = now + next.durationMs;
+            this.player.emergencyOverhealBarrierCapRatio = Math.max(0, Number(next.overhealBarrierCapRatio || 0));
+            this.player.emergencyOverhealBarrierUntil = now + next.durationMs;
           } else if (coreKey === 'druid') {
             this.player.activateEmergencyRegen?.(next.value, next.durationMs);
           }
@@ -2703,6 +2704,8 @@ class GameScene extends Phaser.Scene {
       this.events.off('minionKilled', this._minionKilledHandler);
     }
     this._minionKilledHandler = (payload) => {
+      this.triggerWarlockSouleaterBurst?.(payload?.x ?? 0, payload?.y ?? 0);
+
       const exp = Math.max(0, payload?.expReward || 0);
       if (exp > 0) this.addExp(exp, { source: 'minion' });
 

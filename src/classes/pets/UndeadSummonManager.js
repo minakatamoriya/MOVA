@@ -27,6 +27,7 @@ export default class UndeadSummonManager {
     this.player = null;
     this.summonRegistry = scene?.summonRegistry || null;
     this.infernals = [];
+    this.infernalRespawnAt = 0;
     this.units = new Map([
       [SUMMON_TYPES.guard, []],
       [SUMMON_TYPES.mage, []]
@@ -37,6 +38,10 @@ export default class UndeadSummonManager {
     ]);
     this.acquireRangeBase = 260;
     this.respawnDelayMs = 5000;
+  }
+
+  hasInfernalUnlocked() {
+    return !!(this.player?.warlockDepthInfernalUnlocked);
   }
 
   setPlayer(player) {
@@ -108,12 +113,17 @@ export default class UndeadSummonManager {
     for (let i = 0; i < infernals.length; i++) {
       const unit = infernals[i];
       if (!unit?.active) continue;
-      const level = Phaser.Math.Clamp(Math.round(Number(unit.infernalLevel) || 1), 1, 3);
-      const hpScale = Math.max(0.1, Number(unit.infernalHpScale) || ([0, 0.85, 1.10, 1.45][level] || 1));
-      const nextMaxHp = Math.max(180, Math.round(((this.player?.maxHp || 100) * hpScale + (this.player?.bulletDamage || 1) * (12 + level * 8)) * this.getSummonHealthMultiplier()));
+      const level = Phaser.Math.Clamp(Math.round(Number(unit.infernalLevel) || 3), 1, 3);
+      const hpScale = Math.max(0.1, Number(unit.infernalHpScale) || ([0, 1.8, 2.1, 2.5][level] || 2));
+      const netherlordLevel = Phaser.Math.Clamp(Math.round(this.player?.warlockNetherlord || 0), 0, 3);
+      const nextMaxHp = Math.max(260, Math.round(((this.player?.maxHp || 100) * hpScale + (this.player?.bulletDamage || 1) * (24 + level * 16)) * this.getSummonHealthMultiplier() * ([1, 1.15, 1.30, 1.48][netherlordLevel] || 1)));
       const missing = Math.max(0, (unit.maxHp || nextMaxHp) - (unit.currentHp || 0));
       unit.maxHp = nextMaxHp;
       unit.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+      unit.damageMult = Math.max(0.1, (Number(unit.baseDamageMult) || 1.8) * ([1, 1.18, 1.38, 1.62][netherlordLevel] || 1));
+      unit.auraDamageMult = Math.max(0.1, (Number(unit.baseAuraDamageMult) || 0.42) * ([1, 1.16, 1.28, 1.42][netherlordLevel] || 1));
+      unit.auraRadius = Math.round((Number(unit.baseAuraRadius) || 92) + netherlordLevel * 12);
+      unit.setScale?.((Number(unit.baseScale) || 1.1) + netherlordLevel * 0.08);
     }
   }
 
@@ -234,6 +244,7 @@ export default class UndeadSummonManager {
       const unit = infernals[i];
       if (!unit || !unit.active) continue;
       if ((unit.currentHp || 0) <= 0) continue;
+      if (unit.canDrawFire === false) continue;
       if ((unit.hitRadius || 0) <= 0) continue;
       result.push(unit);
     }
@@ -255,6 +266,11 @@ export default class UndeadSummonManager {
   onSummonKilled(unit) {
     if (!unit) return;
     if (unit.summonType === 'infernal') {
+      const now = this.scene.time?.now ?? 0;
+      if (this.hasInfernalUnlocked()) {
+        this.infernalRespawnAt = Math.max(this.infernalRespawnAt || 0, now + 30000);
+        this.scene?.showDamageNumber?.(this.player?.x || unit.x, (this.player?.y || unit.y) - 86, '地狱火重生 30秒', { color: '#a3e635', fontSize: 18, whisper: true });
+      }
       this.infernals = (this.infernals || []).filter((entry) => entry !== unit && entry?.active);
       this.destroyUnit(unit);
       return;
@@ -349,33 +365,41 @@ export default class UndeadSummonManager {
   summonInfernal(options = {}) {
     if (!this.player) return null;
 
-    const level = Phaser.Math.Clamp(Math.round(Number(options.level) || 1), 1, 3);
-    const durationMs = Math.max(1000, Math.round(Number(options.durationMs) || 10000));
-    const healPerHit = Math.max(1, Math.round(Number(options.healPerHit) || [0, 8, 14, 22][level] || 10));
-    const hpScale = Math.max(0.1, Number(options.hpScale) || ([0, 0.85, 1.10, 1.45][level] || 1));
-    const damageMult = Math.max(0.1, Number(options.damageMult) || ([0, 1.10, 1.45, 1.85][level] || 1));
+    const level = Phaser.Math.Clamp(Math.round(Number(options.level) || 3), 1, 3);
+    const durationMs = Math.max(0, Math.round(Number(options.durationMs) || 0));
+    const healPerHit = Math.max(0, Math.round(Number(options.healPerHit) || 0));
+    const hpScale = Math.max(0.1, Number(options.hpScale) || ([0, 1.8, 2.1, 2.5][level] || 2));
+    const damageMult = Math.max(0.1, Number(options.damageMult) || ([0, 1.75, 2.05, 2.4][level] || 2));
+    const persistent = options.persistent !== false;
 
     (this.infernals || []).forEach((unit) => this.destroyUnit(unit));
     this.infernals = [];
 
-    const unit = this.createInfernal({ level, durationMs, healPerHit, hpScale, damageMult });
+    const unit = this.createInfernal({ level, durationMs, healPerHit, hpScale, damageMult, persistent });
     if (!unit) return null;
 
     this.infernals.push(unit);
+    this.infernalRespawnAt = 0;
     this.summonRegistry?.register(REGISTRY_ID, unit);
     return unit;
   }
 
   createInfernal(config = {}) {
-    const level = Phaser.Math.Clamp(Math.round(Number(config.level) || 1), 1, 3);
-    const durationMs = Math.max(1000, Math.round(Number(config.durationMs) || 10000));
-    const healPerHit = Math.max(1, Math.round(Number(config.healPerHit) || 10));
+    const level = Phaser.Math.Clamp(Math.round(Number(config.level) || 3), 1, 3);
+    const durationMs = Math.max(0, Math.round(Number(config.durationMs) || 0));
+    const healPerHit = Math.max(0, Math.round(Number(config.healPerHit) || 0));
     const hpScale = Math.max(0.1, Number(config.hpScale) || 1);
     const damageMult = Math.max(0.1, Number(config.damageMult) || 1);
+    const persistent = config.persistent !== false;
+    const netherlordLevel = Phaser.Math.Clamp(Math.round(this.player?.warlockNetherlord || 0), 0, 3);
     const x = this.player.x + 10;
     const y = this.player.y + 30;
 
-    const shadow = this.scene.add.ellipse(0, 18, 42, 18, 0x11210f, 0.30);
+    const auraOuter = this.scene.add.circle(0, 8, 44, 0x65a30d, 0.10);
+    auraOuter.setStrokeStyle(3, 0xbef264, 0.34);
+    const auraInner = this.scene.add.circle(0, 10, 26, 0x84cc16, 0.16);
+    const shadow = this.scene.add.ellipse(0, 18, 46, 20, 0x11210f, 0.34);
+    const flameBase = this.scene.add.ellipse(0, 10, 34, 18, 0xd9f99d, 0.16);
     const legs = this.scene.add.rectangle(0, 18, 20, 16, 0x245e27, 0.95);
     const body = this.scene.add.circle(0, 0, 22, 0x3bb54a, 0.97);
     body.setStrokeStyle(3, 0x173f1a, 1);
@@ -390,20 +414,27 @@ export default class UndeadSummonManager {
     const eyeRight = this.scene.add.circle(5, -25, 2.5, 0xe8ffb8, 1);
     const armLeft = this.scene.add.rectangle(-22, 2, 12, 24, 0x2f8f3a, 0.95);
     const armRight = this.scene.add.rectangle(22, 2, 12, 24, 0x2f8f3a, 0.95);
+    const core = this.scene.add.circle(0, -2, 9, 0xecfccb, 0.9);
+    core.setStrokeStyle(2, 0xd9f99d, 0.95);
+    const emberLeft = this.scene.add.circle(-18, -10, 4, 0xd9f99d, 0.72);
+    const emberRight = this.scene.add.circle(18, -14, 3.5, 0xbef264, 0.68);
+    const emberTop = this.scene.add.circle(0, -40, 5, 0xecfccb, 0.62);
 
-    const unit = this.scene.add.container(x, y, [shadow, legs, armLeft, armRight, body, shoulders, head, jaw, hornLeft, hornRight, eyeLeft, eyeRight]);
+    const unit = this.scene.add.container(x, y, [auraOuter, auraInner, shadow, flameBase, legs, armLeft, armRight, body, core, shoulders, head, jaw, hornLeft, hornRight, eyeLeft, eyeRight, emberLeft, emberRight, emberTop]);
     unit.setDepth(8);
     unit.summonType = 'infernal';
     unit.isUndeadSummon = true;
     unit.isInfernal = true;
+    unit.canDrawFire = false;
     unit.infernalLevel = level;
     unit.hitRadius = 22;
-    unit.maxHp = Math.max(180, Math.round(((this.player.maxHp || 100) * hpScale + (this.player.bulletDamage || 1) * (12 + level * 8)) * this.getSummonHealthMultiplier()));
+    unit.maxHp = Math.max(260, Math.round(((this.player.maxHp || 100) * hpScale + (this.player.bulletDamage || 1) * (24 + level * 16)) * this.getSummonHealthMultiplier() * ([1, 1.15, 1.30, 1.48][netherlordLevel] || 1)));
     unit.currentHp = unit.maxHp;
-    unit.moveSpeed = 250;
+    unit.moveSpeed = 250 + netherlordLevel * 18;
     unit.attackRange = 28;
-    unit.attackCooldownMs = 760;
-    unit.damageMult = damageMult;
+    unit.attackCooldownMs = Math.max(420, 760 - netherlordLevel * 70);
+    unit.baseDamageMult = damageMult;
+    unit.damageMult = damageMult * ([1, 1.18, 1.38, 1.62][netherlordLevel] || 1);
     unit.damageTakenMult = 0.55;
     unit.infernalHpScale = hpScale;
     unit.attackWindupMs = 190;
@@ -414,7 +445,30 @@ export default class UndeadSummonManager {
     unit.anchorRadius = 56;
     unit.lastAttackAt = 0;
     unit.healOnHit = healPerHit;
-    unit.expireAt = (this.scene.time?.now ?? 0) + durationMs;
+    unit.persistent = persistent;
+    unit.expireAt = persistent ? 0 : ((this.scene.time?.now ?? 0) + Math.max(1000, durationMs));
+    unit.netherlordLevel = netherlordLevel;
+    unit.baseAuraRadius = 92;
+    unit.auraRadius = unit.baseAuraRadius + netherlordLevel * 12;
+    unit.baseAuraDamageMult = 0.42;
+    unit.auraDamageMult = unit.baseAuraDamageMult * ([1, 1.16, 1.28, 1.42][netherlordLevel] || 1);
+    unit.auraTickMs = 450;
+    unit.lastAuraTickAt = 0;
+    unit.baseScale = 1.1;
+    unit.setScale?.(unit.baseScale + netherlordLevel * 0.08);
+    unit.visuals = {
+      auraOuter,
+      auraInner,
+      flameBase,
+      core,
+      emberLeft,
+      emberRight,
+      emberTop,
+      eyes: [eyeLeft, eyeRight],
+      body,
+      head,
+      shoulders
+    };
 
     const pulse = this.scene.add.circle(x, y, 30, 0x7dff7a, 0.22).setDepth(7);
     pulse.setStrokeStyle(4, 0xd9ff9a, 0.95);
@@ -483,6 +537,7 @@ export default class UndeadSummonManager {
     if (!this.player || this.player.isAlive === false) return;
 
     this.syncRespawns(time);
+    this.syncInfernalRespawn(time);
 
     const guardList = this.units.get(SUMMON_TYPES.guard) || [];
     const mageList = this.units.get(SUMMON_TYPES.mage) || [];
@@ -654,7 +709,7 @@ export default class UndeadSummonManager {
   updateInfernal(unit, time, delta) {
     if (!unit || !unit.active) return;
 
-    if ((unit.expireAt || 0) <= time) {
+    if ((unit.expireAt || 0) > 0 && (unit.expireAt || 0) <= time) {
       this.onSummonKilled(unit);
       return;
     }
@@ -685,6 +740,57 @@ export default class UndeadSummonManager {
     const step = unit.moveSpeed * (delta / 1000);
     unit.x += (dx / dist) * Math.min(step, dist);
     unit.y += (dy / dist) * Math.min(step, dist);
+
+    const pulseT = (time || 0) * 0.006;
+    const visuals = unit.visuals || null;
+    if (visuals) {
+      visuals.auraOuter?.setScale?.(1 + Math.sin(pulseT) * 0.08);
+      visuals.auraOuter?.setAlpha?.(0.22 + Math.sin(pulseT * 0.8) * 0.06);
+      visuals.auraInner?.setScale?.(1 + Math.sin(pulseT * 1.3 + 0.9) * 0.12);
+      visuals.auraInner?.setAlpha?.(0.18 + Math.sin(pulseT * 1.1) * 0.05);
+      visuals.flameBase?.setScale?.(1 + Math.sin(pulseT * 1.7 + 1.6) * 0.14, 1 + Math.sin(pulseT * 2.1) * 0.08);
+      visuals.flameBase?.setAlpha?.(0.14 + Math.sin(pulseT * 1.4) * 0.05);
+      visuals.core?.setScale?.(1 + Math.sin(pulseT * 2.4) * 0.1);
+      visuals.core?.setAlpha?.(0.84 + Math.sin(pulseT * 2.6) * 0.12);
+      if (Array.isArray(visuals.eyes)) {
+        visuals.eyes[0]?.setAlpha?.(0.85 + Math.sin(pulseT * 3.1) * 0.15);
+        visuals.eyes[1]?.setAlpha?.(0.85 + Math.sin(pulseT * 3.1 + 0.4) * 0.15);
+      }
+      visuals.emberLeft?.setPosition?.(-18 + Math.cos(pulseT * 1.2) * 2, -10 + Math.sin(pulseT * 1.8) * 4);
+      visuals.emberRight?.setPosition?.(18 + Math.cos(pulseT * 1.5 + 1.4) * 2, -14 + Math.sin(pulseT * 2.0 + 0.6) * 5);
+      visuals.emberTop?.setPosition?.(Math.sin(pulseT * 1.6) * 3, -40 + Math.cos(pulseT * 2.2) * 4);
+    }
+
+    if (time - (unit.lastAuraTickAt || 0) >= (unit.auraTickMs || 450)) {
+      unit.lastAuraTickAt = time;
+      const auraRadius = Math.max(40, Number(unit.auraRadius || 92));
+      const auraPulse = this.scene.add.circle(unit.x, unit.y + 6, auraRadius, 0xbef264, 0.10).setDepth(7);
+      auraPulse.setStrokeStyle(3, 0xecfccb, 0.28);
+      this.scene.tweens.add({
+        targets: auraPulse,
+        scale: 1.18,
+        alpha: 0,
+        duration: Math.max(180, Math.round(unit.auraTickMs || 450)),
+        ease: 'Sine.Out',
+        onComplete: () => auraPulse.destroy()
+      });
+      const enemies = this.getAllEnemies();
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        if (!enemy?.isAlive || enemy.isInvincible) continue;
+        const enemyRadius = Number.isFinite(enemy?.bossSize) ? enemy.bossSize : (Number(enemy?.radius) || 16);
+        const reach = auraRadius + enemyRadius;
+        const edx = enemy.x - unit.x;
+        const edy = enemy.y - unit.y;
+        if ((edx * edx + edy * edy) > reach * reach) continue;
+
+        const auraDamage = Math.max(1, Math.round((this.player.bulletDamage || 1) * (unit.auraDamageMult || 0.42) * this.getSummonDamageMultiplier()));
+        const result = calculateResolvedDamage({ attacker: this.player, target: enemy, baseDamage: auraDamage, now: this.scene.time?.now ?? time, canCrit: false });
+        enemy.takeDamage?.(result.amount, { attacker: this.player, source: 'infernal_aura', suppressHitReaction: true });
+        this.player.onDealDamage?.(result.amount);
+        this.scene.showDamageNumber?.(enemy.x, enemy.y - Math.max(24, enemyRadius + 16), result.amount, { color: '#84cc16', whisper: true, fontSize: 18 });
+      }
+    }
 
     if (needsRecall || !target || !target.isAlive) {
       clearPendingMeleeWindup(unit);
@@ -726,19 +832,27 @@ export default class UndeadSummonManager {
           strikeTarget.takeDamage(result.amount, { attacker: this.player, source: 'infernal', suppressHitReaction: false });
           this.player.onDealDamage?.(result.amount);
 
-          const healAmount = Math.max(1, Math.round(unit.healOnHit || 0));
-          const restored = this.player.heal?.(healAmount) || 0;
-          if (restored > 0) {
-            this.scene.showDamageNumber(this.player.x, this.player.y - 56, `+${restored}`, { color: '#86efac', fontSize: 20, whisper: true });
-          }
-
           this.scene.showDamageNumber(strikeTarget.x, strikeTarget.y - 32, result.amount, { color: '#7dff7a', whisper: true, fontSize: 22, isCrit: result.isCrit });
           const slash = this.scene.add.line(0, 0, unit.x, unit.y, strikeTarget.x, strikeTarget.y, 0x7dff7a, 0.65);
           slash.setLineWidth(4, 1);
           this.scene.tweens.add({ targets: slash, alpha: 0, duration: 140, onComplete: () => slash.destroy() });
+          const impact = this.scene.add.circle(strikeTarget.x, strikeTarget.y, 16, 0xecfccb, 0.28).setDepth(9);
+          impact.setStrokeStyle(3, 0xbef264, 0.65);
+          this.scene.tweens.add({ targets: impact, scale: 1.6, alpha: 0, duration: 150, ease: 'Cubic.Out', onComplete: () => impact.destroy() });
         }
       });
     }
+  }
+
+  syncInfernalRespawn(time) {
+    if (!this.hasInfernalUnlocked()) return;
+
+    this.infernals = (this.infernals || []).filter((unit) => unit && unit.active && (unit.currentHp || 0) > 0);
+    if ((this.infernals || []).length > 0) return;
+    if ((this.infernalRespawnAt || 0) > time) return;
+
+    this.summonInfernal({ persistent: true, level: 3 });
+    this.scene?.showDamageNumber?.(this.player?.x || 0, (this.player?.y || 0) - 86, '地狱火重生', { color: '#bef264', fontSize: 18, whisper: true });
   }
 
   clearUnits() {
@@ -751,10 +865,16 @@ export default class UndeadSummonManager {
 
     (this.infernals || []).forEach((unit) => this.destroyUnit(unit));
     this.infernals = [];
+    this.infernalRespawnAt = 0;
   }
 
   destroyUnit(unit) {
     if (unit?.active) {
+      if (unit.isInfernal) {
+        const burst = this.scene.add.circle(unit.x, unit.y + 6, Math.max(38, Number(unit.auraRadius || 92) * 0.55), 0xbef264, 0.18).setDepth(7);
+        burst.setStrokeStyle(4, 0xecfccb, 0.55);
+        this.scene.tweens.add({ targets: burst, scale: 1.55, alpha: 0, duration: 260, ease: 'Cubic.Out', onComplete: () => burst.destroy() });
+      }
       clearPendingMeleeWindup(unit);
       this.summonRegistry?.unregister(REGISTRY_ID, unit);
       unit.destroy();

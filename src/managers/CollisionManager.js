@@ -181,6 +181,14 @@ export default class CollisionManager {
       killed
     });
 
+    if (killed) {
+      if (pet.isUndeadSummon && this.scene?.undeadSummonManager?.onSummonKilled) {
+        this.scene.undeadSummonManager.onSummonKilled(pet);
+      } else if (pet.petType && this.scene?.petManager?.onPetKilled) {
+        this.scene.petManager.onPetKilled(pet.petType);
+      }
+    }
+
     return { amount: dmg, killed };
   }
 

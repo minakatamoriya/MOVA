@@ -20,6 +20,33 @@ function expApproach(current, target, deltaMs, timeConstantMs) {
   return current + (target - current) * t;
 }
 
+function getArcaneRayConfig(player) {
+  const dualLevel = Phaser.Math.Clamp(Math.round(player?.mageDualcaster || 0), 0, 3);
+  const trilaserLevel = Phaser.Math.Clamp(Math.round(player?.mageTrilaser || 0), 0, 3);
+  const camera = player?.scene?.cameras?.main;
+  const view = camera?.worldView;
+  const screenRange = view
+    ? Math.max(view.width, view.height) * 1.18
+    : 520;
+
+  return {
+    requiresStationary: dualLevel > 0,
+    range: dualLevel > 0
+      ? Math.max(520, Math.round(screenRange * ([1, 1.0, 1.12, 1.24][dualLevel] || 1)))
+      : Math.max(60, player?.arcaneRayRange || player?.arcaneRayBaseRange || 220),
+    baseWidth: dualLevel > 0 ? ([0, 28, 36, 44][dualLevel] || 28) : 16,
+    damageMult: dualLevel > 0 ? ([0, 3.1, 3.9, 4.8][dualLevel] || 3.1) : 2,
+    refractEnabled: trilaserLevel > 0,
+    refractCount: [0, 1, 2, 3][trilaserLevel] || 0,
+    refractDamageMult: [0, 0.46, 0.58, 0.72][trilaserLevel] || 0.58,
+    chargeMs: dualLevel > 0 ? ([0, 120, 104, 88][dualLevel] || 120) : 80,
+    beamHoldMs: dualLevel > 0 ? ([0, 180, 220, 260][dualLevel] || 180) : 140,
+    slowMultiplier: dualLevel > 0 ? ([0, 0.52, 0.42, 0.30][dualLevel] || 0.52) : 0,
+    slowDurationMs: dualLevel > 0 ? ([0, 260, 340, 420][dualLevel] || 260) : 0,
+    moveCancelFadeMs: dualLevel > 0 ? 120 : 220,
+  };
+}
+
 function ensureArcaneRayState(player) {
   if (player._arcaneRayState) return player._arcaneRayState;
   player._arcaneRayState = {
@@ -283,11 +310,12 @@ function updateBeamDraw(state, player, end, scheme, beamAlpha) {
   const endX = end.x;
   const endY = end.y;
 
-  const focusLvl = Math.max(0, Math.min(3, player.mageEnergyFocusLevel || 0));
+  const cfg = getArcaneRayConfig(player);
+  const focusLvl = Phaser.Math.Clamp(Math.round(player.mageDualcaster || 0), 0, 3);
   const widthScale = 1 + 0.12 * focusLvl;
   const brightScale = 1 + 0.10 * focusLvl;
 
-  const baseWidth = Math.max(10, (player.arcaneRayWidth || 16) * widthScale);
+  const baseWidth = Math.max(10, cfg.baseWidth * widthScale);
   const glowWidth = Math.round(baseWidth * 1.9);
 
   state.beamGlowG.clear();
@@ -365,7 +393,8 @@ function updateRefractBeams(state, player, start, refractTargets, scheme, delta,
     beams.push(g);
   }
 
-  const baseWidth = Math.max(6, Math.round((player.arcaneRayWidth || 16) * 0.50));
+  const cfg = getArcaneRayConfig(player);
+  const baseWidth = Math.max(6, Math.round(cfg.baseWidth * 0.5));
   const beamAlpha = Math.min(1, state.beamAlpha) * 0.70;
 
   for (let i = 0; i < beams.length; i++) {
@@ -412,6 +441,7 @@ export function updateArcaneRay(player, delta) {
 
   const state = ensureArcaneRayState(player);
   const scheme = getBasicSkillColorScheme(player.mainCoreKey || 'mage', player.offCoreKey);
+  const cfg = getArcaneRayConfig(player);
 
   const boss = scene?.bossManager?.getCurrentBoss?.();
   const minions = scene?.bossManager?.getMinions?.() || scene?.bossManager?.minions || [];
@@ -425,7 +455,7 @@ export function updateArcaneRay(player, delta) {
 
   // 选目标：若 Boss 在圈内，优先 Boss；否则选最近的可达目标
   let target = null;
-  const range = Math.max(60, player.arcaneRayRange || player.arcaneRayBaseRange || 220);
+  const range = cfg.range;
   let targetRadius = 0;
   const rc = getRangeCenter(player);
 
@@ -465,7 +495,9 @@ export function updateArcaneRay(player, delta) {
   const inRange = !!(target && isEnemyTouchingRange(rc.x, rc.y, range, target));
 
   // 折射：命中 A 后，从 A 分裂两道短束到附近 B/C（小范围寻怪）
-  const refractEnabled = !!(player.mageRefract && inRange && target && target.isAlive);
+  const stationarySatisfied = !cfg.requiresStationary || !player.isMoving;
+  const effectiveInRange = inRange && stationarySatisfied;
+  const refractEnabled = !!(cfg.refractEnabled && effectiveInRange && target && target.isAlive);
   const refractStart = refractEnabled ? { x: target.x, y: target.y } : null;
   const refractTargets = [];
   if (refractEnabled) {
@@ -476,7 +508,7 @@ export function updateArcaneRay(player, delta) {
       const e = candidates[i];
       const d = Phaser.Math.Distance.Between(target.x, target.y, e.x, e.y);
       if (d <= refractSearchR) refractTargets.push(e);
-      if (refractTargets.length >= 2) break;
+      if (refractTargets.length >= cfg.refractCount) break;
     }
   }
 
@@ -505,11 +537,10 @@ export function updateArcaneRay(player, delta) {
   }
 
   // ====== 相位机：进入范围 -> 蓄力 -> 持续光束；脱离 -> 淡出 ======
-  if (inRange) {
+  if (effectiveInRange) {
     if (state.phase === 'idle' || state.phase === 'fading') {
       state.phase = 'charging';
-      // 起手更快：避免小怪瞬死导致只看到很淡的蓄力
-      state.chargeEndAt = now + 80;
+      state.chargeEndAt = now + cfg.chargeMs;
       spawnChargeFx(scene, player, scheme);
       if (typeof player.playAttackAnimation === 'function') {
         player.playAttackAnimation();
@@ -527,11 +558,11 @@ export function updateArcaneRay(player, delta) {
 
   if (state.phase === 'charging' && now >= (state.chargeEndAt || 0)) {
     state.phase = 'beam';
-    state.beamHoldUntil = now + 140;
+    state.beamHoldUntil = now + cfg.beamHoldMs;
   }
 
   // 允许短暂保持可见（击杀瞬间）但不继续造成伤害
-  const wantBeamVisible = state.phase === 'beam' && (inRange || now < (state.beamHoldUntil || 0));
+  const wantBeamVisible = state.phase === 'beam' && (effectiveInRange || now < (state.beamHoldUntil || 0));
   const beamTargetAlpha = wantBeamVisible ? 1 : 0;
   state.beamAlpha = expApproach(state.beamAlpha || 0, beamTargetAlpha, delta, wantBeamVisible ? 55 : 220);
 
@@ -551,9 +582,9 @@ export function updateArcaneRay(player, delta) {
 
   // 命中判定：用“隐形 hitbox 子弹”复用既有碰撞/伤害/特效/天赋
   if (wantBeamVisible && target) {
-    const focusLvl = Math.max(0, Math.min(3, player.mageEnergyFocusLevel || 0));
+    const focusLvl = Phaser.Math.Clamp(Math.round(player.mageDualcaster || 0), 0, 3);
     const focusMult = 1 + 0.10 * focusLvl;
-    const baseDamage = Math.max(1, Math.round((player.bulletDamage || 1) * (player.laserDamageMult || 2) * focusMult));
+    const baseDamage = Math.max(1, Math.round((player.bulletDamage || 1) * cfg.damageMult * focusMult));
     ensureBeamHitbox(scene, state, player, scheme, baseDamage);
 
     // “截断”：命中点固定到敌方外圈（不穿透）
@@ -586,6 +617,12 @@ export function updateArcaneRay(player, delta) {
         const key = `primary:${getEnemyUid(scene, target)}`;
         applyArcaneRayDirectDamage(scene, player, target, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
       }
+      if (cfg.slowMultiplier > 0 && cfg.slowDurationMs > 0 && typeof target.applyMoveSpeedSlow === 'function') {
+        target.applyMoveSpeedSlow(cfg.slowMultiplier, cfg.slowDurationMs);
+      } else if (cfg.slowMultiplier > 0 && cfg.slowDurationMs > 0) {
+        target.slowMoveMult = Math.min(Number(target.slowMoveMult || 1), cfg.slowMultiplier);
+        target.slowUntil = Math.max(Number(target.slowUntil || 0), now + cfg.slowDurationMs);
+      }
     }
 
     // 路径伤害：主束对“路径上的其它敌人”
@@ -600,12 +637,16 @@ export function updateArcaneRay(player, delta) {
       const hp = getHitPointOnCircleEdge(start.x, start.y, mainEndX, mainEndY, e.x, e.y, r);
       const key = `main:${getEnemyUid(scene, e)}`;
       applyArcaneRayDirectDamage(scene, player, e, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
+      if (cfg.slowMultiplier > 0 && cfg.slowDurationMs > 0) {
+        e.slowMoveMult = Math.min(Number(e.slowMoveMult || 1), cfg.slowMultiplier);
+        e.slowUntil = Math.max(Number(e.slowUntil || 0), now + cfg.slowDurationMs);
+      }
     }
 
     // ====== 折射：从 A 分裂到 B/C（50% 伤害，小范围） ======
     if (refractEnabled && refractStart && refractTargets.length > 0) {
       const tickIntervalMs2 = Math.max(60, Math.round(player.fireRate || 320));
-      for (let i = 0; i < Math.min(2, refractTargets.length); i++) {
+      for (let i = 0; i < Math.min(cfg.refractCount, refractTargets.length); i++) {
         const e = refractTargets[i];
         if (!e || !e.isAlive) continue;
         const r = getEnemyRadius(e);
@@ -613,7 +654,7 @@ export function updateArcaneRay(player, delta) {
           ? getHitPointOnCircleEdge(refractStart.x, refractStart.y, e.x, e.y, e.x, e.y, r)
           : { x: e.x, y: e.y };
         const key = `refract${i}:${getEnemyUid(scene, e)}`;
-        applyArcaneRayDirectDamage(scene, player, e, baseDamage * 0.5, hp.x, hp.y, scheme, now, key, tickIntervalMs2);
+        applyArcaneRayDirectDamage(scene, player, e, baseDamage * cfg.refractDamageMult, hp.x, hp.y, scheme, now, key, tickIntervalMs2);
       }
     }
   } else {

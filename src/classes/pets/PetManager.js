@@ -99,6 +99,8 @@ export default class PetManager {
 
   refreshPetStats() {
     if (!this.player) return;
+    const kingScale = this.getKingScale();
+    const kingLevel = this.getKingLevel();
 
     const bear = this.active.get(PET_TYPES.bear);
     if (bear?.active) {
@@ -106,8 +108,17 @@ export default class PetManager {
       const missing = Math.max(0, (bear.maxHp || nextMaxHp) - (bear.currentHp || 0));
       bear.maxHp = nextMaxHp;
       bear.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
-      bear.moveSpeed = 205 + (this.player.druidPetBearLevel || 0) * 12;
-      bear.damageMult = 0.92 + (this.player.druidPetBearLevel || 0) * 0.2 + (this.player.natureBearGuardLevel || 0) * 0.05;
+      bear.moveSpeed = 205 + (this.player.druidPetBearLevel || 0) * 12 + kingLevel * 10;
+      bear.damageMult = 0.92 + (this.player.druidPetBearLevel || 0) * 0.2 + (this.player.natureBearGuardLevel || 0) * 0.05 + kingLevel * 0.12;
+      bear.hitRadius = Math.round(16 * kingScale);
+      bear.attackRange = Math.round((22 + kingLevel * 4) * kingScale);
+      bear.setScale?.(kingScale);
+    }
+
+    const hawk = this.active.get(PET_TYPES.hawk);
+    if (hawk?.active) {
+      hawk.orbitRadius = 46 + kingLevel * 8;
+      hawk.setScale?.(1 + kingLevel * 0.08);
     }
 
     const treant = this.active.get(PET_TYPES.treant);
@@ -116,19 +127,34 @@ export default class PetManager {
       const missing = Math.max(0, (treant.maxHp || nextMaxHp) - (treant.currentHp || 0));
       treant.maxHp = nextMaxHp;
       treant.currentHp = Math.max(1, Math.min(nextMaxHp, nextMaxHp - missing));
+      treant.hitRadius = Math.round(12 * kingScale);
+      treant.followLerp = 0.12 + kingLevel * 0.015;
+      treant.setScale?.(kingScale);
     }
+  }
+
+  getKingLevel() {
+    return Math.max(0, Math.min(3, Math.round(this.player?.druidKingofbeasts || 0)));
+  }
+
+  getKingScale() {
+    return [1, 1.12, 1.24, 1.38][this.getKingLevel()] || 1;
+  }
+
+  getNaturefusionLevel() {
+    return Math.max(0, Math.min(3, Math.round(this.player?.druidNaturefusion || 0)));
   }
 
   getBearMaxHp() {
     const petLevel = this.player?.druidPetBearLevel || 0;
     const guardLevel = this.player?.natureBearGuardLevel || 0;
-    const hpMultiplier = 0.72 + petLevel * 0.18 + guardLevel * 0.08;
+    const hpMultiplier = 0.72 + petLevel * 0.18 + guardLevel * 0.08 + this.getKingLevel() * 0.10;
     return Math.max(25, Math.round((this.player?.maxHp || 100) * hpMultiplier));
   }
 
   getTreantMaxHp() {
     const petLevel = this.player?.druidPetTreantLevel || 0;
-    return Math.max(10, Math.round((this.player?.maxHp || 100) * (0.18 + petLevel * 0.03)));
+    return Math.max(10, Math.round((this.player?.maxHp || 100) * (0.18 + petLevel * 0.03 + this.getKingLevel() * 0.04)));
   }
 
   getTankPet() {
@@ -256,16 +282,17 @@ export default class PetManager {
 
     const pet = this.scene.add.container(x, y, [body, snout, icon]);
     pet.setDepth(6);
+    pet.setScale(this.getKingScale());
 
     pet.isPet = true;
     pet.petType = PET_TYPES.bear;
-    pet.hitRadius = 16;
+    pet.hitRadius = Math.round(16 * this.getKingScale());
 
     const maxHp = this.getBearMaxHp();
     pet.maxHp = maxHp;
     pet.currentHp = maxHp;
 
-    pet.moveSpeed = 210;
+    pet.moveSpeed = 210 + this.getKingLevel() * 10;
     pet.chargeBonus = 1.35;
     pet.attackWindupMs = 170;
     pet.attackArcRadius = 34;
@@ -276,8 +303,8 @@ export default class PetManager {
     pet.threat = 1;
 
     // 近战攻击参数（慢速、高伤害、可暴击）
-    pet.attackRange = 22;
-    pet.damageMult = 1.05;
+    pet.attackRange = 22 + this.getKingLevel() * 4;
+    pet.damageMult = 1.05 + this.getKingLevel() * 0.12;
     pet.bossSeparation = 8;
 
     return pet;
@@ -298,6 +325,7 @@ export default class PetManager {
 
     const pet = this.scene.add.container(x, y, [wingL, wingR, core, icon]);
     pet.setDepth(7);
+    pet.setScale(1 + this.getKingLevel() * 0.08);
 
     pet.isPet = true;
     pet.petType = PET_TYPES.hawk;
@@ -306,7 +334,7 @@ export default class PetManager {
     pet.maxHp = 1;
     pet.currentHp = 1;
 
-    pet.orbitRadius = 46;
+    pet.orbitRadius = 46 + this.getKingLevel() * 8;
     pet.orbitOmega = (Math.PI * 2) / 1400;
     pet.orbitPhase = Phaser.Math.FloatBetween(0, Math.PI * 2);
 
@@ -330,16 +358,17 @@ export default class PetManager {
 
     const pet = this.scene.add.container(x, y, [leaf, body, icon]);
     pet.setDepth(6);
+    pet.setScale(this.getKingScale());
 
     pet.isPet = true;
     pet.petType = PET_TYPES.treant;
-    pet.hitRadius = 12;
+    pet.hitRadius = Math.round(12 * this.getKingScale());
 
     const maxHp = this.getTreantMaxHp();
     pet.maxHp = maxHp;
     pet.currentHp = maxHp;
 
-    pet.followLerp = 0.12;
+    pet.followLerp = 0.12 + this.getKingLevel() * 0.015;
 
     pet.panicUntil = 0;
     pet.healPausedUntil = 0;
@@ -520,6 +549,16 @@ export default class PetManager {
             this.player?.onDealDamage?.(damageResult.amount);
             this.scene.showDamageNumber(strikeTarget.x, strikeTarget.y - 42, damageResult.amount, { isCrit: damageResult.isCrit, color: '#ffdd88', fontSize: 26 });
 
+            const fusionLevel = this.getNaturefusionLevel();
+            if (fusionLevel > 0) {
+              strikeTarget.debuffs = strikeTarget.debuffs || {};
+              const pz = strikeTarget.debuffs.poisonZone || { stacks: 0, inZoneUntil: 0, nextGainAt: 0, nextDecayAt: 0, nextTickAt: 0 };
+              pz.stacks = Math.min(6, Math.max(pz.stacks || 0, fusionLevel));
+              pz.inZoneUntil = (this.scene.time?.now ?? time) + 1200;
+              pz.nextTickAt = Math.min(pz.nextTickAt || 0, this.scene.time?.now ?? time);
+              strikeTarget.debuffs.poisonZone = pz;
+            }
+
             const puff = this.scene.add.circle(strikeTarget.x, strikeTarget.y, 10, 0xffcc88, 0.45);
             this.scene.tweens.add({
               targets: puff,
@@ -559,6 +598,13 @@ export default class PetManager {
         target.takeDamage(damageResult.amount);
         this.player?.onDealDamage?.(damageResult.amount);
         this.scene.showDamageNumber(target.x, target.y - 34, damageResult.amount, { color: '#aee8ff', fontSize: 22, whisper: true, isCrit: damageResult.isCrit });
+
+        const fusionLevel = this.getNaturefusionLevel();
+        if (fusionLevel > 0) {
+          target.debuffs = target.debuffs || {};
+          target.debuffs.natureHawkMarkUntil = time + 1800 + fusionLevel * 400;
+          target.debuffs.natureHawkMarkMult = [1, 1.10, 1.18, 1.28][fusionLevel] || 1.10;
+        }
 
         const huntmarkLevel = Math.max(0, Math.min(3, this.player?.natureHawkHuntmarkLevel || 0));
         if (huntmarkLevel > 0) {
@@ -634,6 +680,11 @@ export default class PetManager {
           duration: 300,
           onComplete: () => ring.destroy()
         });
+
+        const fusionLevel = this.getNaturefusionLevel();
+        if (fusionLevel > 0) {
+          this.player.guardianBarrierHp = Math.max(0, Math.round((this.player.guardianBarrierHp || 0) + fusionLevel * 2 + amount));
+        }
       }
     }
   }

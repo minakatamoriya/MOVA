@@ -27,15 +27,20 @@ export function getPaladinHammerAcquireRange(player) {
 }
 
 export function getPaladinHammerImpactRadius(player) {
-  return player?.paladinPierce
+  const divineLevel = Phaser.Math.Clamp(Math.round(player?.paladinDivine || 0), 0, 3);
+  const base = player?.paladinPierce
     ? Math.round(PALADIN_HAMMER_CONFIG.baseImpactRadius * PALADIN_HAMMER_CONFIG.pierceImpactRadiusMult)
     : PALADIN_HAMMER_CONFIG.baseImpactRadius;
+  return Math.round(base * ([1, 1.10, 1.22, 1.36][divineLevel] || 1));
 }
 
 function getPaladinHammerDamageMultiplier(player) {
-  return player?.paladinPierce
+  const avengerLevel = Phaser.Math.Clamp(Math.round(player?.paladinAvengerLevel || 0), 0, 3);
+  const divineLevel = Phaser.Math.Clamp(Math.round(player?.paladinDivine || 0), 0, 3);
+  const base = player?.paladinPierce
     ? PALADIN_HAMMER_CONFIG.pierceDamageMult
     : PALADIN_HAMMER_CONFIG.baseDamageMult;
+  return base * ([1, 1.08, 1.18, 1.30][avengerLevel] || 1) * ([1, 1.06, 1.12, 1.18][divineLevel] || 1);
 }
 
 function getPaladinHammerTiming(player) {
@@ -185,6 +190,7 @@ export function firePaladinHammer(player) {
   const radius = getPaladinHammerImpactRadius(player);
   const damageMultiplier = getPaladinHammerDamageMultiplier(player);
   const timing = getPaladinHammerTiming(player);
+  const divineLevel = Phaser.Math.Clamp(Math.round(player?.paladinDivine || 0), 0, 3);
 
   const impactX = target.x;
   const impactY = target.y;
@@ -356,6 +362,16 @@ export function firePaladinHammer(player) {
     scene.time.delayedCall(timing.markerLeadMs, () => {
       if (!scene?.sys?.isActive?.()) return;
       spawnImpact(impactX, impactY, 1);
+      if (divineLevel > 0) {
+        for (let i = 0; i < divineLevel; i++) {
+          scene.time.delayedCall(110 + i * 80, () => {
+            if (!scene?.sys?.isActive?.()) return;
+            const angleOffset = (Math.PI * 2 * i) / Math.max(1, divineLevel);
+            const orbit = 26 + i * 18;
+            spawnImpact(impactX + Math.cos(angleOffset) * orbit, impactY + Math.sin(angleOffset) * orbit, 0.45 + divineLevel * 0.12);
+          });
+        }
+      }
     });
   });
 

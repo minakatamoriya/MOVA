@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import {
   destroyArcaneRay,
+  fireLaser,
   fireMageIceBolt,
   fireStarfall,
   fireArcherArrow,
   firePaladinHammer,
-  fireWarlockPoisonNova
+  fireWarlockPoisonNova,
+  updateArcaneRay
 } from '../classes/attacks/weapons';
 import { normalizeCoreKey } from '../classes/classDefs';
 
@@ -206,6 +208,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this._archerPendingShots = new Set();
     this._archerChargeFxSeq = 0;
     this._mageChargeEffectExpireAt = 0;
+    this.isMoving = false;
 
     // 双职业：主职业决定普攻形态；副职业只提供强化
     this.mainCoreKey = null;
@@ -230,6 +233,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.druidMeteorShowerLevel = 0;
     this.druidMeteorLevel = 0;
     this.druidStarfireLevel = 0;
+    this.warlockDepthInfernalUnlocked = false;
 
     // 通用被动（副职业派系）
     this.universalFireRateMult = 1;
@@ -333,6 +337,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.emergencyDodgeBonus = 0;
     this.emergencyLifestealUntil = 0;
     this.emergencyLifestealPercent = 0;
+    this.emergencyOverhealBarrierUntil = 0;
+    this.emergencyOverhealBarrierCapRatio = 0;
     this.emergencyRegenUntil = 0;
     this.emergencyRegenPerMs = 0;
     this.emergencyRegenRemaining = 0;
@@ -394,6 +400,19 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerArrowRangeLevel = 0;
     this.archerArrowScatterLevel = 0;
     this.archerArrowBounce = 0;
+    this.archerWindfury = 0;
+    this.archerEagleeye = 0;
+    this.mageDualcaster = 0;
+    this.mageTrilaser = 0;
+    this.warriorBladestorm = 0;
+    this.warriorUnyielding = 0;
+    this.warlockPoisonAutoSeek = 0;
+    this.warlockNetherlord = 0;
+    this.paladinAvengerLevel = 0;
+    this.paladinSacredshield = 0;
+    this.paladinDivine = 0;
+    this.druidKingofbeasts = 0;
+    this.druidNaturefusion = 0;
 
     // 装备倍率缓存
     this.equipmentMods = { damageMult: 1, fireRateMult: 1, speedMult: 1, rangeMult: 1, maxHpFlat: 0, regenPerSec: 0, damageReductionPercent: 0, blockChance: 0 };
@@ -710,6 +729,10 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     if (this.weaponType === 'mage_frostbolt') {
+      if (this.mageDualcaster) {
+        fireLaser(this);
+        return;
+      }
       if (!this.getMageTargetInRange()) return;
       this.queueMageIceBoltShot();
       return;
@@ -1144,6 +1167,9 @@ export default class Player extends Phaser.GameObjects.Container {
     if ((this._mageChargeEffectExpireAt || 0) > 0 && (combatPaused || this.weaponType !== 'mage_frostbolt')) {
       this.clearMageChargeEffects();
     }
+    if (this.weaponType !== 'mage_frostbolt' || !this.mageDualcaster) {
+      destroyArcaneRay(this);
+    }
 
     this.updateExternalSpeedModifiers(gameplayNow);
 
@@ -1171,6 +1197,10 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 更新子弹
     this.updateBullets(delta);
+
+    if (this.weaponType === 'mage_frostbolt' && this.mageDualcaster) {
+      updateArcaneRay(this, delta);
+    }
     
     // 限制在游戏区域内
     this.constrainToGameArea();
@@ -1233,6 +1263,8 @@ export default class Player extends Phaser.GameObjects.Container {
       this.hitbox.setAlpha(0.3);
     }
     
+    this.isMoving = Math.abs(velocityX) > 0.0001 || Math.abs(velocityY) > 0.0001;
+
     // 应用移动
     const step = (delta / 1000);
     const dx = velocityX * currentSpeed * step;
@@ -1558,10 +1590,12 @@ export default class Player extends Phaser.GameObjects.Container {
 
     this.tryTriggerGuardianLightFortress(finalDamage);
 
+    let barrierAbsorbed = 0;
     if ((this.guardianBarrierHp || 0) > 0 && finalDamage > 0) {
       const absorbed = Math.min(finalDamage, Math.max(0, Math.round(this.guardianBarrierHp || 0)));
       this.guardianBarrierHp = Math.max(0, Math.round((this.guardianBarrierHp || 0) - absorbed));
       finalDamage -= absorbed;
+      barrierAbsorbed += absorbed;
       if (absorbed > 0 && this.scene?.showDamageNumber) {
         this.scene.showDamageNumber(this.x, this.y - 60, `盾${absorbed}`, { color: '#9bd7ff', fontSize: 18, whisper: true });
       }
@@ -1569,6 +1603,25 @@ export default class Player extends Phaser.GameObjects.Container {
 
     if (this.guardianHolyRebukeLevel > 0 && this.guardianSealStacks >= this.guardianSealMaxStacks) {
       this.scene?.triggerGuardianHolyRebuke?.({ blocked, source: 'guardian_sacred_seal' });
+    }
+
+    const sacredshieldLevel = Math.max(0, Math.min(3, Math.round(this.paladinSacredshield || 0)));
+    const divineLevel = Math.max(0, Math.min(3, Math.round(this.paladinDivine || 0)));
+    if (sacredshieldLevel > 0 && (blocked || finalDamage > 0 || barrierAbsorbed > 0)) {
+      this.scene?.triggerPaladinSacredShield?.({
+        blocked,
+        incomingDamage: Math.max(0, Math.round(finalDamage + barrierAbsorbed)),
+        absorbedDamage: barrierAbsorbed,
+        level: sacredshieldLevel
+      });
+    }
+    if (divineLevel > 0 && (blocked || finalDamage > 0)) {
+      this.scene?.triggerPaladinDivinePulse?.({
+        blocked,
+        damage: Math.max(0, Math.round(finalDamage + barrierAbsorbed)),
+        level: divineLevel,
+        source: 'take_damage'
+      });
     }
 
     if (this.shieldCharges > 0) {
@@ -1915,6 +1968,27 @@ export default class Player extends Phaser.GameObjects.Container {
     return restored;
   }
 
+  applyEmergencyOverhealBarrier(amount) {
+    const gameplayNow = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0;
+    if ((this.emergencyOverhealBarrierUntil || 0) <= gameplayNow) return 0;
+    const capRatio = Math.max(0, Number(this.emergencyOverhealBarrierCapRatio || 0));
+    if (capRatio <= 0) return 0;
+
+    const cap = Math.max(0, Math.round((this.maxHp || 0) * capRatio));
+    if (cap <= 0) return 0;
+
+    const current = Math.max(0, Math.round(this.guardianBarrierHp || 0));
+    if (current >= cap) return 0;
+
+    const gained = Math.min(Math.max(0, Math.round(amount || 0)), cap - current);
+    if (gained <= 0) return 0;
+
+    this.guardianBarrierHp = current + gained;
+    this.scene?.events?.emit?.('updatePlayerInfo');
+    this.scene?.showDamageNumber?.(this.x, this.y - 72, `骨甲+${gained}`, { color: '#d9f99d', fontSize: 18, whisper: true });
+    return gained;
+  }
+
   spendHealth(amount, options = {}) {
     const requested = Math.max(0, Math.round(Number(amount) || 0));
     if (requested <= 0) return 0;
@@ -2236,7 +2310,11 @@ export default class Player extends Phaser.GameObjects.Container {
     if (lifestealPercent <= 0) return;
     const healAmount = Math.floor(amount * lifestealPercent);
     if (healAmount > 0) {
-      this.heal(healAmount);
+      const restored = this.heal(healAmount);
+      const overheal = Math.max(0, healAmount - restored);
+      if (overheal > 0) {
+        this.applyEmergencyOverhealBarrier(overheal);
+      }
     }
   }
 
