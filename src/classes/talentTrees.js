@@ -51,15 +51,17 @@ export const TREE_DEFS = [
     id: 'mage',
     name: '法师-主',
     color: resolveClassColor('mage'),
-    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为奥术射线。' },
+    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为单发冰弹，命中叠加寒霜，叠满五层爆炸并传染。' },
     nodes: [
-      { id: 'mage_refract', name: '折射', maxLevel: 1, desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%。' },
-      { id: 'mage_arcane_perception', name: '奥术感知', maxLevel: 3, desc: '奥术射线索敌范围提升。' },
-      { id: 'mage_energy_focus', name: '能量汇集', maxLevel: 3, desc: '奥术射线伤害提升，并随层数变粗更亮（+10%/+20%/+30%）。' },
-      { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 3, desc: '生命低于30%时自动触发：释放冰霜新星，冻结周围敌人 3/5/10 秒，冷却30秒。' },
-      { id: 'mage_frost_domain', name: '极寒疆域', maxLevel: 3, desc: '强化冰霜新星：冻结范围扩大至300/380/480。' }
+      { id: 'mage_frostbite', name: '霜蚀', maxLevel: 3, desc: '冰弹自带减速；1/2/3级强化到 30%/38%/48%，持续 1.9/2.3/2.7 秒。' },
+      { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 3, desc: '冰弹索敌范围提升。1/2/3级额外 +45/+90/+135。' },
+      { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 3, desc: '强化冰弹本体。1/2/3级伤害 +10%/+20%/+30%，弹道更利落。' },
+      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 3, desc: '5 层碎冰后额外冻结主目标。1/2/3级分别冻结 0.8/1.2/1.7 秒。' },
+      { id: 'mage_shatter', name: '碎冰传染', maxLevel: 3, desc: '强化基础碎冰爆裂。1/2级提升半径与伤害；3级额外把传染提升到 2 层。1/2/3级分别为半径 120/150/185，伤害 70%/100%/135%，传染 1/1/2 层寒霜。' },
+      { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 3, desc: '生命低于30%时自动触发冰霜新星。1/2/3级冻结周围敌人 3/5/10 秒，冷却30秒。' },
+      { id: 'mage_frost_domain', name: '极寒疆域', maxLevel: 3, desc: '强化冰霜新星范围。1/2/3级范围提升至 300/380/480。' }
     ],
-    ultimate: { id: 'mage_ultimate', name: '终极：贯穿聚焦', maxLevel: 1, desc: '激光聚焦并贯穿。' }
+    ultimate: { id: 'mage_ultimate', name: '终极：极寒贯星', maxLevel: 1, desc: '冰矛贯穿前方，并强化冻结与碎冰爆发。' }
   },
   {
     id: 'paladin',
@@ -218,9 +220,11 @@ export const SKILL_TO_TREE = {
   warrior_ultimate: 'warrior',
 
   mage_core: 'mage',
-  mage_refract: 'mage',
-  mage_arcane_perception: 'mage',
-  mage_energy_focus: 'mage',
+  mage_frostbite: 'mage',
+  mage_cold_focus: 'mage',
+  mage_ice_veins: 'mage',
+  mage_deep_freeze: 'mage',
+  mage_shatter: 'mage',
   mage_frost_nova: 'mage',
   mage_frost_domain: 'mage',
   mage_ultimate: 'mage',
@@ -363,7 +367,11 @@ export const SKILL_TO_TREE = {
   dual_drone_warrior_ancestral: 'third'
 };
 
-export const SKILL_ID_ALIASES = {};
+export const SKILL_ID_ALIASES = {
+  mage_refract: 'mage_frostbite',
+  mage_arcane_perception: 'mage_cold_focus',
+  mage_energy_focus: 'mage_ice_veins'
+};
 
 export function normalizeSkillId(skillId) {
   if (!skillId) return skillId;

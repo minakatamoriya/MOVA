@@ -87,53 +87,79 @@ export default class BulletManager {
 
     // 创建子弹
     let bullet;
-    if (resolvedType === 'arrow') {
+    if (resolvedType === 'arrow' || resolvedType === 'spear') {
       // 箭矢：用“预渲染贴图 + Image”代替 Container(多个子物体)
       // 目的：减少每发箭矢的对象创建与 draw calls，降低移动+连射时的 GC/卡顿。
       const highlightColor = arrowHighlightColor ?? 0x54ff68;
       const featherColor = arrowFeatherColor ?? 0x25c944;
-      const texKey = `__bm_arrow_${color.toString(16)}_${resolvedStroke.toString(16)}_${highlightColor.toString(16)}_${featherColor.toString(16)}`;
+      const texKey = resolvedType === 'spear'
+        ? `__bm_spear_${color.toString(16)}_${resolvedStroke.toString(16)}_${highlightColor.toString(16)}_${featherColor.toString(16)}`
+        : `__bm_arrow_${color.toString(16)}_${resolvedStroke.toString(16)}_${highlightColor.toString(16)}_${featherColor.toString(16)}`;
       if (!this.scene.textures?.exists?.(texKey)) {
         const g = this.scene.make.graphics({ x: 0, y: 0, add: false });
-        const W = 88;
-        const H = 40;
-        const cx = 12;
+        const W = resolvedType === 'spear' ? 104 : 88;
+        const H = resolvedType === 'spear' ? 34 : 40;
+        const cx = resolvedType === 'spear' ? 10 : 12;
         const cy = Math.floor(H / 2);
 
         // 纯亮绿色分层，避免白色高光，把荧光感留给同色系亮度差。
         g.clear();
-        g.fillStyle(resolvedStroke, 0.98);
-        g.fillRect(cx + 6, cy - 6, 38, 12);
-        g.fillTriangle(cx + 42, cy - 10, cx + 42, cy + 10, cx + 64, cy);
+        if (resolvedType === 'spear') {
+          g.fillStyle(resolvedStroke, 0.98);
+          g.fillRect(cx + 6, cy - 4, 46, 8);
+          g.fillTriangle(cx + 44, cy - 11, cx + 44, cy + 11, cx + 78, cy);
 
-        g.fillStyle(color, 1);
-        g.fillRect(cx + 8, cy - 4, 34, 8);
-        g.fillTriangle(cx + 40, cy - 7, cx + 40, cy + 7, cx + 60, cy);
+          g.fillStyle(color, 1);
+          g.fillRect(cx + 8, cy - 2, 40, 4);
+          g.fillTriangle(cx + 40, cy - 8, cx + 40, cy + 8, cx + 73, cy);
 
-        g.fillStyle(highlightColor, 0.95);
-        g.fillRect(cx + 10, cy - 2, 26, 4);
-        g.fillTriangle(cx + 36, cy - 4, cx + 36, cy + 4, cx + 51, cy);
+          g.fillStyle(highlightColor, 0.95);
+          g.fillRect(cx + 10, cy - 1, 28, 2);
+          g.fillTriangle(cx + 32, cy - 5, cx + 32, cy + 5, cx + 58, cy);
 
-        g.fillStyle(featherColor, 0.92);
-        g.fillTriangle(cx - 1, cy, cx + 10, cy - 6, cx + 12, cy - 1);
-        g.fillTriangle(cx - 1, cy, cx + 10, cy + 6, cx + 12, cy + 1);
+          g.fillStyle(featherColor, 0.88);
+          g.fillTriangle(cx + 2, cy, cx + 12, cy - 4, cx + 14, cy - 1);
+          g.fillTriangle(cx + 2, cy, cx + 12, cy + 4, cx + 14, cy + 1);
 
-        g.lineStyle(1, highlightColor, 0.72);
-        g.beginPath();
-        g.moveTo(cx + 10, cy);
-        g.lineTo(cx + 52, cy);
-        g.strokePath();
+          g.lineStyle(1, highlightColor, 0.78);
+          g.beginPath();
+          g.moveTo(cx + 12, cy);
+          g.lineTo(cx + 62, cy);
+          g.strokePath();
+        } else {
+          g.fillStyle(resolvedStroke, 0.98);
+          g.fillRect(cx + 6, cy - 6, 38, 12);
+          g.fillTriangle(cx + 42, cy - 10, cx + 42, cy + 10, cx + 64, cy);
+
+          g.fillStyle(color, 1);
+          g.fillRect(cx + 8, cy - 4, 34, 8);
+          g.fillTriangle(cx + 40, cy - 7, cx + 40, cy + 7, cx + 60, cy);
+
+          g.fillStyle(highlightColor, 0.95);
+          g.fillRect(cx + 10, cy - 2, 26, 4);
+          g.fillTriangle(cx + 36, cy - 4, cx + 36, cy + 4, cx + 51, cy);
+
+          g.fillStyle(featherColor, 0.92);
+          g.fillTriangle(cx - 1, cy, cx + 10, cy - 6, cx + 12, cy - 1);
+          g.fillTriangle(cx - 1, cy, cx + 10, cy + 6, cx + 12, cy + 1);
+
+          g.lineStyle(1, highlightColor, 0.72);
+          g.beginPath();
+          g.moveTo(cx + 10, cy);
+          g.lineTo(cx + 52, cy);
+          g.strokePath();
+        }
 
         g.generateTexture(texKey, W, H);
         g.destroy();
       }
 
       // 目标：更“长、粗、亮”，且保持利落条形
-      const shaftLen = Math.max(16, Math.round(radius * 3.15 * arrowLenMult));
-      const shaftW = Math.max(4, Math.round(radius * 0.9 * arrowThickMult));
-      const headLen = Math.max(8, Math.round(radius * 1.28 * arrowLenMult));
+      const shaftLen = Math.max(16, Math.round(radius * (resolvedType === 'spear' ? 3.55 : 3.15) * arrowLenMult));
+      const shaftW = Math.max(4, Math.round(radius * (resolvedType === 'spear' ? 0.7 : 0.9) * arrowThickMult));
+      const headLen = Math.max(8, Math.round(radius * (resolvedType === 'spear' ? 1.55 : 1.28) * arrowLenMult));
       const totalLen = shaftLen + headLen;
-      const totalH = Math.max(8, Math.round(shaftW * 2.4));
+      const totalH = Math.max(8, Math.round(shaftW * (resolvedType === 'spear' ? 1.75 : 2.4)));
 
       bullet = this.scene.add.image(x, y, texKey).setOrigin(0.5, 0.5);
       bullet.setDisplaySize(totalLen, totalH);
@@ -141,7 +167,7 @@ export default class BulletManager {
       bullet.setAlpha(0.96);
 
       bullet.radius = radius; // 碰撞仍用圆形半径
-      bullet._trailAnchorOffset = Math.max(8, totalLen * 0.44);
+      bullet._trailAnchorOffset = Math.max(8, totalLen * (resolvedType === 'spear' ? 0.46 : 0.44));
       bullet.rotateToVelocity = true;
       // 兼容 basicAttackMods / 其它逻辑对 setStrokeStyle 的调用
       bullet.setStrokeStyle = () => bullet;
@@ -187,7 +213,7 @@ export default class BulletManager {
 
     // 创建光晕
     if (hasGlow) {
-      const glowAlpha = (resolvedType === 'arrow') ? 0.36 : 0.2;
+      const glowAlpha = (resolvedType === 'arrow' || resolvedType === 'spear') ? 0.36 : 0.2;
       const glow = this.scene.add.circle(x, y, glowRadius, glowColor ?? color, glowAlpha);
       glow.depth = -1;
       bullet.glow = glow;
@@ -198,11 +224,12 @@ export default class BulletManager {
       bullet._hasTrail = true;
       bullet._trailColor = trailColor ?? resolvedStroke;
       bullet._trailNext = 0; // 立即可发射
-      bullet._trailInterval = Math.max(40, Math.round(trailIntervalMs ?? (resolvedType === 'arrow' ? 72 : this._trailInterval)));
-      bullet._trailLifeMs = Math.max(80, Math.round(trailLifeMs ?? (resolvedType === 'arrow' ? 170 : 220)));
-      bullet._trailAlpha = Phaser.Math.Clamp(trailAlpha ?? (resolvedType === 'arrow' ? 0.42 : 0.7), 0.08, 1);
-      bullet._trailScale = Phaser.Math.Clamp(trailScale ?? (resolvedType === 'arrow' ? 0.88 : 1), 0.2, 2.2);
-      bullet._trailMode = trailMode ?? (resolvedType === 'arrow' ? 'streak' : 'dot');
+      const longProjectile = resolvedType === 'arrow' || resolvedType === 'spear';
+      bullet._trailInterval = Math.max(40, Math.round(trailIntervalMs ?? (longProjectile ? 72 : this._trailInterval)));
+      bullet._trailLifeMs = Math.max(80, Math.round(trailLifeMs ?? (longProjectile ? 170 : 220)));
+      bullet._trailAlpha = Phaser.Math.Clamp(trailAlpha ?? (longProjectile ? 0.42 : 0.7), 0.08, 1);
+      bullet._trailScale = Phaser.Math.Clamp(trailScale ?? (longProjectile ? 0.88 : 1), 0.2, 2.2);
+      bullet._trailMode = trailMode ?? (longProjectile ? 'streak' : 'dot');
       bullet._trailScaleX = Phaser.Math.Clamp(trailScaleX ?? bullet._trailScale, 0.15, 4);
       bullet._trailScaleY = Phaser.Math.Clamp(trailScaleY ?? bullet._trailScale, 0.1, 4);
       bullet._trailTracked = true;

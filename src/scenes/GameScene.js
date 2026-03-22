@@ -414,7 +414,6 @@ class GameScene extends Phaser.Scene {
     return !!(
       this.viewMenuOpen
       || this.viewMenuClosing
-      || this._levelUpCinematicActive
       || this._sceneIntroActive
       || this._pathChoiceActive
       || this._postBossRewardActive
@@ -536,6 +535,20 @@ class GameScene extends Phaser.Scene {
       return { ...src };
     })();
 
+    const currentLevelUpOffer = this.getCurrentLevelUpOffer?.() || null;
+    const pendingLevelUpPoints = this.getPendingLevelUpPoints?.() || 0;
+    const levelUp = (pendingLevelUpPoints > 0 || currentLevelUpOffer)
+      ? {
+        open: !!this._levelUpPanelOpen,
+        level: currentLevelUpOffer?.level || this.playerData?.level || 1,
+        options: currentLevelUpOffer?.options || [],
+        pendingPoints: pendingLevelUpPoints,
+        pendingSinceMs: Number(this._levelUpPendingSinceMs || 0),
+        lastInteractionMs: Number(this._levelUpLastInteractionMs || 0),
+        cinematicActive: !!this._levelUpCinematicActive
+      }
+      : null;
+
     return {
       selectedTrees,
       skillTreeLevels,
@@ -546,6 +559,7 @@ class GameScene extends Phaser.Scene {
       inventoryAcquired,
       sessionCoins: this.sessionCoins || 0,
       globalCoins: this.globalCoins || 0,
+      levelUp,
       player,
       gameplayNowMs: Number(this._gameplayNowMs || 0),
       itemCooldowns,
@@ -632,6 +646,16 @@ class GameScene extends Phaser.Scene {
       this.emitUiSnapshot();
     };
     uiBus.on('ui:requestSnapshot', this._uiRequestSnapshotHandler);
+
+    this._uiLevelUpOpenHandler = () => {
+      this.openPendingLevelUpScene?.();
+    };
+    uiBus.on('ui:levelUp:open', this._uiLevelUpOpenHandler);
+
+    this._uiLevelUpCloseHandler = () => {
+      this.setLevelUpPanelOpen?.(false);
+    };
+    uiBus.on('ui:levelUp:close', this._uiLevelUpCloseHandler);
 
     // 范围圈开关（统一控制所有职业范围提示）
     this._uiSetRangeIndicatorsHandler = (enabled) => {
@@ -720,8 +744,9 @@ class GameScene extends Phaser.Scene {
       if (this.time) this.time.paused = false;
       if (this.tweens) this.tweens.resumeAll();
 
-      // 升级选择场景结束：允许继续弹出后续升级
-      this._levelUpActive = false;
+      this._levelUpPanelOpen = false;
+      this._levelUpActive = !!this._currentLevelUpOffer;
+      this.emitUiSnapshot?.();
       if (this.time) {
         this.time.delayedCall(0, () => this.startNextPendingLevelUp());
       } else {
@@ -1355,6 +1380,21 @@ class GameScene extends Phaser.Scene {
       this._uiRequestSnapshotHandler = null;
     }
 
+    if (this._uiLevelUpOpenHandler) {
+      uiBus.off('ui:levelUp:open', this._uiLevelUpOpenHandler);
+      this._uiLevelUpOpenHandler = null;
+    }
+
+    if (this._uiLevelUpCloseHandler) {
+      uiBus.off('ui:levelUp:close', this._uiLevelUpCloseHandler);
+      this._uiLevelUpCloseHandler = null;
+    }
+
+    if (this._uiLevelUpSelectHandler) {
+      uiBus.off('ui:levelUp:select', this._uiLevelUpSelectHandler);
+      this._uiLevelUpSelectHandler = null;
+    }
+
     if (this._uiSetRangeIndicatorsHandler) {
       uiBus.off('ui:setRangeIndicators', this._uiSetRangeIndicatorsHandler);
       this._uiSetRangeIndicatorsHandler = null;
@@ -1689,6 +1729,7 @@ class GameScene extends Phaser.Scene {
 
     this.player?.onDealDamage?.(damage);
     this.applyWarriorOffclassHitEffects?.(boss, now);
+    this.applyMageFrostHitEffects?.(boss, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
 
     if (!killed && (bullet.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
       const chance = Phaser.Math.Clamp(Number(bullet.stunChance || 0), 0, 0.95);
@@ -1751,6 +1792,7 @@ class GameScene extends Phaser.Scene {
     const bullet = payload.bullet;
     const enemy = payload.target;
     const damage = Math.max(0, Math.round(Number(payload.damage || 0)));
+    const now = Number(payload.at || this.time?.now || 0);
     const hitX = Number(payload.hitX ?? bullet?.x ?? enemy?.x ?? 0);
     const hitY = Number(payload.hitY ?? bullet?.y ?? enemy?.y ?? 0);
     const isCrit = !!payload.isCrit;
@@ -1758,7 +1800,8 @@ class GameScene extends Phaser.Scene {
     if (!bullet || !enemy) return;
 
     this.player?.onDealDamage?.(damage);
-    this.applyWarriorOffclassHitEffects?.(enemy, this.time?.now ?? 0);
+    this.applyWarriorOffclassHitEffects?.(enemy, now);
+    this.applyMageFrostHitEffects?.(enemy, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
     this.presentManagedPlayerMinionHit({ bullet, enemy, hitX, hitY, damage, isCrit });
   }
 
@@ -2476,7 +2519,14 @@ class GameScene extends Phaser.Scene {
 
     // 升级队列：支持一次获得多级时逐次弹出三选一
     this._pendingLevelUpLevels = [];
+    this._pendingLevelUpPoints = 0;
     this._levelUpActive = false;
+    this._currentLevelUpOffer = null;
+    this._levelUpPanelOpen = false;
+    this._levelUpPendingSinceMs = 0;
+    this._levelUpLastInteractionMs = 0;
+    this._levelUpOfferSequence = 0;
+    this._levelUpSelectionLocked = false;
 
     // 第一关流程：首波小怪 -> 升级三选一 -> 再遇 Boss
     this._level1IntroWaveActive = false;
@@ -2611,7 +2661,7 @@ class GameScene extends Phaser.Scene {
       this.game.events.off('upgradeSelected', this._upgradeSelectedHandler);
     }
     this._upgradeSelectedHandler = (upgrade) => {
-      this.applyUpgrade(upgrade);
+      this.consumeLevelUpSelection?.(upgrade);
     };
     this.game.events.on('upgradeSelected', this._upgradeSelectedHandler);
 
@@ -2791,6 +2841,12 @@ class GameScene extends Phaser.Scene {
       if (!pointer) return;
       if (!this.player) return;
 
+      if (this.isPointerOverLevelUpHud?.(pointer.x, pointer.y)) {
+        this.resetTouchJoystickInput?.();
+        this.openPendingLevelUpScene?.();
+        return;
+      }
+
       if (this.cooldownHud?.containsPoint?.(pointer.x, pointer.y)) {
         return;
       }
@@ -2960,7 +3016,7 @@ class GameScene extends Phaser.Scene {
     // - 打开查看菜单/升级/商店等暂停期间不推进
     // - 恢复后的第一帧跳过 delta，避免补算
     if (!Number.isFinite(this._gameplayNowMs)) this._gameplayNowMs = 0;
-    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing || this._levelUpCinematicActive || this._sceneIntroActive);
+    const menuFrozen = (this.viewMenuOpen || this.viewMenuClosing || this._sceneIntroActive);
     if (this._skipGameplayDeltaOnce) {
       this._skipGameplayDeltaOnce = false;
     } else if (!menuFrozen) {
@@ -2993,6 +3049,9 @@ class GameScene extends Phaser.Scene {
     if (this.player) {
       this.player.update(time, delta);
     }
+
+    this.updateLevelUpPresentationFollow?.();
+    this.updateLevelUpPendingHud?.(this._gameplayNowMs || time || 0);
 
     // 玩家死亡：立即停止所有玩家攻击与机制（但不暂停 Scene 的 time/tweens，保证 GameOver 延迟跳转仍能发生）
     if (this.player && this.player.isAlive === false) {

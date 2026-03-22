@@ -223,7 +223,12 @@ export function applyHudMixin(GameScene) {
         this.bottomHudExitBtn,
         this.bottomHudHpBarBg,
         this.bottomHudHpBarFill,
-        this.bottomHudHpBarText
+        this.bottomHudHpBarText,
+        this.levelUpHudContainer,
+        this.levelUpHudGlow,
+        this.levelUpHudPulse,
+        this.levelUpHudCircle,
+        this.levelUpHudText
       ];
       oldElements.forEach((el) => {
         if (el?.destroy) el.destroy();
@@ -236,11 +241,146 @@ export function applyHudMixin(GameScene) {
       this.bottomHudHpBarBg = null;
       this.bottomHudHpBarFill = null;
       this.bottomHudHpBarText = null;
+      this.levelUpHudContainer = null;
+      this.levelUpHudGlow = null;
+      this.levelUpHudPulse = null;
+      this.levelUpHudCircle = null;
+      this.levelUpHudText = null;
+
+      this.createLevelUpPendingHud();
     },
 
     rebuildBottomHud() {
       this.createMinimalBottomHud();
+      this.updateLevelUpPendingHud(this._gameplayNowMs || 0);
       this.cooldownHud?.layout?.();
+    },
+
+    isPointerOverLevelUpHud(pointerX, pointerY) {
+      const container = this.levelUpHudContainer;
+      if (!container?.visible) return false;
+
+      const x = Number(pointerX);
+      const y = Number(pointerY);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+      const dx = x - Number(container.x || 0);
+      const dy = y - Number(container.y || 0);
+      return (dx * dx + dy * dy) <= (44 * 44);
+    },
+
+    createLevelUpPendingHud() {
+      const cam = this.cameras.main;
+      const x = cam.width - 86;
+      const y = cam.height - 112;
+
+      const glow = this.add.circle(0, 0, 50, 0xf59e0b, 0.12);
+      const pulse = this.add.circle(0, 0, 40, 0xf59e0b, 0.08);
+      const circle = this.add.circle(0, 0, 40, 0x78350f, 0.96)
+        .setStrokeStyle(4, 0xf59e0b, 0.96);
+      const text = this.add.text(0, 0, '0', {
+        fontSize: '34px',
+        color: '#fff7ed',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      const container = this.add.container(x, y, [glow, pulse, circle, text]);
+      container.setScrollFactor(0);
+      container.setDepth(10020);
+      container.setSize(112, 112);
+      container.setVisible(false);
+      container.setData('ui', true);
+      container.setData('isUI', true);
+      container.setInteractive(new Phaser.Geom.Circle(0, 0, 44), Phaser.Geom.Circle.Contains);
+      container.on('pointerdown', (pointer, localX, localY, event) => {
+        event?.stopPropagation?.();
+        this.resetTouchJoystickInput?.();
+        this.openPendingLevelUpScene?.();
+      });
+
+      this.levelUpHudContainer = container;
+      this.levelUpHudGlow = glow;
+      this.levelUpHudPulse = pulse;
+      this.levelUpHudCircle = circle;
+      this.levelUpHudText = text;
+    },
+
+    updateLevelUpPendingHud(now = 0) {
+      const container = this.levelUpHudContainer;
+      const glow = this.levelUpHudGlow;
+      const pulseRing = this.levelUpHudPulse;
+      const circle = this.levelUpHudCircle;
+      const text = this.levelUpHudText;
+      if (!container || !glow || !pulseRing || !circle || !text) return;
+
+      const points = Math.max(0, Number(this.getPendingLevelUpPoints?.() || 0));
+      const sceneActive = !!this.scene?.isActive?.('LevelUpScene');
+      if (points <= 0 || sceneActive) {
+        container.setVisible(false);
+        return;
+      }
+
+      let fill = 0x7c4a03;
+      let stroke = 0xf59e0b;
+      let pulseAmount = 0.038;
+      let glowAlpha = 0.14;
+      let ringAlpha = 0.10;
+      let textScaleAmount = 0.024;
+      let ringBaseScale = 1.04;
+      let circleStrokeWidth = 4;
+      let circleAlpha = 0.96;
+      let pulseSpeed = 180;
+
+      if (points >= 10) {
+        fill = 0x450a0a;
+        stroke = 0xdc2626;
+        pulseAmount = 0.18;
+        glowAlpha = 0.34;
+        ringAlpha = 0.28;
+        textScaleAmount = 0.10;
+        ringBaseScale = 1.12;
+        circleStrokeWidth = 6;
+        circleAlpha = 0.99;
+        pulseSpeed = 68;
+      } else if (points >= 7) {
+        fill = 0x6f1d1b;
+        stroke = 0xf87171;
+        pulseAmount = 0.115;
+        glowAlpha = 0.25;
+        ringAlpha = 0.21;
+        textScaleAmount = 0.06;
+        ringBaseScale = 1.08;
+        circleStrokeWidth = 5;
+        pulseSpeed = 102;
+      } else if (points >= 4) {
+        fill = 0x9a3412;
+        stroke = 0xfb7185;
+        pulseAmount = 0.07;
+        glowAlpha = 0.20;
+        ringAlpha = 0.16;
+        textScaleAmount = 0.04;
+        ringBaseScale = 1.06;
+        pulseSpeed = 132;
+      }
+
+      const wave = Math.sin(Number(now || 0) / pulseSpeed);
+      const pulse = 1 + wave * pulseAmount;
+      const textScale = 1 + wave * textScaleAmount;
+      const ringScale = ringBaseScale + wave * (pulseAmount * 0.95);
+
+      circle.setFillStyle(fill, circleAlpha);
+      circle.setStrokeStyle(circleStrokeWidth, stroke, 0.98);
+      glow.setFillStyle(stroke, glowAlpha);
+      glow.setScale(1.02 + pulseAmount * 0.95 + Math.max(0, wave) * pulseAmount * 0.4, 1.02 + pulseAmount * 0.95 + Math.max(0, wave) * pulseAmount * 0.4);
+      pulseRing.setFillStyle(stroke, ringAlpha);
+      pulseRing.setScale(ringScale, ringScale);
+      text.setText(String(points));
+      text.setFontSize(points >= 10 ? '32px' : (points >= 7 ? '33px' : '34px'));
+      text.setScale(textScale);
+      circle.setScale(pulse, pulse);
+      container.setPosition(this.cameras.main.width - 86, this.cameras.main.height - 112);
+      container.setScale(1);
+      container.setVisible(true);
     },
 
     createTopLeftHud() {

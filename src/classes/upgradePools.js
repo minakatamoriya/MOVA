@@ -60,13 +60,15 @@ export const UPGRADE_POOLS = {
     { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
   ],
 
-  // 🔵 法师·激光
+  // 🔵 法师·冰法
   mage: [
-    { id: 'mage_refract', category: 'build', name: '折射', desc: '激光命中目标后，从该目标分裂 2 道短射线到附近敌人，伤害为 50%', icon: '法主' },
-    { id: 'mage_arcane_perception', category: 'build', name: '奥术感知', desc: '奥术射线索敌范围提升（可叠加）', icon: '法主' },
-    { id: 'mage_energy_focus', category: 'build', name: '能量汇集', desc: '奥术射线伤害 +10%，并随层数变粗更亮（可叠加）', icon: '法主' },
-    { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: '生命低于30%时自动触发：冻结周围敌人 3/5/10 秒，冷却30秒', icon: '法主', maxLevel: 3 },
-    { id: 'mage_frost_domain', category: 'build', name: '极寒疆域', desc: '强化冰霜新星：冻结范围扩大至300/380/480', icon: '法主', maxLevel: 3, requiredSkillId: 'mage_frost_nova' }
+    { id: 'mage_frostbite', category: 'build', name: '霜蚀', desc: '冰弹基础自带 22% 减速 1.5 秒。1/2/3级强化到 30%/38%/48%，持续 1.9/2.3/2.7 秒', icon: '法主', maxLevel: 3 },
+    { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹索敌范围提升。1/2/3级：+45/+90/+135', icon: '法主', maxLevel: 3 },
+    { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害 +10%/+20%/+30%，飞行更利落', icon: '法主', maxLevel: 3 },
+    { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: '基础 5 层碎冰后额外冻结主目标。1/2/3级：冻结0.8/1.2/1.7秒', icon: '法主', maxLevel: 3 },
+    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '基础 5 层会爆炸并传染。1/2/3级：碎冰半径 120/150/185，造成 70%/100%/135% 伤害，并传染 1/1/2 层寒霜', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: '生命低于30%时自动触发：冻结周围敌人。1/2/3级：冻结3/5/10秒，冷却30秒', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frost_domain', category: 'build', name: '极寒疆域', desc: '强化冰霜新星范围。1/2/3级：作用半径提升至300/380/480', icon: '法主', maxLevel: 3, requiredSkillId: 'mage_frost_nova' }
   ],
 
   // 🛡️ 圣骑士·矛

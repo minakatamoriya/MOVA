@@ -19,7 +19,8 @@ export default class LevelUpScene extends Phaser.Scene {
     uiBus.emit('phaser:uiSnapshot', {
       levelUp: {
         level: this.currentLevel || 1,
-        options: this._upgrades || []
+        options: this._upgrades || [],
+        pendingPoints: this.pendingPoints || 0
       }
     });
   }
@@ -29,6 +30,50 @@ export default class LevelUpScene extends Phaser.Scene {
     this.currentLevel = data.level || 1;
     this.choiceCount = data.choices || 3;
     this.options = data.options || null;
+    this.pendingPoints = Math.max(0, Number(data.pendingPoints || 0));
+  }
+
+  getGameScene() {
+    try {
+      return this.scene.get('GameScene');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  closeForLater() {
+    const gameScene = this.getGameScene();
+    gameScene?.setLevelUpPanelOpen?.(false);
+    gameScene?.markLevelUpInteraction?.();
+    this.scene.resume('GameScene');
+    this.scene.stop();
+  }
+
+  completeSelection(selection) {
+    const chosen = typeof selection === 'string'
+      ? (this._upgrades || []).find((u) => u.id === selection)
+      : selection;
+    if (!chosen) return false;
+
+    const gameScene = this.getGameScene();
+    const consumed = gameScene?.consumeLevelUpSelection?.(chosen);
+    if (!consumed) return false;
+
+    const pendingPoints = Math.max(0, Number(gameScene?.getPendingLevelUpPoints?.() || 0));
+    const nextOffer = gameScene?.getCurrentLevelUpOffer?.() || null;
+    if (pendingPoints > 0 && nextOffer?.options?.length) {
+      this.scene.restart({
+        level: nextOffer.level || this.currentLevel || 1,
+        choices: nextOffer.options.length,
+        options: nextOffer.options,
+        pendingPoints
+      });
+      return true;
+    }
+
+    this.scene.resume('GameScene');
+    this.scene.stop();
+    return true;
   }
 
   create() {
@@ -64,15 +109,14 @@ export default class LevelUpScene extends Phaser.Scene {
       uiBus.on('ui:requestSnapshot', this._uiRequestSnapshotHandler);
 
       this._uiSelectHandler = (payload) => {
-        const chosen = typeof payload === 'string'
-          ? (this._upgrades || []).find((u) => u.id === payload)
-          : payload;
-        if (!chosen) return;
-        this.game.events.emit('upgradeSelected', chosen);
-        this.scene.resume('GameScene');
-        this.scene.stop();
+        this.completeSelection(payload);
       };
       uiBus.on('ui:levelUp:select', this._uiSelectHandler);
+
+      this._uiCloseHandler = () => {
+        this.closeForLater();
+      };
+      uiBus.on('ui:levelUp:close', this._uiCloseHandler);
 
       this.emitUiSnapshot();
       return;
@@ -86,7 +130,7 @@ export default class LevelUpScene extends Phaser.Scene {
       .setOrigin(0);
 
     // 标题
-    this.add.text(centerX, 80, `等级提升！ 等级 ${this.currentLevel}`, {
+    this.add.text(centerX, 80, `剩余点数：${this.pendingPoints || 0}`, {
       fontSize: '42px',
       color: '#ffff00',
       fontStyle: 'bold'
@@ -96,6 +140,10 @@ export default class LevelUpScene extends Phaser.Scene {
       fontSize: '24px',
       color: '#ffffff'
     }).setOrigin(0.5);
+
+    this.createButton(this.cameras.main.width - 110, 70, '稍后再加', () => {
+      this.closeForLater();
+    }, 160, 44, '18px').setScrollFactor(0).setDepth(50);
 
     const count = upgrades.length;
     const topY = 170;
@@ -109,9 +157,7 @@ export default class LevelUpScene extends Phaser.Scene {
     upgrades.forEach((upgrade, index) => {
       const card = this.createUpgradeCard(centerX, startY + index * spacing, upgrade, () => {
         console.log(`选择了：${upgrade.name}`);
-        this.game.events.emit('upgradeSelected', upgrade);
-        this.scene.resume('GameScene');
-        this.scene.stop();
+        this.completeSelection(upgrade);
       });
       this.upgradeCards.push(card);
     });
@@ -137,6 +183,10 @@ export default class LevelUpScene extends Phaser.Scene {
     if (this._uiSelectHandler) {
       uiBus.off('ui:levelUp:select', this._uiSelectHandler);
       this._uiSelectHandler = null;
+    }
+    if (this._uiCloseHandler) {
+      uiBus.off('ui:levelUp:close', this._uiCloseHandler);
+      this._uiCloseHandler = null;
     }
   }
 
@@ -229,8 +279,8 @@ export default class LevelUpScene extends Phaser.Scene {
     const card = this.add.container(x, y);
     const theme = getUpgradeCardTheme(upgrade);
     const styles = this.getCardTextStyles(theme);
-    const cardWidth = 560;
-    const cardHeight = 124;
+    const cardWidth = 592;
+    const cardHeight = 136;
     const levelLabel = upgrade.offerLevelLabel || '';
     const displayDesc = upgrade.offerDesc || upgrade.desc;
     const hasTopMeta = !!(theme.badge || theme.kicker || levelLabel);
@@ -319,8 +369,8 @@ export default class LevelUpScene extends Phaser.Scene {
 
     const nodes = [aura, bg, splitBg, accentBar, secondaryAccentBar, shine, cornerGlowTop, cornerGlowBottom, border, innerBorder, badgeBg, badgeText, kickerText, levelBadgeBg, levelBadgeText, icon, name, desc].filter(Boolean);
     card.add(nodes);
-    card.setSize(cardWidth, cardHeight);
-    card.setInteractive({ useHandCursor: true });
+    card.setSize(cardWidth + 24, cardHeight + 18);
+    card.setInteractive(new Phaser.Geom.Rectangle(-(cardWidth + 24) / 2, -(cardHeight + 18) / 2, cardWidth + 24, cardHeight + 18), Phaser.Geom.Rectangle.Contains);
 
     card.setData('bg', bg);
     card.setData('border', border);
@@ -333,7 +383,8 @@ export default class LevelUpScene extends Phaser.Scene {
     card.setData('upgrade', upgrade);
     card.setData('callback', callback);
 
-    card.on('pointerup', () => {
+    card.on('pointerdown', (pointer, localX, localY, event) => {
+      event?.stopPropagation?.();
       callback();
       this.updateSelection();
     });

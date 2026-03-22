@@ -20,6 +20,8 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     // 控制：眩晕/定身（自然伙伴等效果用）
     this.stunUntil = 0;
     this.freezeUntil = 0;
+    this.slowUntil = 0;
+    this.slowMoveMult = 1;
     this._stunResumeTimer = null;
     this._freezeClearTimer = null;
     this._freezeAura = null;
@@ -646,7 +648,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     }
 
     entry.stacks = nStacks;
-    entry.container.setVisible(true);
+  entry.container.setVisible(this.scene?.registry?.get?.('showEnemyOverlays') === true);
     entry.iconText.setText(label);
     entry.iconText.setColor(color);
     entry.stackText.setText(String(nStacks));
@@ -657,16 +659,20 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   _layoutDebuffUi() {
     const ui = this._debuffUi;
     if (!ui?.entries) return;
+    const showEnemyOverlays = this.scene?.registry?.get?.('showEnemyOverlays') === true;
 
     const priority = {
       poisonZone: 10,
+      mageFrost: 15,
       slow: 20
     };
 
     const visibleKeys = [...ui.entries.keys()]
       .filter((k) => {
         const e = ui.entries.get(k);
-        return e && e.container && e.container.visible;
+        if (!e || !e.container) return false;
+        e.container.setVisible(showEnemyOverlays && e.stacks > 0);
+        return e.container.visible;
       })
       .sort((a, b) => (priority[a] || 999) - (priority[b] || 999));
 
@@ -682,7 +688,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     });
 
     if (this._bossHud?.debuffContainer) {
-      this._bossHud.debuffContainer.setVisible(visibleKeys.length > 0);
+      this._bossHud.debuffContainer.setVisible(showEnemyOverlays && visibleKeys.length > 0);
     }
   }
 
@@ -940,7 +946,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     if (dt <= 0) return;
 
     // 轻微追踪：只走 moveSpeed 的一部分，避免过快（但要能看出来在动）
-    const maxStep = this.moveSpeed * 0.75 * dt;
+    const maxStep = this.moveSpeed * this.getSlowMoveMultiplier(now) * 0.75 * dt;
     const step = Math.min(maxStep, dist);
 
     const nx = dx / dist;
@@ -1640,6 +1646,33 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       if ((this.freezeUntil || 0) > current) return;
       this.setFrozenVisualVisible(false);
     });
+  }
+
+  applySlow(percent, durationMs = 0) {
+    if (!this.isAlive) return;
+    const now = this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, Math.round(durationMs || 0));
+    this.slowUntil = Math.max(this.slowUntil || 0, until);
+    this.slowMoveMult = Math.min(Number(this.slowMoveMult || 1), Phaser.Math.Clamp(1 - Number(percent || 0), 0.2, 1));
+    this.createDebuffUi?.();
+    if ((this.freezeUntil || 0) <= now) {
+      if (this.sprite?.setTint) this.sprite.setTint(0xa8ebff);
+      if (this.body?.setStrokeStyle) this.body.setStrokeStyle(3, 0x7fdcff, 1);
+    }
+  }
+
+  getSlowMoveMultiplier(now) {
+    const current = Number(now ?? this.scene?.time?.now ?? 0);
+    if ((this.slowUntil || 0) > current) {
+      return Phaser.Math.Clamp(Number(this.slowMoveMult || 1), 0.2, 1);
+    }
+    this.slowUntil = 0;
+    this.slowMoveMult = 1;
+    if ((this.freezeUntil || 0) <= current) {
+      if (this.sprite?.clearTint) this.sprite.clearTint();
+      if (this.body?.setStrokeStyle) this.body.setStrokeStyle(3, 0xffffff, 0.95);
+    }
+    return 1;
   }
 
   /**

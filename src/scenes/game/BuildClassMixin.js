@@ -298,17 +298,23 @@ export function applyBuildClassMixin(GameScene) {
           applyCoreUpgrade(this, upgrade.id);
           break;
         case 'mage_refract':
-          this.player.mageRefract = true;
+        case 'mage_frostbite':
+          this.player.mageFrostbiteLevel = Math.min(3, (this.player.mageFrostbiteLevel || 0) + 1);
           break;
-        case 'mage_arcane_perception': {
-          this.player.mageArcanePerceptionLevel = Math.min(3, (this.player.mageArcanePerceptionLevel || 0) + 1);
-          const base = this.player.arcaneRayBaseRange || this.player.arcaneRayRange || 220;
-          this.player.arcaneRayBaseRange = base;
-          this.player.arcaneRayRange = Math.round(base + this.player.mageArcanePerceptionLevel * 45);
+        case 'mage_arcane_perception':
+        case 'mage_cold_focus': {
+          this.player.mageColdFocusLevel = Math.min(3, (this.player.mageColdFocusLevel || 0) + 1);
+          const base = this.player.mageMissileRangeBase || this.player.mageMissileRange || 280;
+          this.player.mageMissileRangeBase = base;
+          this.player.mageMissileRange = Math.round(base + this.player.mageColdFocusLevel * 45);
           break;
         }
         case 'mage_energy_focus':
-          this.player.mageEnergyFocusLevel = Math.min(3, (this.player.mageEnergyFocusLevel || 0) + 1);
+        case 'mage_ice_veins':
+          this.player.mageIceVeinsLevel = Math.min(3, (this.player.mageIceVeinsLevel || 0) + 1);
+          break;
+        case 'mage_deep_freeze':
+          this.player.mageDeepFreezeLevel = Math.min(3, (this.player.mageDeepFreezeLevel || 0) + 1);
           break;
         case 'mage_frost_nova':
           this.player.mageFrostNovaLevel = Math.min(3, (this.player.mageFrostNovaLevel || 0) + 1);
@@ -507,6 +513,9 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'warrior_bloodlust_mastery':
           this.player.warriorBloodlustMasteryLevel = Math.min(3, (this.player.warriorBloodlustMasteryLevel || 0) + 1);
+          break;
+        case 'mage_shatter':
+          this.player.mageShatterLevel = Math.min(3, (this.player.mageShatterLevel || 0) + 1);
           break;
         case 'mage_frost_domain':
           this.player.mageFrostDomainLevel = Math.min(3, (this.player.mageFrostDomainLevel || 0) + 1);
@@ -783,21 +792,136 @@ export function applyBuildClassMixin(GameScene) {
       this.buildState.core = core;
     },
 
+    getPendingLevelUpPoints() {
+      return Math.max(0, Math.floor(Number(this._pendingLevelUpPoints || 0)));
+    },
+
+    getCurrentLevelUpOffer() {
+      return this._currentLevelUpOffer || null;
+    },
+
+    markLevelUpInteraction() {
+      this._levelUpLastInteractionMs = Number(this._gameplayNowMs || 0);
+    },
+
+    rollLevelUpOffer(levelOverride = null) {
+      if (this.getPendingLevelUpPoints() <= 0) {
+        this._currentLevelUpOffer = null;
+        this._levelUpActive = false;
+        return null;
+      }
+
+      const options = this.getLevelUpOptions();
+      const offer = {
+        id: Math.max(1, Math.floor(Number(this._levelUpOfferSequence || 0)) + 1),
+        level: Math.max(1, Math.floor(Number(levelOverride || this.playerData?.level || 1))),
+        options: Array.isArray(options) ? options : []
+      };
+
+      this._levelUpOfferSequence = offer.id;
+      this._currentLevelUpOffer = offer;
+      this._levelUpActive = true;
+      return offer;
+    },
+
+    ensureLevelUpOffer(levelOverride = null) {
+      if (this._currentLevelUpOffer?.options?.length) return this._currentLevelUpOffer;
+      return this.rollLevelUpOffer(levelOverride);
+    },
+
+    setLevelUpPanelOpen(open) {
+      const nextOpen = !!open && this.getPendingLevelUpPoints() > 0;
+      this._levelUpPanelOpen = nextOpen;
+
+      if (nextOpen) {
+        this.markLevelUpInteraction();
+        this.ensureLevelUpOffer();
+      }
+
+      this.emitUiSnapshot?.();
+      return nextOpen;
+    },
+
+    openPendingLevelUpScene() {
+      if (this.getPendingLevelUpPoints() <= 0) return false;
+      if (this.viewMenuOpen || this.viewMenuClosing) return false;
+      if (this.scene?.isActive?.('LevelUpScene')) return false;
+
+      const offer = this.ensureLevelUpOffer();
+      if (!offer) return false;
+
+      this._levelUpPanelOpen = true;
+      this.markLevelUpInteraction();
+      this.clearLevelUpPresentation();
+      this.resetTouchJoystickInput?.();
+      this.player?.clearAnalogMove?.();
+      this.player?.clearTransientCombatEffects?.();
+      this.levelUpHudContainer?.setVisible?.(false);
+
+      this.scene.pause('GameScene');
+      this.scene.launch('LevelUpScene', {
+        level: offer.level || this.playerData?.level || 1,
+        choices: offer.options?.length || this.levelUpChoiceCount || 3,
+        options: offer.options || [],
+        pendingPoints: this.getPendingLevelUpPoints()
+      });
+      return true;
+    },
+
+    consumeLevelUpSelection(selection) {
+      if (this._levelUpSelectionLocked) return false;
+
+      const offer = this.getCurrentLevelUpOffer();
+      const chosen = typeof selection === 'string'
+        ? (offer?.options || []).find((opt) => opt?.id === selection)
+        : selection;
+
+      if (!offer || !chosen || this.getPendingLevelUpPoints() <= 0) return false;
+
+      this._levelUpSelectionLocked = true;
+
+      try {
+        this.markLevelUpInteraction();
+        this.buildState.levelUps += 1;
+        this.applyUpgrade(chosen);
+
+        this._pendingLevelUpPoints = Math.max(0, this.getPendingLevelUpPoints() - 1);
+        this._currentLevelUpOffer = null;
+        this._levelUpActive = false;
+
+        if (this._pendingLevelUpPoints > 0) {
+          this._levelUpPanelOpen = true;
+          this.rollLevelUpOffer();
+        } else {
+          this._levelUpPanelOpen = false;
+          this._levelUpPendingSinceMs = 0;
+          this._levelUpLastInteractionMs = 0;
+        }
+
+        this.events.emit('updatePlayerInfo');
+        this.emitUiSnapshot?.();
+        return true;
+      } finally {
+        this._levelUpSelectionLocked = false;
+      }
+    },
+
     triggerLevelUp() {
       let levelOverride = null;
       if (arguments && arguments.length > 0 && typeof arguments[0] === 'object') {
         levelOverride = arguments[0]?.levelOverride ?? null;
       }
 
-      this._levelUpActive = true;
-      this.buildState.levelUps += 1;
-      this.player?.restoreFullHealth?.();
+      if (this.getPendingLevelUpPoints() <= 0) return;
 
-      const options = this.getLevelUpOptions();
+      const offer = this.ensureLevelUpOffer(levelOverride);
+      if (!offer) return;
+
+      this.emitUiSnapshot?.();
 
       this.playLevelUpPresentation({
-        level: levelOverride || this.playerData.level,
-        options
+        level: levelOverride || offer.level || this.playerData.level,
+        pendingPoints: this.getPendingLevelUpPoints()
       });
     },
 
@@ -835,30 +959,47 @@ export function applyBuildClassMixin(GameScene) {
         this._levelUpPresentationObjects.forEach((obj) => obj?.destroy?.());
       }
       this._levelUpPresentationObjects = [];
+      this._levelUpPresentationFollowState = null;
+      this._levelUpCinematicActive = false;
+    },
+
+    updateLevelUpPresentationFollow() {
+      if (!this._levelUpCinematicActive || !this._levelUpPresentationFollowState || !this.player) return;
+
+      const nextX = Number(this.player.x || 0);
+      const nextY = Number(this.player.y || 0);
+      const dx = nextX - Number(this._levelUpPresentationFollowState.x || 0);
+      const dy = nextY - Number(this._levelUpPresentationFollowState.y || 0);
+      if (!dx && !dy) return;
+
+      const objects = Array.isArray(this._levelUpPresentationObjects) ? this._levelUpPresentationObjects : [];
+      for (let i = 0; i < objects.length; i += 1) {
+        const obj = objects[i];
+        if (!obj?.active) continue;
+        obj.x += dx;
+        obj.y += dy;
+      }
+
+      this._levelUpParticleManager?.setPosition?.(nextX, nextY + 10);
+      this._levelUpParticleEmitter?.setPosition?.(nextX, nextY + 10);
+      this._levelUpPresentationFollowState = { x: nextX, y: nextY };
     },
 
     playLevelUpPresentation(payload = {}) {
       const level = payload.level || this.playerData?.level || 1;
-      const options = payload.options || [];
       const duration = 2000;
 
       this.clearLevelUpPresentation();
+      this.player?.clearTransientCombatEffects?.();
 
-      // 演出期间冻结主要战斗推进，但保留 tween / 粒子 / 镜头特效。
       this._levelUpCinematicActive = true;
-
-      // 关键：演出开始前先清空输入，避免摇杆/按键残留导致恢复后持续移动。
-      this.resetTouchJoystickInput?.();
-      this.player?.clearAnalogMove?.();
-      this.player?.freezeMovementAnimation?.();
-
-      if (this.physics?.world) this.physics.world.pause();
 
       const playerX = this.player?.x ?? this.cameras.main.centerX;
       const playerY = this.player?.y ?? this.cameras.main.centerY;
       const beamHeight = Math.max(620, Math.round(this.cameras.main.height * 1.45));
       const beamCenterY = playerY - Math.round(beamHeight * 0.48);
       const objects = [];
+      this._levelUpPresentationFollowState = { x: playerX, y: playerY };
 
       const pillar = this.add.rectangle(playerX, beamCenterY, 132, beamHeight, 0xf2b63d, 0.10);
       pillar.setBlendMode(Phaser.BlendModes.ADD);
@@ -1113,18 +1254,12 @@ export function applyBuildClassMixin(GameScene) {
         this._levelUpPresentationTimer = null;
         this.clearLevelUpPresentation();
         this._levelUpCinematicActive = false;
-        this.player?.restoreFullHealth?.();
-
-        if (this.anims) this.anims.pauseAll();
-        if (this.time) this.time.paused = true;
-        if (this.tweens) this.tweens.pauseAll();
-
-        this.scene.pause('GameScene');
-        this.scene.launch('LevelUpScene', {
-          level,
-          choices: options.length,
-          options
-        });
+        this.emitUiSnapshot?.();
+        if (this.time) {
+          this.time.delayedCall(0, () => this.startNextPendingLevelUp?.());
+        } else {
+          this.startNextPendingLevelUp?.();
+        }
       });
     },
 
@@ -2035,9 +2170,8 @@ export function applyBuildClassMixin(GameScene) {
       this.laserEnabled = true;
       this.player.canFire = true;
       this.player.archerEnabled = false;
-      this.player.setWeapon('laser');
-      this.player.laserDamageMult = 2.0;
-      this.player.baseFireRate = 320;
+      this.player.setWeapon('mage_frostbolt');
+      this.player.baseFireRate = 460;
       this.player.applyStatMultipliers({ damageMult: 1, fireRateMult: 1, speedMult: 1 });
     },
 
@@ -2152,7 +2286,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
       const active = mainCore === 'mage' || this.player.mainCoreKey === 'mage'
-        || this.player.weaponType === 'laser';
+        || this.player.weaponType === 'mage_frostbolt';
       if (!active) {
         if (this._mageRangeRing) this._mageRangeRing.setVisible(false);
         return;
@@ -2160,8 +2294,8 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_mageRangeRing', 'mage');
 
-      // 法师基础技能已经统一为激光，范围圈直接对齐激光索敌/生效范围
-      const r = Math.max(60, Math.round(this.player.arcaneRayRange || this.player.arcaneRayBaseRange || 220));
+      // 冰法基础技能使用单发冰弹，范围圈对齐冰弹索敌范围
+      const r = Math.max(80, Math.round(this.player.mageMissileRange || this.player.mageMissileRangeBase || 280));
 
       this._mageRangeRing.setRadius(r);
       const hp = this.player.getHitboxPosition?.();
@@ -2310,6 +2444,12 @@ export function applyBuildClassMixin(GameScene) {
           this.applyWarriorOffclassHitEffects?.(target, now);
           this.showDamageNumber?.(target.x, target.y - 26, damageResult.amount, { color: '#ff9b5f', fontSize: 20, whisper: true });
         }
+
+        if ((debuffs.mageFrost?.expiresAt || 0) > 0 && now >= (debuffs.mageFrost?.expiresAt || 0)) {
+          debuffs.mageFrost.stacks = 0;
+          debuffs.mageFrost.expiresAt = 0;
+          target.setDebuffStacks?.('mageFrost', 0, { label: '冰', color: '#8fdcff' });
+        }
       }
     },
 
@@ -2402,6 +2542,242 @@ export function applyBuildClassMixin(GameScene) {
         target.debuffs = target.debuffs || {};
         target.debuffs.warriorSunderUntil = now + 2400;
         target.debuffs.warriorSunderMult = sunderMult;
+      }
+    },
+
+    applyMageFrostHitEffects(target, context = {}) {
+      const player = this.player;
+      const allowDeadFinisher = !!context.killedByHit;
+      if (!player || !target) return;
+      if (!target.isAlive && !allowDeadFinisher) return;
+
+      const sourceBullet = context.bullet;
+      const isMageCore = player.mainCoreKey === 'mage' || player.weaponType === 'mage_frostbolt';
+      if (!isMageCore) return;
+      if (!context.fromSpread && !sourceBullet?.frostSpell) return;
+
+      const now = Number(context.now || this.time?.now || 0);
+      const slowLevel = Math.max(0, Math.min(3, player.mageFrostbiteLevel || 0));
+      const slowPct = [0.22, 0.30, 0.38, 0.48][slowLevel] || 0.22;
+      const slowMs = [1500, 1900, 2300, 2700][slowLevel] || 1500;
+
+      if (!context.skipSlow && target.isAlive && typeof target.applySlow === 'function') {
+        target.applySlow(slowPct, slowMs);
+      }
+
+      this.applyMageFrostStacks(target, 1, now, { fromSpread: !!context.fromSpread, killedByHit: allowDeadFinisher });
+    },
+
+    applyMageFrostStacks(target, amount, now, context = {}) {
+      const player = this.player;
+      const allowDeadFinisher = !!context.killedByHit;
+      if (!player || !target) return;
+      if (!target.isAlive && !allowDeadFinisher) return;
+      const showEnemyOverlays = this.registry?.get?.('showEnemyOverlays') === true;
+
+      target.debuffs = target.debuffs || {};
+      const frost = target.debuffs.mageFrost || { stacks: 0, expiresAt: 0 };
+      if ((frost.expiresAt || 0) <= now) frost.stacks = 0;
+
+      if (target.isAlive) target.syncOverheadUiVisibility?.();
+      frost.stacks = Math.min(5, Math.max(0, Math.round(frost.stacks || 0)) + Math.max(0, Math.round(amount || 0)));
+      frost.expiresAt = now + 2600;
+      target.debuffs.mageFrost = frost;
+      if (target.isAlive) {
+        target.setDebuffStacks?.('mageFrost', frost.stacks, { label: '冰', color: '#8fdcff' });
+      }
+
+      if (target.isAlive && showEnemyOverlays && !context.fromSpread) {
+        this.showDamageNumber?.(target.x, target.y - Math.max(8, (target.bossSize || target.radius || 18) + 40), `冰${frost.stacks}`, {
+          color: '#dff7ff',
+          fontSize: 14,
+          whisper: true
+        });
+      }
+
+      if (frost.stacks < 5) return;
+
+      frost.stacks = 0;
+      frost.expiresAt = 0;
+      if (target.isAlive) {
+        target.setDebuffStacks?.('mageFrost', 0, { label: '冰', color: '#8fdcff' });
+      }
+      this.triggerMageShatter(target, now, { allowSpread: !context.fromSpread });
+    },
+
+    triggerMageShatter(originTarget, now, options = {}) {
+      const player = this.player;
+      const level = Math.max(0, Math.min(3, player?.mageShatterLevel || 0));
+      if (!player || !originTarget) return;
+
+      const radius = [92, 120, 150, 185][level] || 92;
+      const damageScale = [0.45, 0.7, 1.0, 1.35][level] || 0.45;
+      const freezeMs = [0, 800, 1200, 1700][Math.max(0, Math.min(3, player?.mageDeepFreezeLevel || 0))] || 0;
+      const spreadStacks = level >= 3 ? 2 : 1;
+      const startRadius = Math.max(20, Math.round(radius * 0.26));
+      this.cameras?.main?.shake?.(100, level >= 2 ? 0.0036 : 0.0024);
+
+      const frostMist = this.add.circle(originTarget.x, originTarget.y, Math.max(26, radius * 0.32), 0xa7ecff, 0.22);
+      frostMist.setDepth(55);
+      frostMist.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: frostMist,
+        alpha: 0,
+        scaleX: 1.85,
+        scaleY: 1.7,
+        duration: 280,
+        ease: 'Sine.Out',
+        onComplete: () => frostMist.destroy()
+      });
+
+      const burst = this.add.circle(originTarget.x, originTarget.y, startRadius, 0xb9ecff, 0.30);
+      burst.setDepth(56);
+      burst.setStrokeStyle(4, 0xe5f7ff, 0.98);
+      this.tweens.add({
+        targets: burst,
+        alpha: 0,
+        scaleX: radius / startRadius,
+        scaleY: radius / startRadius,
+        duration: 320,
+        onComplete: () => burst.destroy()
+      });
+
+      const shockRing = this.add.circle(originTarget.x, originTarget.y, Math.max(10, startRadius * 0.72), 0xdff9ff, 0);
+      shockRing.setDepth(56);
+      shockRing.setStrokeStyle(8, 0xdff9ff, 0.9);
+      shockRing.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: shockRing,
+        alpha: 0,
+        scaleX: radius / Math.max(1, shockRing.radius),
+        scaleY: radius / Math.max(1, shockRing.radius),
+        duration: 180,
+        ease: 'Cubic.Out',
+        onComplete: () => shockRing.destroy()
+      });
+
+      const iceBloom = this.add.star(originTarget.x, originTarget.y, 8, Math.max(10, radius * 0.12), Math.max(18, radius * 0.42), 0xe9feff, 0.22);
+      iceBloom.setDepth(56);
+      iceBloom.setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({
+        targets: iceBloom,
+        alpha: 0,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        angle: 24,
+        duration: 220,
+        ease: 'Cubic.Out',
+        onComplete: () => iceBloom.destroy()
+      });
+
+      const coreFlash = this.add.circle(originTarget.x, originTarget.y, Math.max(16, radius * 0.14), 0xffffff, 0.55);
+      coreFlash.setDepth(57);
+      this.tweens.add({
+        targets: coreFlash,
+        alpha: 0,
+        scaleX: 2.4,
+        scaleY: 2.4,
+        duration: 180,
+        onComplete: () => coreFlash.destroy()
+      });
+
+      const shardCount = 8 + level * 2;
+      for (let i = 0; i < shardCount; i++) {
+        const angle = (Math.PI * 2 * i) / shardCount + (now * 0.0015);
+        const shard = this.add.rectangle(originTarget.x, originTarget.y, 8 + (i % 3), 24 + (i % 4) * 6, 0xcff6ff, 0.88);
+        shard.setDepth(57);
+        shard.setRotation(angle);
+        shard.setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({
+          targets: shard,
+          x: originTarget.x + Math.cos(angle) * (radius * (0.55 + (i % 2) * 0.12)),
+          y: originTarget.y + Math.sin(angle) * (radius * (0.55 + (i % 2) * 0.12)),
+          alpha: 0,
+          scaleX: 0.82,
+          scaleY: 1.9,
+          duration: 260 + (i % 3) * 30,
+          ease: 'Cubic.Out',
+          onComplete: () => shard.destroy()
+        });
+      }
+
+      for (let i = 0; i < 10; i++) {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const spark = this.add.circle(originTarget.x, originTarget.y, Phaser.Math.Between(3, 5), 0xf4ffff, 0.95);
+        spark.setDepth(58);
+        spark.setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({
+          targets: spark,
+          x: originTarget.x + Math.cos(angle) * Phaser.Math.Between(Math.round(radius * 0.28), Math.round(radius * 0.92)),
+          y: originTarget.y + Math.sin(angle) * Phaser.Math.Between(Math.round(radius * 0.28), Math.round(radius * 0.92)),
+          alpha: 0,
+          scale: 0.1,
+          duration: Phaser.Math.Between(180, 280),
+          ease: 'Quad.Out',
+          onComplete: () => spark.destroy()
+        });
+      }
+
+      this.vfxSystem?.playHit?.(originTarget.x, originTarget.y, {
+        color: 0xd8f7ff,
+        radius: Math.max(16, Math.round(radius * 0.3)),
+        durationMs: 180
+      });
+
+      const originDamage = calculateResolvedDamage({
+        attacker: player,
+        target: originTarget,
+        baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * damageScale)),
+        now,
+        canCrit: false
+      });
+      originTarget.takeDamage?.(originDamage.amount, { attacker: player, source: 'mage_shatter_origin', suppressHitReaction: true });
+      player.onDealDamage?.(originDamage.amount);
+      this.showDamageNumber?.(originTarget.x, originTarget.y - Math.max(28, (originTarget.bossSize || originTarget.radius || 18) + 22), originDamage.amount, {
+        color: '#b8f2ff',
+        fontSize: 24,
+        whisper: true
+      });
+      this.createHitEffect?.(originTarget.x, originTarget.y, 0xcff6ff);
+
+      if (freezeMs > 0 && typeof originTarget.applyFreeze === 'function') {
+        originTarget.applyFreeze(freezeMs, { source: 'mage_deep_freeze', player });
+        this.showDamageNumber?.(originTarget.x, originTarget.y - Math.max(24, (originTarget.bossSize || originTarget.radius || 18) + 16), '冻结', {
+          color: '#9be7ff',
+          fontSize: 18,
+          whisper: true
+        });
+      }
+
+      const targets = this.getOffclassCombatTargets();
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target === originTarget || target.isInvincible) continue;
+        const dx = target.x - originTarget.x;
+        const dy = target.y - originTarget.y;
+        if ((dx * dx + dy * dy) > (radius * radius)) continue;
+
+        const damageResult = calculateResolvedDamage({
+          attacker: player,
+          target,
+          baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * damageScale)),
+          now,
+          canCrit: false
+        });
+        target.takeDamage?.(damageResult.amount, { attacker: player, source: 'mage_shatter', suppressHitReaction: true });
+        player.onDealDamage?.(damageResult.amount);
+        this.applyWarriorOffclassHitEffects?.(target, now);
+        this.showDamageNumber?.(target.x, target.y - 26, damageResult.amount, { color: '#8fdcff', whisper: true });
+        this.createHitEffect?.(target.x, target.y, 0x8fdcff);
+        this.showDamageNumber?.(target.x, target.y - Math.max(10, (target.bossSize || target.radius || 18) + 38), `传染+${spreadStacks}`, {
+          color: '#dff7ff',
+          fontSize: 14,
+          whisper: true
+        });
+
+        if (options.allowSpread !== false) {
+          this.applyMageFrostStacks(target, spreadStacks, now, { fromSpread: true });
+        }
       }
     },
 

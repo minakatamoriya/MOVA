@@ -144,6 +144,18 @@ export default function App() {
   const levelUp = viewData?.levelUp || null;
   const shop = viewData?.shop || null;
   const gameOver = viewData?.gameOver || null;
+  const levelUpPendingPoints = Math.max(0, Number(levelUp?.pendingPoints || 0));
+  const levelUpPanelOpen = !!levelUp?.open && levelUpPendingPoints > 0;
+  const levelUpAttentionBaseMs = Math.max(
+    Number(levelUp?.pendingSinceMs || 0),
+    Number(levelUp?.lastInteractionMs || 0)
+  );
+  const levelUpAttentionElapsedMs = (!levelUpPanelOpen && levelUpPendingPoints > 0)
+    ? Math.max(0, gameplayNowMs - levelUpAttentionBaseMs)
+    : 0;
+  const levelUpUrgency = levelUpAttentionElapsedMs >= 12000
+    ? 2
+    : (levelUpAttentionElapsedMs >= 6000 ? 1 : 0);
 
   // 装备系统（React 版）交互：点击=查看详情；详情卡片右侧按钮操作（装备/卸载）
   const [equipDetail, setEquipDetail] = useState(null);
@@ -1189,6 +1201,20 @@ export default function App() {
           100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 12px 30px rgba(0,0,0,0.22); }
         }
 
+        @keyframes levelup-indicator-pulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.18); }
+          50% { transform: scale(1.04); box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+
+        @keyframes levelup-indicator-shake {
+          0%, 100% { transform: translateX(0) rotate(0deg); }
+          15% { transform: translateX(-2px) rotate(-2deg); }
+          35% { transform: translateX(3px) rotate(2deg); }
+          55% { transform: translateX(-3px) rotate(-2deg); }
+          75% { transform: translateX(2px) rotate(1deg); }
+        }
+
         .mobile-scroll {
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
@@ -1952,7 +1978,7 @@ export default function App() {
         </div>
       ) : null}
 
-      {/* 三选一升级（React 版）：只在 LevelUpScene 显示 */}
+      {/* 三选一升级（React 版）：暂停场景内连续加点 */}
       {sceneKey === 'LevelUpScene' ? (
         <div
           className="ui-panel"
@@ -1981,10 +2007,32 @@ export default function App() {
               overflow: 'hidden'
             }}
           >
-            <div style={{ fontSize: 34, fontWeight: 900, color: '#ffff00' }}>
-              等级提升！ 等级 {levelUp?.level || 1}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ fontSize: 34, fontWeight: 900, color: '#ffff00' }}>
+                剩余点数：{levelUpPendingPoints}
+              </div>
+              <button
+                type="button"
+                onClick={() => uiBus.emit('ui:levelUp:close')}
+                style={{
+                  cursor: 'pointer',
+                  height: 36,
+                  padding: '0 14px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(255,255,255,0.22)',
+                  background: 'rgba(255,255,255,0.08)',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  flexShrink: 0
+                }}
+              >
+                稍后再加
+              </button>
             </div>
-            <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 800 }}>选择一个升级选项</div>
+            <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 800 }}>
+              {`请选择一个升级选项`}
+            </div>
 
             <div
               style={{
@@ -2013,17 +2061,18 @@ export default function App() {
                     style={{
                       cursor: 'pointer',
                       textAlign: 'left',
-                      padding: isSpecial ? 16 : 14,
+                      padding: isSpecial ? 18 : 16,
                       borderRadius: 16,
                       border: `2px solid ${toRgba(theme.border, isSpecial ? 0.92 : 0.55)}`,
                       background: theme.gradient,
                       color: '#fff',
                       width: '100%',
-                      minHeight: 136,
+                      minHeight: 156,
                       position: 'relative',
                       overflow: 'hidden',
                       boxShadow: theme.shadow,
-                      animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none'
+                      animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none',
+                      touchAction: 'manipulation'
                     }}
                   >
                     <div

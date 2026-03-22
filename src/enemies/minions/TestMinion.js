@@ -205,6 +205,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.followOffset = config.followOffset || { x: 120, y: 40 };
     this.stunUntil = 0;
     this.freezeUntil = 0;
+    this.slowUntil = 0;
+    this.slowMoveMult = 1;
     this._freezeClearTimer = null;
     this._freezeAura = null;
     this._freezeCrystal = null;
@@ -425,6 +427,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     const priority = {
       poisonZone: 10,
+      mageFrost: 15,
       slow: 20
     };
 
@@ -1035,6 +1038,33 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     });
   }
 
+  applySlow(percent, durationMs = 0) {
+    if (!this.isAlive) return;
+    const now = this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, Math.round(durationMs || 0));
+    this.slowUntil = Math.max(this.slowUntil || 0, until);
+    this.slowMoveMult = Math.min(Number(this.slowMoveMult || 1), Phaser.Math.Clamp(1 - Number(percent || 0), 0.2, 1));
+    this.syncOverheadUiVisibility?.();
+    if ((this.freezeUntil || 0) <= now) {
+      if (this.sprite?.setTint) this.sprite.setTint(0xa8ebff);
+      if (this.body?.setStrokeStyle) this.body.setStrokeStyle(2, 0x7fdcff, 1);
+    }
+  }
+
+  getSlowMoveMultiplier(now) {
+    const current = Number(now ?? this.scene?.time?.now ?? 0);
+    if ((this.slowUntil || 0) > current) {
+      return Phaser.Math.Clamp(Number(this.slowMoveMult || 1), 0.2, 1);
+    }
+    this.slowUntil = 0;
+    this.slowMoveMult = 1;
+    if ((this.freezeUntil || 0) <= current) {
+      if (this.sprite?.clearTint) this.sprite.clearTint();
+      if (this.body?.setStrokeStyle) this.body.setStrokeStyle(2, 0xffffff, 0.85);
+    }
+    return 1;
+  }
+
   die(reason = 'unknown') {
     if (!this.isAlive) return;
     this.isAlive = false;
@@ -1237,6 +1267,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const pct = Phaser.Math.Clamp(t / this.aggroRampMs, 0, 1);
       speedMult = 0.35 + 0.65 * pct;
     }
+    speedMult *= this.getSlowMoveMultiplier(now);
 
     if (this.minionType === 'shooter' && this.followBoss) {
       const targetX = this.followBoss.x + (this.followOffset?.x || 0);

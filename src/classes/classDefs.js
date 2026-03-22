@@ -61,7 +61,7 @@ export const CLASSES = [
     icon: '法主',
     coreUpgradeId: CORE_UPGRADE_IDS.mage,
     coreKey: CORE_KEYS.mage,
-    coreDesc: '基础攻击切换为激光聚焦'
+    coreDesc: '基础攻击切换为单发冰弹，命中叠加寒霜，叠满五层爆炸并传染'
   },
   {
     id: CLASS_IDS.druid,

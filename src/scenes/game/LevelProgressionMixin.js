@@ -440,13 +440,19 @@ export function applyLevelProgressionMixin(GameScene) {
         this.playerData.level += 1;
         this.playerData.maxExp = this.getMaxExpForLevel(this.playerData.level);
         this._pendingLevelUpLevels.push(this.playerData.level);
+        this._pendingLevelUpPoints = Math.max(0, Number(this._pendingLevelUpPoints || 0)) + 1;
+        if (this._pendingLevelUpPoints === 1) {
+          this._levelUpPendingSinceMs = Number(this._gameplayNowMs || 0);
+          this._levelUpLastInteractionMs = 0;
+        }
+        this.startNextPendingLevelUp();
       }
 
       if (!opts?.silent) {
         this.updateInfoPanel();
       }
 
-      this.startNextPendingLevelUp();
+      this.emitUiSnapshot?.();
     },
 
     grantTestLevelUp() {
@@ -461,11 +467,9 @@ export function applyLevelProgressionMixin(GameScene) {
     },
 
     startNextPendingLevelUp() {
-      if (this._levelUpActive) return;
       if (!Array.isArray(this._pendingLevelUpLevels) || this._pendingLevelUpLevels.length === 0) return;
       if (this.viewMenuOpen || this.viewMenuClosing) return;
 
-      this._levelUpActive = true;
       const nextLevel = this._pendingLevelUpLevels.shift();
       this.triggerLevelUp({ levelOverride: nextLevel });
     },
@@ -663,7 +667,7 @@ export function applyLevelProgressionMixin(GameScene) {
             case 'archer_core':
               return '箭矢连射';
             case 'mage_core':
-              return '奥术射线';
+              return '冰弹';
             case 'paladin_core':
               return '护盾脉冲';
             case 'warlock_core':

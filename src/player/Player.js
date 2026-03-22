@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
 import {
-  fireLaser,
-  updateArcaneRay,
   destroyArcaneRay,
+  fireMageIceBolt,
   fireStarfall,
   fireArcherArrow,
   firePaladinHammer,
@@ -196,26 +195,33 @@ export default class Player extends Phaser.GameObjects.Container {
     this.baseBulletDamage = 6;
     this.bulletDamage = this.baseBulletDamage; // 子弹伤害
     this.canFire = true;
-    this.weaponType = 'archer_arrow'; // archer_arrow | laser | warrior_melee | paladin_hammer | starfall | warlock_poisonnova
+    this.weaponType = 'archer_arrow'; // archer_arrow | mage_frostbolt | warrior_melee | paladin_hammer | starfall | warlock_poisonnova
     this.archerAttackWindupRatio = 0.23;
     this.archerAttackWindupMinMs = 74;
     this.archerAttackWindupMaxMs = 138;
+    this.mageAttackWindupRatio = 0.2;
+    this.mageAttackWindupMinMs = 56;
+    this.mageAttackWindupMaxMs = 108;
     this.archerArrowRangeMax = 420;
     this._archerPendingShots = new Set();
     this._archerChargeFxSeq = 0;
+    this._mageChargeEffectExpireAt = 0;
 
     // 双职业：主职业决定普攻形态；副职业只提供强化
     this.mainCoreKey = null;
     this.offCoreKey = null;
     this.offFireRateMult = 1;
-    // 法师激光：早期不再“一碰就秒”
-    this.laserDamageMult = 1.4;
-
     // 圣骑：击退与制裁（眩晕）
     this.paladinKnockback = 0;
     this.paladinStunLevel = 0;
     this.paladinStunChance = 0;
+    this.mageFrostbiteLevel = 0;
+    this.mageColdFocusLevel = 0;
+    this.mageIceVeinsLevel = 0;
+    this.mageDeepFreezeLevel = 0;
+    this.mageShatterLevel = 0;
     this.mageFrostNovaLevel = 0;
+    this.mageFrostDomainLevel = 0;
 
     // 通用被动（副职业派系）
     this.universalFireRateMult = 1;
@@ -690,8 +696,9 @@ export default class Player extends Phaser.GameObjects.Container {
       return;
     }
 
-    if (this.weaponType === 'laser') {
-      fireLaser(this);
+    if (this.weaponType === 'mage_frostbolt') {
+      if (!this.getMageTargetInRange()) return;
+      this.queueMageIceBoltShot();
       return;
     }
 
@@ -740,12 +747,62 @@ export default class Player extends Phaser.GameObjects.Container {
     return best;
   }
 
+  getMageTargetInRange() {
+    const scene = this.scene;
+    const boss = scene?.bossManager?.getCurrentBoss?.();
+    const minions = scene?.bossManager?.getMinions?.() || scene?.bossManager?.minions || [];
+    const enemies = [];
+
+    if (boss && boss.isAlive) enemies.push(boss);
+    if (Array.isArray(minions) && minions.length > 0) {
+      minions.forEach((unit) => {
+        if (unit && unit.isAlive) enemies.push(unit);
+      });
+    }
+    if (enemies.length === 0) return null;
+
+    const hp = (typeof this.getHitboxPosition === 'function') ? this.getHitboxPosition() : null;
+    const rangeX = (hp && Number.isFinite(hp.x)) ? hp.x : this.x;
+    const rangeY = (hp && Number.isFinite(hp.y)) ? hp.y : this.y;
+    const acquireRange = Phaser.Math.Clamp(
+      Math.round(this.mageMissileRange || this.mageMissileRangeBase || 280),
+      120,
+      520
+    );
+
+    let best = null;
+    let bestD = Infinity;
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      const dx = enemy.x - rangeX;
+      const dy = enemy.y - rangeY;
+      const d = dx * dx + dy * dy;
+      if (d > acquireRange * acquireRange) continue;
+      if (enemy.isBoss) return enemy;
+      if (d < bestD) {
+        best = enemy;
+        bestD = d;
+      }
+    }
+
+    return best;
+  }
+
   getArcherWindupMs() {
     const fromFireRate = Math.round((this.fireRate || this.baseFireRateArcher || 560) * (this.archerAttackWindupRatio || 0.2));
     return Phaser.Math.Clamp(
       fromFireRate,
       this.archerAttackWindupMinMs || 60,
       this.archerAttackWindupMaxMs || 120
+    );
+  }
+
+  getMageWindupMs() {
+    const fromFireRate = Math.round((this.fireRate || this.baseFireRate || 460) * (this.mageAttackWindupRatio || 0.2));
+    return Phaser.Math.Clamp(
+      fromFireRate,
+      this.mageAttackWindupMinMs || 56,
+      this.mageAttackWindupMaxMs || 108
     );
   }
 
@@ -771,6 +828,56 @@ export default class Player extends Phaser.GameObjects.Container {
     }
     if (this.sprite?.clearTint) this.sprite.clearTint();
     if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
+  }
+
+  clearMageChargeEffects() {
+    if (this.archerChargeAura) {
+      this.scene?.tweens?.killTweensOf?.(this.archerChargeAura);
+      this.archerChargeAura.setVisible(false);
+      this.archerChargeAura.setAlpha(0);
+      this.archerChargeAura.setScale(1);
+      this.archerChargeAura.setStrokeStyle(2, 0xe9fbff, 0);
+    }
+    if (this.archerChargeSpark) {
+      this.scene?.tweens?.killTweensOf?.(this.archerChargeSpark);
+      this.archerChargeSpark.setVisible(false);
+      this.archerChargeSpark.setAlpha(0);
+      this.archerChargeSpark.setScale(1, 1);
+      this.archerChargeSpark.setFillStyle(0xf4ffff, 0);
+      this.archerChargeSpark.setStrokeStyle(1, 0x89dfff, 0);
+      this.archerChargeSpark.setAngle(0);
+      this.archerChargeSpark.x = 0;
+      this.archerChargeSpark.y = -this.visualRadius * 0.85;
+    }
+    if (this.archerReleaseFlash) {
+      this.scene?.tweens?.killTweensOf?.(this.archerReleaseFlash);
+      this.archerReleaseFlash.setVisible(false);
+      this.archerReleaseFlash.setAlpha(0);
+      this.archerReleaseFlash.setFillStyle(0xbff6ff, 0);
+      this.archerReleaseFlash.setScale(1, 1);
+      this.archerReleaseFlash.setAngle(0);
+      this.archerReleaseFlash.x = 0;
+      this.archerReleaseFlash.y = -this.visualRadius * 0.9;
+    }
+    this._mageChargeEffectExpireAt = 0;
+    if (this.sprite?.clearTint) this.sprite.clearTint();
+    if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
+  }
+
+  cancelPendingAttackWindups() {
+    if (this._archerPendingShots?.size) {
+      for (const timer of this._archerPendingShots) {
+        try { timer?.remove?.(); } catch (_) { /* ignore */ }
+      }
+      this._archerPendingShots.clear();
+    }
+  }
+
+  clearTransientCombatEffects() {
+    this.cancelPendingAttackWindups();
+    this.clearArcherChargeEffects();
+    this.clearMageChargeEffects();
+    this.clearFrostNovaEffect();
   }
 
   playArcherAttackTelegraph(durationMs, fireAngle = -Math.PI / 2) {
@@ -826,6 +933,35 @@ export default class Player extends Phaser.GameObjects.Container {
     }
   }
 
+  playMageAttackTelegraph(durationMs, fireAngle = -Math.PI / 2) {
+    this.clearMageChargeEffects();
+    if (!this.scene?.sys?.isActive?.()) return;
+    this._mageChargeEffectExpireAt = 0;
+  }
+
+  playMageShotKick(fireAngle = -Math.PI / 2) {
+    if (!this.scene?.sys?.isActive?.() || !this.sprite) return;
+    this._mageChargeEffectExpireAt = 0;
+
+    const kickX = -Math.cos(fireAngle) * 3.5;
+    const kickY = -Math.sin(fireAngle) * 3.5;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.x = kickX;
+    this.sprite.y = kickY;
+    if (this.sprite.setAlpha) this.sprite.setAlpha(1);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      x: 0,
+      y: 0,
+      duration: 78,
+      ease: 'Quad.Out',
+      onComplete: () => {
+        if (this.sprite?.clearTint) this.sprite.clearTint();
+        if (this.sprite?.setAlpha) this.sprite.setAlpha(1);
+      }
+    });
+  }
+
   queueArcherArrowShot() {
     const target = this.getArcherTargetInRange();
     if (!target) return;
@@ -842,6 +978,45 @@ export default class Player extends Phaser.GameObjects.Container {
       if (didFire) {
         this.playArcherShotKick(fireAngle);
         this.playAttackAnimation();
+      }
+    });
+
+    this._archerPendingShots.add(timer);
+  }
+
+  queueMageIceBoltShot() {
+    const target = this.getMageTargetInRange();
+    if (!target) return;
+
+    const windupMs = this.getMageWindupMs();
+    const originY = this.y - this.visualRadius * 0.35;
+    const initialAngle = Phaser.Math.Angle.Between(this.x, originY, target.x, target.y);
+    this.playMageAttackTelegraph(windupMs, initialAngle);
+
+    const timer = this.scene.time.delayedCall(windupMs, () => {
+      this._archerPendingShots.delete(timer);
+      if (!this.scene?.sys?.isActive?.()) {
+        this.clearMageChargeEffects();
+        return;
+      }
+      if (!this.isAlive || !this.canFire || this.scene?.isCombatBehaviorPaused?.()) {
+        this.clearMageChargeEffects();
+        return;
+      }
+
+      const releaseTarget = (target && target.isAlive) ? target : this.getMageTargetInRange();
+      if (!releaseTarget) {
+        this.clearMageChargeEffects();
+        return;
+      }
+
+      const releaseAngle = Phaser.Math.Angle.Between(this.x, this.y - this.visualRadius * 0.35, releaseTarget.x, releaseTarget.y);
+      const didFire = fireMageIceBolt(this, { target: releaseTarget, fireAngle: releaseAngle });
+      if (didFire) {
+        this.playMageShotKick(releaseAngle);
+        this.playAttackAnimation();
+      } else {
+        this.clearMageChargeEffects();
       }
     });
 
@@ -943,6 +1118,16 @@ export default class Player extends Phaser.GameObjects.Container {
     const combatPaused = !!this.scene?.isCombatBehaviorPaused?.();
     const gameplayNow = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? time ?? 0;
 
+    if ((this._frostNovaEffectExpireAt || 0) > 0 && gameplayNow >= (this._frostNovaEffectExpireAt || 0)) {
+      this.clearFrostNovaEffect();
+    }
+    if ((this._mageChargeEffectExpireAt || 0) > 0 && gameplayNow >= (this._mageChargeEffectExpireAt || 0)) {
+      this.clearMageChargeEffects();
+    }
+    if ((this._mageChargeEffectExpireAt || 0) > 0 && (combatPaused || this.weaponType !== 'mage_frostbolt')) {
+      this.clearMageChargeEffects();
+    }
+
     this.updateExternalSpeedModifiers(gameplayNow);
 
     this.updateEmergencyStatusEffects(time, delta, gameplayNow);
@@ -967,11 +1152,6 @@ export default class Player extends Phaser.GameObjects.Container {
       fireWarlockPoisonNova(this);
     }
 
-    // 法师主普攻：奥术射线（持续连线光束）
-    if (this.weaponType === 'laser') {
-      updateArcaneRay(this, delta);
-    }
-    
     // 更新子弹
     this.updateBullets(delta);
     
@@ -1520,14 +1700,33 @@ export default class Player extends Phaser.GameObjects.Container {
     });
   }
 
+  clearFrostNovaEffect() {
+    const effect = this._frostNovaEffect || null;
+    if (!effect) return;
+
+    const nodes = Array.isArray(effect.nodes) ? effect.nodes : [];
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i];
+      if (!node) continue;
+      try { this.scene?.tweens?.killTweensOf?.(node); } catch (_) { /* ignore */ }
+      try { node.destroy?.(); } catch (_) { /* ignore */ }
+    }
+
+    this._frostNovaEffect = null;
+    this._frostNovaEffectExpireAt = 0;
+  }
+
   playFrostNovaEffect(radius = 0) {
     const scene = this.scene;
     if (!scene?.add || !scene?.tweens) return;
+
+    this.clearFrostNovaEffect();
 
     const resolvedRadius = Math.max(this.visualRadius + 26, Math.round(Number(radius) || 0));
     const flash = scene.add.circle(this.x, this.y, this.visualRadius + 12, 0xbfe9ff, 0.34).setDepth(38);
     const ring = scene.add.circle(this.x, this.y, Math.max(18, Math.round(resolvedRadius * 0.18)), 0x7dd3fc, 0.08).setDepth(37);
     ring.setStrokeStyle(5, 0xe0f2fe, 0.96);
+    const nodes = [flash, ring];
 
     scene.tweens.add({
       targets: flash,
@@ -1535,7 +1734,9 @@ export default class Player extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 220,
       ease: 'Cubic.Out',
-      onComplete: () => flash.destroy()
+      onComplete: () => {
+        try { flash.destroy(); } catch (_) { /* ignore */ }
+      }
     });
 
     scene.tweens.add({
@@ -1544,7 +1745,9 @@ export default class Player extends Phaser.GameObjects.Container {
       alpha: 0,
       duration: 340,
       ease: 'Quart.Out',
-      onComplete: () => ring.destroy()
+      onComplete: () => {
+        try { ring.destroy(); } catch (_) { /* ignore */ }
+      }
     });
 
     for (let index = 0; index < 10; index++) {
@@ -1552,6 +1755,7 @@ export default class Player extends Phaser.GameObjects.Container {
       const shard = scene.add.rectangle(this.x, this.y, 8, 22, 0xe0f7ff, 0.90).setDepth(39);
       shard.setStrokeStyle(2, 0x8fdcff, 0.85);
       shard.rotation = angle;
+      nodes.push(shard);
       const travel = resolvedRadius * Phaser.Math.FloatBetween(0.72, 0.96);
       scene.tweens.add({
         targets: shard,
@@ -1561,9 +1765,14 @@ export default class Player extends Phaser.GameObjects.Container {
         alpha: 0,
         duration: 320,
         ease: 'Cubic.Out',
-        onComplete: () => shard.destroy()
+        onComplete: () => {
+          try { shard.destroy(); } catch (_) { /* ignore */ }
+        }
       });
     }
+
+    this._frostNovaEffect = { nodes };
+    this._frostNovaEffectExpireAt = (this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0) + 520;
   }
 
   activateEmergencyRegen(healFraction, durationMs) {
@@ -1810,6 +2019,7 @@ export default class Player extends Phaser.GameObjects.Container {
     if (this.weaponType === 'laser' && type !== 'laser') {
       destroyArcaneRay(this);
     }
+    this.clearTransientCombatEffects();
     this.weaponType = type;
     console.log(`武器切换为: ${this.weaponType}`);
   }
@@ -1912,9 +2122,9 @@ export default class Player extends Phaser.GameObjects.Container {
       // 猎人
       this.enableArcherBuild();
     } else if (coreKey === 'mage') {
-      // 法师主普攻：恢复激光
-      this.weaponType = 'laser';
-      this.baseFireRate = 560;
+      // 法师主普攻：单发冰弹
+      this.weaponType = 'mage_frostbolt';
+      this.baseFireRate = 460;
     } else if (coreKey === 'drone') {
       // 德鲁伊主普攻：星落
       this.weaponType = 'starfall';
@@ -2090,11 +2300,7 @@ export default class Player extends Phaser.GameObjects.Container {
     if (this.fireTimer) {
       this.fireTimer.remove();
     }
-    if (this._archerPendingShots?.size) {
-      for (const timer of this._archerPendingShots) timer?.remove?.();
-      this._archerPendingShots.clear();
-    }
-    this.clearArcherChargeEffects();
+    this.clearTransientCombatEffects();
 
     // 终止持续类技能表现（例如法师奥术射线）
     try { destroyArcaneRay(this); } catch (_) { /* ignore */ }
@@ -2145,11 +2351,7 @@ export default class Player extends Phaser.GameObjects.Container {
     if (this.fireTimer) {
       this.fireTimer.remove();
     }
-    if (this._archerPendingShots?.size) {
-      for (const timer of this._archerPendingShots) timer?.remove?.();
-      this._archerPendingShots.clear();
-    }
-    this.clearArcherChargeEffects();
+    this.clearTransientCombatEffects();
     
     // 清理所有子弹
     this.bullets.forEach(bullet => {

@@ -1,4 +1,5 @@
 export { fireLaser, updateArcaneRay, destroyArcaneRay } from './laser';
+export { fireMageIceBolt } from './iceBolt';
 export { fireStarfall } from './starfall';
 export { fireArcherArrow } from './archerArrow';
 export { firePaladinHammer } from './paladinHammer';
