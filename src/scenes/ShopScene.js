@@ -9,11 +9,32 @@ export default class ShopScene extends Phaser.Scene {
     super({ key: 'ShopScene' });
   }
 
+  init(data = {}) {
+    this.mode = data?.mode || 'mystery';
+    this.round = Math.max(0, Math.floor(Number(data?.round || 0)));
+  }
+
   isReactUiMode() {
     return this.registry?.get('uiMode') === 'react';
   }
 
+  getGameScene() {
+    try {
+      return this.scene.get('GameScene');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  isRoundVendorMode() {
+    return this.mode === 'round_vendor';
+  }
+
   getShopItems() {
+    if (this.isRoundVendorMode()) {
+      return this.getGameScene()?.getRoundVendorSnapshot?.() || [];
+    }
+
     return [
       { id: 'potion_hp', name: '生命药水', price: 50, desc: '恢复50点生命', icon: '🧪' },
       { id: 'buff_atk', name: '攻击强化', price: 100, desc: '永久+5攻击力', icon: '⚔️' },
@@ -23,6 +44,12 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   loadRegistryData() {
+    if (this.isRoundVendorMode()) {
+      const gameScene = this.getGameScene();
+      this.sessionCoins = Number(gameScene?.sessionCoins || 0);
+      return;
+    }
+
     if (!this.registry.has('globalCoins')) {
       this.registry.set('globalCoins', 0);
     }
@@ -37,6 +64,23 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   emitUiSnapshot() {
+    if (this.isRoundVendorMode()) {
+      const gameScene = this.getGameScene();
+      uiBus.emit('phaser:uiSnapshot', {
+        shop: {
+          mode: 'round_vendor',
+          title: '小商贩补给',
+          subtitle: this.round > 0 ? `第 ${this.round} 轮清场补给` : 'Boss 清场补给',
+          closeLabel: '离开补给',
+          note: '倒计时结束前可反复靠近交易；未交易则自动进入下一轮。',
+          coins: Number(gameScene?.sessionCoins || 0),
+          items: this.getShopItems(),
+          purchased: []
+        }
+      });
+      return;
+    }
+
     uiBus.emit('phaser:uiSnapshot', {
       shop: {
         coins: this.globalCoins || 0,
@@ -64,6 +108,13 @@ export default class ShopScene extends Phaser.Scene {
 
       this._uiBuyHandler = (itemId) => {
         this.loadRegistryData();
+
+        if (this.isRoundVendorMode()) {
+          this.getGameScene()?.purchaseRoundVendorItem?.(itemId);
+          this.emitUiSnapshot();
+          return;
+        }
+
         const item = this.getShopItems().find((i) => i.id === itemId);
         if (!item) return;
         if (this.purchased.includes(item.id)) return;
@@ -80,6 +131,12 @@ export default class ShopScene extends Phaser.Scene {
       uiBus.on('ui:shop:buy', this._uiBuyHandler);
 
       this._uiCloseHandler = () => {
+        if (this.isRoundVendorMode()) {
+          this.scene.resume('GameScene');
+          this.scene.stop();
+          return;
+        }
+
         this.scene.resume('GameScene');
         this.scene.stop();
       };

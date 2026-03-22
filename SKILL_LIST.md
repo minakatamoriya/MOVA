@@ -298,3 +298,4 @@
 
 - 本文档优先反映当前已接入升级池与展示层的实际数值，不再保留旧版设计稿文案。
 - 若代码与文档不一致，应先修正 [src/classes/upgradePools.js](src/classes/upgradePools.js) 与 [src/classes/upgradeOfferPresentation.js](src/classes/upgradeOfferPresentation.js)，再同步本文档。
+- 双职业 30 组的重设计草案已单独整理到 [DUAL_CLASS_REDESIGN.md](DUAL_CLASS_REDESIGN.md)，避免与当前已实装内容混淆。

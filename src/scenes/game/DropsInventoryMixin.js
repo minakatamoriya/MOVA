@@ -506,6 +506,7 @@ export function applyDropsInventoryMixin(GameScene) {
 
     hasEquippedConsumable(itemId) {
       if (!itemId) return false;
+      if ((this.getRunConsumableCount?.(itemId) || 0) > 0) return true;
       return this.hasEquippedItem(itemId) >= 0;
     },
 
@@ -528,8 +529,15 @@ export function applyDropsInventoryMixin(GameScene) {
       if (!this._itemCooldownReadyNotified) this._itemCooldownReadyNotified = Object.create(null);
       this._itemCooldownReadyNotified[itemId] = false;
       this.player.heal(healAmount);
-      this.consumeEquippedItem(itemId);
+
+      if ((this.getRunConsumableCount?.(itemId) || 0) > 0) {
+        this.consumeRunConsumable?.(itemId, 1, { emitUi: false });
+      } else {
+        this.consumeEquippedItem(itemId);
+      }
+
       this.toast?.show?.({ icon: def?.icon || '🧪', text: `使用了 ${def?.name || '消耗品'}` });
+      this.emitUiSnapshot?.();
       return true;
     },
 

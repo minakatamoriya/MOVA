@@ -16,12 +16,15 @@ export default class LevelUpScene extends Phaser.Scene {
   }
 
   emitUiSnapshot() {
+    const gameScene = this.getGameScene();
     uiBus.emit('phaser:uiSnapshot', {
       levelUp: {
         level: this.currentLevel || 1,
         options: this._upgrades || [],
-        pendingPoints: this.pendingPoints || 0
-      }
+        pendingPoints: this.pendingPoints || 0,
+        rerollDiceCount: Math.max(0, Number(gameScene?.getRunConsumableCount?.('reroll_dice') || 0))
+      },
+      runConsumables: gameScene?.getRunConsumableSnapshot?.() || {}
     });
   }
 
@@ -47,6 +50,20 @@ export default class LevelUpScene extends Phaser.Scene {
     gameScene?.markLevelUpInteraction?.();
     this.scene.resume('GameScene');
     this.scene.stop();
+  }
+
+  rerollSelection() {
+    const gameScene = this.getGameScene();
+    const offer = gameScene?.rerollCurrentLevelUpOffer?.();
+    if (!offer?.options?.length) return false;
+
+    this.scene.restart({
+      level: offer.level || this.currentLevel || 1,
+      choices: offer.options.length,
+      options: offer.options,
+      pendingPoints: Math.max(0, Number(gameScene?.getPendingLevelUpPoints?.() || this.pendingPoints || 0))
+    });
+    return true;
   }
 
   completeSelection(selection) {
@@ -118,6 +135,11 @@ export default class LevelUpScene extends Phaser.Scene {
       };
       uiBus.on('ui:levelUp:close', this._uiCloseHandler);
 
+      this._uiRerollHandler = () => {
+        this.rerollSelection();
+      };
+      uiBus.on('ui:levelUp:reroll', this._uiRerollHandler);
+
       this.emitUiSnapshot();
       return;
     }
@@ -144,6 +166,10 @@ export default class LevelUpScene extends Phaser.Scene {
     this.createButton(this.cameras.main.width - 110, 70, '稍后再加', () => {
       this.closeForLater();
     }, 160, 44, '18px').setScrollFactor(0).setDepth(50);
+
+    this.createButton(120, 70, `骰子重刷 (${this.getGameScene()?.getRunConsumableCount?.('reroll_dice') || 0})`, () => {
+      this.rerollSelection();
+    }, 200, 44, '18px').setScrollFactor(0).setDepth(50);
 
     const count = upgrades.length;
     const topY = 170;
@@ -187,6 +213,10 @@ export default class LevelUpScene extends Phaser.Scene {
     if (this._uiCloseHandler) {
       uiBus.off('ui:levelUp:close', this._uiCloseHandler);
       this._uiCloseHandler = null;
+    }
+    if (this._uiRerollHandler) {
+      uiBus.off('ui:levelUp:reroll', this._uiRerollHandler);
+      this._uiRerollHandler = null;
     }
   }
 

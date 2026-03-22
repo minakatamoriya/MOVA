@@ -144,7 +144,13 @@ export default function App() {
   const levelUp = viewData?.levelUp || null;
   const shop = viewData?.shop || null;
   const gameOver = viewData?.gameOver || null;
+  const runConsumables = (viewData?.runConsumables && typeof viewData.runConsumables === 'object') ? viewData.runConsumables : {};
   const levelUpPendingPoints = Math.max(0, Number(levelUp?.pendingPoints || 0));
+  const rerollDiceCount = Math.max(
+    0,
+    Number(levelUp?.rerollDiceCount ?? runConsumables?.reroll_dice?.count ?? 0)
+  );
+  const isRoundVendorShop = shop?.mode === 'round_vendor';
   const levelUpPanelOpen = !!levelUp?.open && levelUpPendingPoints > 0;
   const levelUpAttentionBaseMs = Math.max(
     Number(levelUp?.pendingSinceMs || 0),
@@ -238,10 +244,19 @@ export default function App() {
     if (sceneKey !== 'EquipmentScene') {
       setEquipDetail(null);
     }
-    if (sceneKey !== 'ItemShopScene') {
+    if (sceneKey !== 'ItemShopScene' && sceneKey !== 'ShopScene') {
       setShopDetailItem(null);
     }
   }, [sceneKey]);
+
+  useEffect(() => {
+    if (!shopDetailItem?.id) return;
+    if (sceneKey !== 'ItemShopScene' && sceneKey !== 'ShopScene') return;
+    const currentItems = Array.isArray(shop?.items) ? shop.items : [];
+    const nextItem = currentItems.find((item) => item?.id === shopDetailItem.id) || null;
+    if (!nextItem) return;
+    setShopDetailItem(nextItem);
+  }, [sceneKey, shop?.items, shopDetailItem?.id]);
 
   const getOwnedCount = (itemId) => getOwnedItemCount(ownedItems, itemId);
   const getEquippedCount = (itemId) => getOwnedItemCount(equippedItems, itemId);
@@ -284,6 +299,11 @@ export default function App() {
       return;
     }
     uiBus.emit('ui:itemShop:purchase', item.id);
+  };
+
+  const attemptRoundVendorPurchase = (item) => {
+    if (!item?.id || item?.canBuy === false) return;
+    uiBus.emit('ui:shop:buy', item.id);
   };
 
   const getNextAutoEquipSlot = () => {
@@ -1047,8 +1067,8 @@ export default function App() {
             gap: 10
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>战利品</div>
-          <div style={{ fontSize: 12, opacity: 0.62 }}>局内即时生效，不进入携带栏</div>
+          <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.72 }}>局内装备</div>
+          <div style={{ fontSize: 12, opacity: 0.62 }}>拾取或从商贩购入后立即生效，本局结束清空</div>
           <div className="mobile-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 360, paddingRight: 2 }}>
             {groupedLoot.length <= 0 ? (
               <div style={{ borderRadius: 12, background: 'rgba(11, 11, 24, 0.58)', padding: 12, opacity: 0.7 }}>暂未拾取战利品</div>
@@ -2005,27 +2025,52 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ fontSize: 34, fontWeight: 900, color: '#ffff00' }}>
-                剩余点数：{levelUpPendingPoints}
+              <div>
+                <div style={{ fontSize: 34, fontWeight: 900, color: '#ffff00' }}>
+                  剩余点数：{levelUpPendingPoints}
+                </div>
+                <div style={{ marginTop: 6, fontSize: 15, fontWeight: 800, color: 'rgba(255,255,255,0.82)' }}>
+                  {`骰子：${rerollDiceCount}/5`}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => uiBus.emit('ui:levelUp:close')}
-                style={{
-                  cursor: 'pointer',
-                  height: 36,
-                  padding: '0 14px',
-                  borderRadius: 999,
-                  border: '1px solid rgba(255,255,255,0.22)',
-                  background: 'rgba(255,255,255,0.08)',
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 800,
-                  flexShrink: 0
-                }}
-              >
-                稍后再加
-              </button>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  disabled={rerollDiceCount <= 0}
+                  onClick={() => uiBus.emit('ui:levelUp:reroll')}
+                  style={{
+                    cursor: rerollDiceCount > 0 ? 'pointer' : 'not-allowed',
+                    height: 36,
+                    padding: '0 14px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    background: rerollDiceCount > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                    color: rerollDiceCount > 0 ? '#fff' : 'rgba(255,255,255,0.45)',
+                    fontSize: 12,
+                    fontWeight: 800
+                  }}
+                >
+                  {`🎲 重刷一次 (${rerollDiceCount})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => uiBus.emit('ui:levelUp:close')}
+                  style={{
+                    cursor: 'pointer',
+                    height: 36,
+                    padding: '0 14px',
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.22)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#fff',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    flexShrink: 0
+                  }}
+                >
+                  稍后再加
+                </button>
+              </div>
             </div>
             <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 800 }}>
               {`请选择一个升级选项`}
@@ -2294,7 +2339,12 @@ export default function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 32, fontWeight: 900, color: '#ffd700' }}>🏪 神秘商店</div>
+              <div>
+                <div style={{ fontSize: 32, fontWeight: 900, color: '#ffd700' }}>{isRoundVendorShop ? '🧺 小商贩补给' : '🏪 神秘商店'}</div>
+                {shop?.subtitle ? (
+                  <div style={{ marginTop: 4, fontSize: 13, opacity: 0.78 }}>{shop.subtitle}</div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => uiBus.emit('ui:shop:close')}
@@ -2310,19 +2360,33 @@ export default function App() {
                   fontWeight: 800
                 }}
               >
-                关闭商店
+                {shop?.closeLabel || '关闭商店'}
               </button>
             </div>
 
             <div style={{ fontSize: 18, fontWeight: 900, color: '#ffff00' }}>金币: {shop?.coins ?? 0}</div>
+            {isRoundVendorShop ? (
+              <div style={{ fontSize: 14, opacity: 0.82 }}>
+                {shop?.note || '本轮只会出现一次，关闭后直接进入下一轮。'}
+              </div>
+            ) : null}
 
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(shop?.items || []).map((item) => {
                 const purchased = (shop?.purchased || []).includes(item.id);
-                const canBuy = !purchased && (shop?.coins ?? 0) >= Number(item.price || 0);
+                const canBuy = isRoundVendorShop
+                  ? !!item.canBuy
+                  : (!purchased && (shop?.coins ?? 0) >= Number(item.price || 0));
+                const stockText = isRoundVendorShop
+                  ? `${Math.max(0, Number(item.currentCount || 0))}/${Math.max(0, Number(item.carryLimit || 0))}`
+                  : null;
+                const disabledText = isRoundVendorShop
+                  ? (item.disabledReason === 'carry_limit' ? '已满' : (item.disabledReason === 'not_enough_session_coins' ? '金币不足' : (item.disabledReason === 'sold_out' ? '已售' : '')))
+                  : '';
                 return (
                   <div
                     key={item.id}
+                    onClick={() => showShopDetail(item)}
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
@@ -2330,24 +2394,53 @@ export default function App() {
                       gap: 14,
                       padding: 12,
                       borderRadius: 12,
-                      border: '2px solid rgba(42,42,58,1)',
-                      background: 'rgba(11, 11, 24, 0.62)'
+                      border: shopDetailItem?.id === item.id
+                        ? `2px solid ${item.rarityTextColor || '#ffe082'}`
+                        : '2px solid rgba(42,42,58,1)',
+                      background: canBuy ? 'rgba(11, 11, 24, 0.62)' : 'rgba(11, 11, 24, 0.40)',
+                      opacity: canBuy ? 1 : 0.72,
+                      cursor: 'pointer'
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 18 }}>{item.icon} {item.name}</div>
+                      <div style={{ fontWeight: 900, fontSize: 18, color: item.rarityTextColor || '#ffffff' }}>
+                        {item.icon} {item.name}
+                        {item.rarityLabel ? (
+                          <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.82 }}>{item.rarityLabel}</span>
+                        ) : null}
+                      </div>
                       <div style={{ opacity: 0.82, fontSize: 13, marginTop: 4 }}>{item.desc}</div>
+                      {stockText ? (
+                        <div style={{ opacity: 0.68, fontSize: 12, marginTop: 6 }}>
+                          当前携带：{stockText}
+                        </div>
+                      ) : null}
+                      {isRoundVendorShop && item.vendorSummary ? (
+                        <div style={{ opacity: 0.68, fontSize: 12, marginTop: 6, color: item.rarityTextColor || '#ffe082' }}>
+                          {item.vendorSummary}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                       <div style={{ fontWeight: 900, color: '#ffff00' }}>{item.price} 💰</div>
-                      {purchased ? (
+                      {isRoundVendorShop && disabledText ? (
+                        <div style={{ fontWeight: 900, color: 'rgba(255,255,255,0.52)' }}>{disabledText}</div>
+                      ) : null}
+                      {!isRoundVendorShop && purchased ? (
                         <div style={{ fontWeight: 900, color: '#88ff88' }}>已购买</div>
                       ) : (
                         <button
                           type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isRoundVendorShop) {
+                              attemptRoundVendorPurchase(item);
+                              return;
+                            }
+                            uiBus.emit('ui:shop:buy', item.id);
+                          }}
                           disabled={!canBuy}
-                          onClick={() => uiBus.emit('ui:shop:buy', item.id)}
                           style={{
                             cursor: canBuy ? 'pointer' : 'not-allowed',
                             height: 34,
@@ -2368,6 +2461,118 @@ export default function App() {
                 );
               })}
             </div>
+
+            {shopDetailItem ? (
+              <div
+                style={{
+                  borderRadius: 16,
+                  border: '2px solid rgba(42,42,58,1)',
+                  background: 'rgba(11, 11, 24, 0.92)',
+                  padding: 14,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 14,
+                      border: `1px solid ${shopDetailItem.rarityTextColor || 'rgba(255,255,255,0.14)'}`,
+                      background: 'rgba(255,255,255,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 28,
+                      flexShrink: 0
+                    }}
+                  >
+                    {shopDetailItem.icon}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 900, fontSize: 18, lineHeight: 1.2, color: shopDetailItem.rarityTextColor || '#ffffff' }}>
+                      {shopDetailItem.name}
+                    </div>
+                    <div style={{ opacity: 0.82, fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>{shopDetailItem.desc}</div>
+                    {shopDetailItem.categoryLabel || shopDetailItem.rarityLabel ? (
+                      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.72 }}>
+                        {[shopDetailItem.rarityLabel, shopDetailItem.categoryLabel].filter(Boolean).join(' · ')}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {(Array.isArray(shopDetailItem.previewLines) && shopDetailItem.previewLines.length > 0) ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {shopDetailItem.previewLines.map((line, index) => (
+                      <div key={`${shopDetailItem.id}-line-${index}`} style={{ fontSize: 13, lineHeight: 1.45, color: String(line || '').includes('-') ? '#fca5a5' : '#dbeafe' }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
+                    {isRoundVendorShop ? (
+                      <div style={{ fontSize: 12, opacity: 0.72 }}>
+                        {shopDetailItem.kind === 'consumable'
+                          ? `当前携带 ${Math.max(0, Number(shopDetailItem.currentCount || 0))}/${Math.max(0, Number(shopDetailItem.carryLimit || 0))}`
+                          : (shopDetailItem.purchased ? '本轮已购入' : '购入后直接进入局内装备栏')}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                      type="button"
+                      disabled={!shopDetailItem.canBuy && isRoundVendorShop}
+                      onClick={() => {
+                        if (isRoundVendorShop) {
+                          attemptRoundVendorPurchase(shopDetailItem);
+                        } else {
+                          uiBus.emit('ui:shop:buy', shopDetailItem.id);
+                        }
+                      }}
+                      style={{
+                        cursor: (!shopDetailItem.canBuy && isRoundVendorShop) ? 'default' : 'pointer',
+                        height: 42,
+                        padding: '0 18px',
+                        borderRadius: 999,
+                        border: '1px solid rgba(255,255,255,0.18)',
+                        background: (!shopDetailItem.canBuy && isRoundVendorShop) ? 'rgba(255,255,255,0.06)' : 'rgba(59,130,246,0.26)',
+                        color: '#fff',
+                        fontSize: 14,
+                        fontWeight: 900,
+                        opacity: (!shopDetailItem.canBuy && isRoundVendorShop) ? 0.55 : 1
+                      }}
+                    >
+                      购买
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShopDetailItem(null)}
+                      style={{
+                        cursor: 'pointer',
+                        height: 42,
+                        padding: '0 16px',
+                        borderRadius: 999,
+                        border: '1px solid rgba(255,255,255,0.14)',
+                        background: 'rgba(255,255,255,0.06)',
+                        color: '#fff',
+                        fontSize: 14,
+                        fontWeight: 900
+                      }}
+                    >
+                      收起
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}

@@ -208,6 +208,11 @@ class GameScene extends Phaser.Scene {
     this.exitDoorZone = null;
     this.exitDoorVisuals = null;
     this.exitDoorRift = null;
+    this.roundVendorActive = false;
+    this.roundVendorZone = null;
+    this.roundVendorVisuals = null;
+    this.roundVendorSmoke = null;
+    this.roundVendorAnchor = null;
 
     // 新流程：起始房间（无迷雾、无 Boss），选武器后进门进入第一关
     this.inStartRoom = true;
@@ -274,6 +279,10 @@ class GameScene extends Phaser.Scene {
     this._roundClearCountdownText = null;
     this._roundClearCountdownSubText = null;
     this._roundClearCountdownTimer = null;
+    this._roundVendorPending = false;
+    this._roundVendorOpen = false;
+    this._roundVendorSpawned = false;
+    this.roundVendorStock = [];
     this._postBossRewardActive = false;
     this._postBossRewardChoiceMade = false;
     this._postBossRewardSelected = null;
@@ -531,12 +540,14 @@ class GameScene extends Phaser.Scene {
 
     const currentLevelUpOffer = this.getCurrentLevelUpOffer?.() || null;
     const pendingLevelUpPoints = this.getPendingLevelUpPoints?.() || 0;
+    const runConsumables = this.getRunConsumableSnapshot();
     const levelUp = (pendingLevelUpPoints > 0 || currentLevelUpOffer)
       ? {
         open: !!this._levelUpPanelOpen,
         level: currentLevelUpOffer?.level || this.playerData?.level || 1,
         options: currentLevelUpOffer?.options || [],
         pendingPoints: pendingLevelUpPoints,
+        rerollDiceCount: this.getRunConsumableCount('reroll_dice'),
         pendingSinceMs: Number(this._levelUpPendingSinceMs || 0),
         lastInteractionMs: Number(this._levelUpLastInteractionMs || 0),
         cinematicActive: !!this._levelUpCinematicActive
@@ -553,6 +564,7 @@ class GameScene extends Phaser.Scene {
       inventoryAcquired,
       sessionCoins: this.sessionCoins || 0,
       globalCoins: this.globalCoins || 0,
+      runConsumables,
       levelUp,
       player,
       gameplayNowMs: Number(this._gameplayNowMs || 0),
@@ -2292,7 +2304,139 @@ class GameScene extends Phaser.Scene {
 
   hasCooldownItem(itemId) {
     if (!itemId) return false;
+    if (this.getRunConsumableCount(itemId) > 0) return true;
     return (this.hasEquippedItem?.(itemId) ?? -1) >= 0;
+  }
+
+  getRunConsumableCount(itemId) {
+    if (!itemId) return 0;
+    return Math.max(0, Math.floor(Number(this.runConsumables?.[itemId] || 0)));
+  }
+
+  setRunConsumableCount(itemId, count, opts = {}) {
+    const def = getItemById(itemId);
+    if (!def) return 0;
+
+    const limit = Math.max(0, Math.floor(Number(def.carryLimit || def.maxOwned || 0)));
+    const nextCount = Phaser.Math.Clamp(Math.floor(Number(count || 0)), 0, limit);
+    if (!this.runConsumables || typeof this.runConsumables !== 'object') {
+      this.runConsumables = Object.create(null);
+    }
+    this.runConsumables[itemId] = nextCount;
+    if (opts.emitUi !== false) {
+      this.emitUiSnapshot?.();
+    }
+    return nextCount;
+  }
+
+  addRunConsumable(itemId, amount = 1, opts = {}) {
+    const delta = Math.max(0, Math.floor(Number(amount || 0)));
+    if (delta <= 0) return this.getRunConsumableCount(itemId);
+    return this.setRunConsumableCount(itemId, this.getRunConsumableCount(itemId) + delta, opts);
+  }
+
+  consumeRunConsumable(itemId, amount = 1, opts = {}) {
+    const cost = Math.max(1, Math.floor(Number(amount || 1)));
+    const current = this.getRunConsumableCount(itemId);
+    if (current < cost) return false;
+    this.setRunConsumableCount(itemId, current - cost, opts);
+    return true;
+  }
+
+  getRunConsumableSnapshot() {
+    return ['potion_small', 'reroll_dice'].reduce((acc, itemId) => {
+      const def = getItemById(itemId);
+      if (!def) return acc;
+      acc[itemId] = {
+        id: def.id,
+        name: def.name,
+        icon: def.icon,
+        count: this.getRunConsumableCount(itemId),
+        carryLimit: Math.max(0, Math.floor(Number(def.carryLimit || def.maxOwned || 0)))
+      };
+      return acc;
+    }, {});
+  }
+
+  getRunVendorPrice(itemOrId) {
+    const item = typeof itemOrId === 'string' ? getItemById(itemOrId) : itemOrId;
+    if (!item) return 0;
+    return Math.max(1, Math.ceil(Number(item.price || 0) * 1.5));
+  }
+
+  canBuyRunVendorItem(itemId) {
+    const item = getItemById(itemId);
+    if (!item) return { ok: false, reason: 'missing', price: 0, count: 0, carryLimit: 0 };
+
+    const count = this.getRunConsumableCount(itemId);
+    const carryLimit = Math.max(0, Math.floor(Number(item.carryLimit || item.maxOwned || 0)));
+    const price = this.getRunVendorPrice(item);
+    if (count >= carryLimit) return { ok: false, reason: 'carry_limit', price, count, carryLimit };
+    if (Number(this.sessionCoins || 0) < price) return { ok: false, reason: 'not_enough_session_coins', price, count, carryLimit };
+    return { ok: true, reason: '', price, count, carryLimit };
+  }
+
+  purchaseRoundVendorItem(itemId) {
+    const entry = this.getRoundVendorStock?.().find((candidate) => candidate?.id === itemId || candidate?.itemId === itemId);
+    if (!entry) return { ok: false, reason: 'missing', price: 0 };
+
+    if (entry.kind === 'consumable') {
+      const item = getItemById(entry.itemId);
+      const state = this.canBuyRunVendorItem(entry.itemId);
+      if (!item || !state.ok) return state;
+
+      this.sessionCoins = Math.max(0, Number(this.sessionCoins || 0) - Number(state.price || 0));
+      this.addRunConsumable(entry.itemId, 1, { emitUi: false });
+      this.toast?.show?.({ icon: item.icon || '□', text: `${item.name} +1` }, { durationMs: 1000 });
+      this.emitUiSnapshot?.();
+
+      return {
+        ok: true,
+        reason: '',
+        price: state.price,
+        count: this.getRunConsumableCount(entry.itemId),
+        carryLimit: state.carryLimit
+      };
+    }
+
+    const state = this.getRoundVendorOfferState?.(entry.id) || { ok: false, reason: 'missing', price: 0 };
+    if (!state.ok || !entry.item) return state;
+
+    this.sessionCoins = Math.max(0, Number(this.sessionCoins || 0) - Number(state.price || 0));
+    entry.purchased = true;
+    this.addItemToInventory?.({
+      ...entry.item,
+      source: 'vendor'
+    });
+    this.toast?.show?.({ icon: entry.item.icon || '✦', text: `${entry.item.name} 已装入本局装备` }, { durationMs: 1200 });
+    this.emitUiSnapshot?.();
+    return { ok: true, reason: '', price: state.price };
+  }
+
+  openRoundVendorScene() {
+    if (this._roundVendorOpen) return false;
+    if (!this.roundVendorActive || !this.roundVendorZone) return false;
+    if (this.scene?.isActive?.('ShopScene')) return false;
+
+    this._roundVendorOpen = true;
+    this.resetTouchJoystickInput?.();
+    this.player?.clearAnalogMove?.();
+
+    this.scene.pause('GameScene');
+    this.scene.launch('ShopScene', {
+      mode: 'round_vendor',
+      round: Math.max(1, Math.floor(Number(this.currentStage || 1)))
+    });
+    return true;
+  }
+
+  resolveRoundVendorAndContinue() {
+    if (!this._roundVendorOpen && !this._roundVendorPending) return false;
+    this._roundVendorOpen = false;
+    this._roundVendorPending = false;
+    this.resetChaosArenaRoundFlow?.();
+    this.advanceToNextLevel?.();
+    return true;
   }
 
   getSkillLevel(skillId) {
@@ -2584,6 +2728,11 @@ class GameScene extends Phaser.Scene {
 
     this.inventoryAcquired = [];
     this.inventoryEquipped = equippedIds.map(id => (id ? getItemById(id) : null));
+    this.runConsumables = Object.create(null);
+    const potionCount = equippedIds.filter((id) => id === 'potion_small').length;
+    const diceCount = equippedIds.filter((id) => id === 'reroll_dice').length;
+    this.setRunConsumableCount('potion_small', potionCount, { emitUi: false });
+    this.setRunConsumableCount('reroll_dice', Math.max(3, diceCount), { emitUi: false });
     this._runLootGearItems = [];
     this._runLootItemSeq = 0;
 
@@ -3358,6 +3507,16 @@ class GameScene extends Phaser.Scene {
       }
     }
 
+    if (this.roundVendorActive && this.roundVendorZone && this.player && !this._roundVendorOpen) {
+      const dx = this.player.x - this.roundVendorZone.x;
+      const dy = this.player.y - this.roundVendorZone.y;
+      const hx = (this.roundVendorZone.width || 0) * 0.5;
+      const hy = (this.roundVendorZone.height || 0) * 0.5;
+      if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) {
+        this.openRoundVendorScene?.();
+      }
+    }
+
     this.updateBulletSystemsDebugOverlay();
 
   }
@@ -3368,6 +3527,7 @@ class GameScene extends Phaser.Scene {
   onSceneShutdown() {
     console.log('GameScene: 清理游戏资源');
 
+    this.cleanupRoundVendor?.();
     this.destroyBulletSystems();
 
     // 清理移动端隐藏摇杆

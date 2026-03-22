@@ -32,6 +32,7 @@ export const useUiStore = create((set) => ({
     globalCoins: 0,
     ownedItems: [],
     equippedItems: [],
+    runConsumables: {},
     levelUp: null,
     shop: null,
     gameOver: null,

@@ -106,6 +106,64 @@ const LOOT_EQUIPMENT_TEMPLATES = [
   { id: 'rage_edge', name: '狂锋纹', icon: '✹', category: 'crit_damage', categoryLabel: '暴伤', sortOrder: 10, effects: { critMultiplier: 0.22 } }
 ];
 
+const VENDOR_CURSE_TEMPLATES = [
+  {
+    id: 'bloodthorn_idol',
+    name: '血棘邪像',
+    icon: '🜂',
+    category: 'vendor_curse',
+    categoryLabel: '诅咒圣物',
+    sortOrder: 110,
+    effects: { damageMult: 1.18, damageReductionPercent: -0.08 },
+    price: 340,
+    summary: '攻击猛涨，但身板更薄。'
+  },
+  {
+    id: 'reverse_hourglass',
+    name: '逆时沙漏',
+    icon: '⌛',
+    category: 'vendor_curse',
+    categoryLabel: '诅咒圣物',
+    sortOrder: 111,
+    effects: { fireRateMult: 0.82, maxHpFlat: -26 },
+    price: 360,
+    summary: '攻速暴涨，但生命被抽空。'
+  },
+  {
+    id: 'hunters_gamble',
+    name: '逐猎赌契',
+    icon: '🜁',
+    category: 'vendor_curse',
+    categoryLabel: '诅咒圣物',
+    sortOrder: 112,
+    effects: { critChance: 0.10, speedMult: 0.90 },
+    price: 320,
+    summary: '暴击更狠，但移动变钝。'
+  },
+  {
+    id: 'ashen_chalice',
+    name: '烬心圣杯',
+    icon: '☗',
+    category: 'vendor_curse',
+    categoryLabel: '诅咒圣物',
+    sortOrder: 113,
+    effects: { lifestealPercent: 0.10, fireRateMult: 1.12 },
+    price: 330,
+    summary: '吸血更强，但出手更慢。'
+  },
+  {
+    id: 'glass_comet',
+    name: '琉璃彗芯',
+    icon: '✺',
+    category: 'vendor_curse',
+    categoryLabel: '诅咒圣物',
+    sortOrder: 114,
+    effects: { rangeMult: 1.20, maxHpFlat: -18, dodgeChance: -0.04 },
+    price: 350,
+    summary: '射程拉满，但容错下降。'
+  }
+];
+
 function clampPositive(value, fallback = 0) {
   const resolved = Number(value);
   return Number.isFinite(resolved) ? Math.max(0, resolved) : fallback;
@@ -192,30 +250,38 @@ export function getLootTemplates() {
 
 export function formatLootEffectLines(effects = {}) {
   const lines = [];
-  if (effects.damageMult && effects.damageMult !== 1) lines.push(`攻击力 +${Math.round((effects.damageMult - 1) * 100)}%`);
-  if (effects.maxHpFlat) lines.push(`生命上限 +${Math.round(effects.maxHpFlat)}`);
-  if (effects.fireRateMult && effects.fireRateMult !== 1) lines.push(`攻击速度 +${Math.round((1 / effects.fireRateMult - 1) * 100)}%`);
-  if (effects.speedMult && effects.speedMult !== 1) lines.push(`移动速度 +${Math.round((effects.speedMult - 1) * 100)}%`);
-  if (effects.rangeMult && effects.rangeMult !== 1) lines.push(`攻击范围 +${Math.round((effects.rangeMult - 1) * 100)}%`);
-  if (effects.critChance) lines.push(`暴击率 +${formatPercentValue(effects.critChance)}`);
-  if (effects.critMultiplier) lines.push(`暴击伤害 +${Math.round(effects.critMultiplier * 100)}%`);
-  if (effects.regenPerSec) lines.push(`每秒回复 +${Number(effects.regenPerSec).toFixed(1)}`);
-  if (effects.damageReductionPercent) lines.push(`减伤 +${formatPercentValue(effects.damageReductionPercent)}`);
-  if (effects.dodgeChance) lines.push(`闪避 +${formatPercentValue(effects.dodgeChance)}`);
+  const pushSignedPercent = (label, value, digits = 0) => {
+    const numeric = Number(value || 0);
+    if (!numeric) return;
+    const sign = numeric > 0 ? '+' : '-';
+    lines.push(`${label} ${sign}${formatPercentValue(Math.abs(numeric), digits)}`);
+  };
+  const pushSignedFlat = (label, value, digits = 0) => {
+    const numeric = Number(value || 0);
+    if (!numeric) return;
+    const sign = numeric > 0 ? '+' : '-';
+    const abs = Math.abs(numeric);
+    lines.push(`${label} ${sign}${digits > 0 ? abs.toFixed(digits) : Math.round(abs)}`);
+  };
+
+  if (effects.damageMult && effects.damageMult !== 1) pushSignedPercent('攻击力', effects.damageMult - 1);
+  if (effects.maxHpFlat) pushSignedFlat('生命上限', effects.maxHpFlat);
+  if (effects.fireRateMult && effects.fireRateMult !== 1) pushSignedPercent('攻击速度', (1 / effects.fireRateMult) - 1);
+  if (effects.speedMult && effects.speedMult !== 1) pushSignedPercent('移动速度', effects.speedMult - 1);
+  if (effects.rangeMult && effects.rangeMult !== 1) pushSignedPercent('攻击范围', effects.rangeMult - 1);
+  if (effects.critChance) pushSignedPercent('暴击率', effects.critChance);
+  if (effects.critMultiplier) pushSignedPercent('暴击伤害', effects.critMultiplier);
+  if (effects.regenPerSec) pushSignedFlat('每秒回复', effects.regenPerSec, 1);
+  if (effects.damageReductionPercent) pushSignedPercent('减伤', effects.damageReductionPercent);
+  if (effects.dodgeChance) pushSignedPercent('闪避', effects.dodgeChance);
+  if (effects.lifestealPercent) pushSignedPercent('吸血', effects.lifestealPercent);
+  if (effects.blockChance) pushSignedPercent('格挡', effects.blockChance);
   return lines;
 }
 
 export function formatLootPickupLine(effects = {}) {
-  if (effects.damageMult && effects.damageMult !== 1) return `攻击 +${Math.round((effects.damageMult - 1) * 100)}%`;
-  if (effects.fireRateMult && effects.fireRateMult !== 1) return `攻速 +${Math.round((1 / effects.fireRateMult - 1) * 100)}%`;
-  if (effects.speedMult && effects.speedMult !== 1) return `移速 +${Math.round((effects.speedMult - 1) * 100)}%`;
-  if (effects.rangeMult && effects.rangeMult !== 1) return `范围 +${Math.round((effects.rangeMult - 1) * 100)}%`;
-  if (effects.maxHpFlat) return `生命 +${Math.round(effects.maxHpFlat)}`;
-  if (effects.damageReductionPercent) return `减伤 +${formatPercentValue(effects.damageReductionPercent)}`;
-  if (effects.regenPerSec) return `回复 +${Number(effects.regenPerSec).toFixed(1)}`;
-  if (effects.critChance) return `暴击 +${formatPercentValue(effects.critChance)}`;
-  if (effects.dodgeChance) return `闪避 +${formatPercentValue(effects.dodgeChance)}`;
-  if (effects.critMultiplier) return `暴伤 +${Math.round(effects.critMultiplier * 100)}%`;
+  const firstLine = formatLootEffectLines(effects)[0];
+  if (firstLine) return firstLine;
   return '';
 }
 
@@ -274,4 +340,21 @@ export function rollLootEquipment({ source = 'minion', rng = Math.random, instan
   return buildLootEquipment({ template, rarityId: rarity.id, instanceId, source });
 }
 
-export { LOOT_RARITY_DEFS, LOOT_SOURCE_PROFILES, LOOT_EQUIPMENT_TEMPLATES };
+export function rollVendorCurseEquipment({ rng = Math.random, instanceId = '', source = 'vendor' } = {}) {
+  if (VENDOR_CURSE_TEMPLATES.length <= 0) return null;
+  const index = Math.floor(clampPositive(rng(), 0) * VENDOR_CURSE_TEMPLATES.length) % VENDOR_CURSE_TEMPLATES.length;
+  const template = VENDOR_CURSE_TEMPLATES[index];
+  const rarityId = rng() < 0.28 ? 'epic' : 'rare';
+  const item = buildLootEquipment({ template, rarityId, instanceId, source });
+  if (!item) return null;
+  const rarity = getLootRarity(rarityId);
+  return {
+    ...item,
+    price: Math.round(Number(template.price || 320) * (rarityId === 'epic' ? 1.18 : 1)),
+    vendorSummary: template.summary || '',
+    desc: [template.summary || '', ...formatLootEffectLines(item.effects || {})].filter(Boolean).join('\n'),
+    shortDesc: [template.summary || '', ...formatLootEffectLines(item.effects || {})].filter(Boolean).join(' · ')
+  };
+}
+
+export { LOOT_RARITY_DEFS, LOOT_SOURCE_PROFILES, LOOT_EQUIPMENT_TEMPLATES, VENDOR_CURSE_TEMPLATES };

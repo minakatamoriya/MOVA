@@ -788,6 +788,41 @@ export function applyBuildClassMixin(GameScene) {
       return offer;
     },
 
+    rerollCurrentLevelUpOffer() {
+      if (this.getPendingLevelUpPoints() <= 0) return null;
+      if ((this.getRunConsumableCount?.('reroll_dice') || 0) <= 0) return null;
+
+      const currentOffer = this.getCurrentLevelUpOffer?.() || null;
+      const level = Math.max(1, Math.floor(Number(currentOffer?.level || this.playerData?.level || 1)));
+      const previousSignature = (currentOffer?.options || []).map((opt) => opt?.id || '').join('|');
+
+      let nextOptions = [];
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = this.getLevelUpOptions();
+        if (!Array.isArray(candidate) || candidate.length <= 0) continue;
+
+        nextOptions = candidate;
+        const nextSignature = candidate.map((opt) => opt?.id || '').join('|');
+        if (nextSignature !== previousSignature) break;
+      }
+
+      if (!Array.isArray(nextOptions) || nextOptions.length <= 0) return null;
+      if (!this.consumeRunConsumable?.('reroll_dice', 1, { emitUi: false })) return null;
+
+      const offer = {
+        id: Math.max(1, Math.floor(Number(this._levelUpOfferSequence || 0)) + 1),
+        level,
+        options: nextOptions
+      };
+
+      this._levelUpOfferSequence = offer.id;
+      this._currentLevelUpOffer = offer;
+      this._levelUpActive = true;
+      this.markLevelUpInteraction?.();
+      this.emitUiSnapshot?.();
+      return offer;
+    },
+
     ensureLevelUpOffer(levelOverride = null) {
       if (this._currentLevelUpOffer?.options?.length) return this._currentLevelUpOffer;
       return this.rollLevelUpOffer(levelOverride);

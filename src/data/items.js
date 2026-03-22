@@ -15,6 +15,19 @@ export const ITEM_DEFS = [
     consumable: { mode: 'autoHeal', thresholdPct: 0.10, healPct: 0.50, cooldownMs: 30000 }
   },
   {
+    id: 'reroll_dice',
+    name: '骰子',
+    desc: '在三选一界面消耗 1 个，立即重刷当前天赋选项。可携带多个。',
+    icon: '🎲',
+    price: 100,
+    kind: 'consumable',
+    stackable: true,
+    maxOwned: 5,
+    carryLimit: 5,
+    effects: {},
+    consumable: { mode: 'rerollLevelUp' }
+  },
+  {
     id: 'revive_cross',
     name: '复活十字',
     desc: '死亡后立即原地复活并回满生命。每局最多携带 1 个。',

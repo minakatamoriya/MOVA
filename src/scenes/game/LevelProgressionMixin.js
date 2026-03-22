@@ -6,6 +6,7 @@ import { rollEliteAffixes } from '../../data/eliteAffixes';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
+import { rollVendorCurseEquipment } from '../../data/lootItems';
 import TestMinion from '../../enemies/minions/TestMinion';
 
 function distributeExpRewards(totalExp, count) {
@@ -46,9 +47,305 @@ export function applyLevelProgressionMixin(GameScene) {
 
     resetChaosArenaRoundFlow() {
       this.clearChaosArenaCountdownOverlay();
+      this.cleanupRoundVendor?.();
       this._roundBossDefeated = false;
       this._roundClearCountdownActive = false;
       this._roundClearCountdownSeconds = 0;
+      this._roundVendorPending = false;
+      this._roundVendorOpen = false;
+      this._roundVendorSpawned = false;
+    },
+
+    cleanupRoundVendor() {
+      this.roundVendorActive = false;
+      this.roundVendorAnchor = null;
+      this.roundVendorStock = [];
+      if (this.roundVendorZone) {
+        this.roundVendorZone.destroy();
+        this.roundVendorZone = null;
+      }
+      if (this.roundVendorSmoke) {
+        this.roundVendorSmoke.destroy();
+        this.roundVendorSmoke = null;
+      }
+      if (Array.isArray(this.roundVendorVisuals)) {
+        this.roundVendorVisuals.forEach((obj) => obj?.destroy?.());
+      }
+      this.roundVendorVisuals = null;
+    },
+
+    buildRoundVendorStock() {
+      const stock = [
+        { id: 'potion_small', kind: 'consumable', itemId: 'potion_small' },
+        { id: 'reroll_dice', kind: 'consumable', itemId: 'reroll_dice' }
+      ];
+
+      if (Math.random() < 0.18) {
+        const cursed = rollVendorCurseEquipment({
+          rng: Math.random,
+          instanceId: this.nextRunLootItemInstanceId?.('vendor_curse') || `vendor_curse_${Date.now()}`,
+          source: 'vendor'
+        });
+        if (cursed) {
+          stock.push({
+            id: `vendor:${cursed.instanceId}`,
+            kind: 'run_loot_equipment',
+            item: cursed,
+            purchased: false
+          });
+        }
+      }
+
+      this.roundVendorStock = stock;
+      return stock;
+    },
+
+    getRoundVendorStock() {
+      return Array.isArray(this.roundVendorStock) ? this.roundVendorStock : [];
+    },
+
+    getRoundVendorOfferState(offerId) {
+      const entry = this.getRoundVendorStock().find((candidate) => candidate?.id === offerId || candidate?.itemId === offerId);
+      if (!entry) return { ok: false, reason: 'missing', price: 0 };
+
+      if (entry.kind === 'consumable') {
+        return this.canBuyRunVendorItem(entry.itemId);
+      }
+
+      const item = entry.item;
+      const price = Math.max(0, Number(item?.price || 0));
+      if (entry.purchased) return { ok: false, reason: 'sold_out', price };
+      if (Number(this.sessionCoins || 0) < price) return { ok: false, reason: 'not_enough_session_coins', price };
+      return { ok: true, reason: '', price };
+    },
+
+    getRoundVendorSnapshot() {
+      return this.getRoundVendorStock().map((entry) => {
+        if (!entry) return null;
+        if (entry.kind === 'consumable') {
+          const def = this.itemPool?.find?.((item) => item.id === entry.itemId) || null;
+          const state = this.canBuyRunVendorItem(entry.itemId);
+          return def ? {
+            id: entry.id,
+            itemId: def.id,
+            kind: 'consumable',
+            name: def.name,
+            icon: def.icon,
+            desc: def.desc,
+            price: this.getRunVendorPrice(def),
+            currentCount: this.getRunConsumableCount(def.id),
+            carryLimit: Math.max(0, Math.floor(Number(def.carryLimit || def.maxOwned || 0))),
+            canBuy: !!state.ok,
+            disabledReason: state.reason || '',
+            rarityLabel: '补给',
+            rarityTextColor: '#fef08a',
+            previewLines: [def.desc]
+          } : null;
+        }
+
+        const item = entry.item;
+        const state = this.getRoundVendorOfferState(entry.id);
+        return item ? {
+          id: entry.id,
+          itemId: item.instanceId,
+          kind: 'run_loot_equipment',
+          name: item.name,
+          icon: item.icon,
+          desc: item.desc,
+          price: Math.max(0, Number(item.price || 0)),
+          canBuy: !!state.ok,
+          disabledReason: state.reason || '',
+          rarityLabel: item.rarityLabel,
+          rarityTextColor: item.rarityTextColor,
+          categoryLabel: item.categoryLabel,
+          vendorSummary: item.vendorSummary,
+          previewLines: Array.isArray(item.statLines) ? item.statLines : [],
+          purchased: !!entry.purchased
+        } : null;
+      }).filter(Boolean);
+    },
+
+    getRoundVendorSpawnPoint() {
+      const player = this.player;
+      const { world, view } = this.getArenaWorldAndViewRect();
+      const safeInset = Math.max(72, Math.round((this.mapConfig?.cellSize || 128) * 0.75));
+      const safeLeft = Math.max(world.x + safeInset, view.x + safeInset);
+      const safeRight = Math.min(world.right - safeInset, view.right - safeInset);
+      const safeTop = Math.max(world.y + safeInset, view.y + safeInset);
+      const safeBottom = Math.min(world.bottom - safeInset, view.bottom - safeInset);
+      const fallbackX = Phaser.Math.Clamp(Number(player?.x || view.centerX), safeLeft, safeRight);
+      const fallbackY = Phaser.Math.Clamp(Number(player?.y || view.centerY), safeTop, safeBottom);
+
+      const radius = Math.max(110, Math.round((this.mapConfig?.cellSize || 128) * 1.05));
+      const directions = [
+        { x: 1, y: 0 },
+        { x: -1, y: 0 },
+        { x: 0, y: -1 },
+        { x: 0, y: 1 },
+        { x: 0.82, y: -0.58 },
+        { x: -0.82, y: -0.58 },
+        { x: 0.82, y: 0.58 },
+        { x: -0.82, y: 0.58 }
+      ];
+
+      let best = { x: fallbackX, y: fallbackY, score: -Infinity };
+      directions.forEach((dir) => {
+        const targetX = Number(player?.x || fallbackX) + dir.x * radius;
+        const targetY = Number(player?.y || fallbackY) + dir.y * radius;
+        const x = Phaser.Math.Clamp(targetX, safeLeft, safeRight);
+        const y = Phaser.Math.Clamp(targetY, safeTop, safeBottom);
+        const distToPlayer = Phaser.Math.Distance.Between(Number(player?.x || fallbackX), Number(player?.y || fallbackY), x, y);
+        const clampPenalty = Phaser.Math.Distance.Between(targetX, targetY, x, y);
+        const centerBias = Phaser.Math.Distance.Between(x, y, view.centerX, view.centerY) * 0.08;
+        const score = distToPlayer - clampPenalty - centerBias;
+        if (score > best.score) {
+          best = { x, y, score };
+        }
+      });
+
+      return { x: best.x, y: best.y };
+    },
+
+    spawnRoundVendorSmoke(x, y, durationMs = 2000) {
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (this.roundVendorSmoke) {
+        this.roundVendorSmoke.destroy();
+        this.roundVendorSmoke = null;
+      }
+
+      const smoke = this.add.container(x, y).setDepth(219);
+  const groundRing = this.add.ellipse(0, 44, 156, 48, 0xd6d3d1, 0.18).setStrokeStyle(3, 0xf8fafc, 0.38);
+  const flash = this.add.circle(0, 8, 18, 0xfff7ed, 0.85);
+  smoke.add(groundRing);
+  smoke.add(flash);
+      const puffs = [];
+      for (let i = 0; i < 12; i += 1) {
+        const angle = (Math.PI * 2 * i) / 12;
+        const dist = Phaser.Math.Between(10, 34);
+        const puff = this.add.circle(
+          Math.cos(angle) * dist * 0.45,
+          Math.sin(angle) * dist * 0.35,
+          Phaser.Math.Between(12, 22),
+          Phaser.Math.Between(0, 1) ? 0xcbd5e1 : 0x94a3b8,
+          Phaser.Math.FloatBetween(0.18, 0.34)
+        );
+        smoke.add(puff);
+        puffs.push(puff);
+
+        this.tweens.add({
+          targets: puff,
+          x: puff.x + Math.cos(angle) * Phaser.Math.Between(26, 58),
+          y: puff.y + Math.sin(angle) * Phaser.Math.Between(18, 46),
+          scale: Phaser.Math.FloatBetween(1.2, 1.7),
+          alpha: 0,
+          duration: durationMs,
+          ease: 'Cubic.Out'
+        });
+      }
+
+      this.tweens.add({
+        targets: groundRing,
+        scaleX: 1.28,
+        scaleY: 1.36,
+        alpha: 0,
+        duration: durationMs,
+        ease: 'Quad.Out'
+      });
+
+      this.tweens.add({
+        targets: flash,
+        scale: 6.2,
+        alpha: 0,
+        duration: 320,
+        ease: 'Cubic.Out',
+        onComplete: () => flash.destroy()
+      });
+
+      this.roundVendorSmoke = smoke;
+      this.time.delayedCall(durationMs, () => {
+        if (this.roundVendorSmoke === smoke) {
+          smoke.destroy();
+          this.roundVendorSmoke = null;
+        }
+      });
+    },
+
+    spawnRoundVendor() {
+      if (this.roundVendorActive || this._roundVendorSpawned || !this.player) return false;
+
+      const { x, y } = this.getRoundVendorSpawnPoint();
+      this.cleanupRoundVendor?.();
+      this.buildRoundVendorStock?.();
+      this._roundVendorSpawned = true;
+      this.roundVendorActive = true;
+      this.roundVendorAnchor = { x, y };
+
+      const zone = this.add.zone(x, y, 128, 104).setDepth(220);
+      this.roundVendorZone = zone;
+
+      const root = this.add.container(x, y).setDepth(220);
+      const shadow = this.add.ellipse(0, 44, 118, 34, 0x000000, 0.24);
+      const base = this.add.circle(0, 10, 34, 0x2a1f17, 0.98).setStrokeStyle(4, 0xd6a04f, 0.95);
+      const hood = this.add.circle(0, -10, 26, 0x6b2d1f, 0.98).setStrokeStyle(3, 0xf0c36b, 0.9);
+      const face = this.add.circle(0, -6, 12, 0xf4d7a4, 0.92);
+      const pack = this.add.circle(22, 8, 14, 0x8b5a2b, 0.96).setStrokeStyle(2, 0xf0c36b, 0.8);
+      const dice = this.add.text(0, 8, '商', {
+        fontSize: '18px',
+        color: '#fff7d6',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+      const label = this.add.text(0, -58, '小商贩', {
+        fontSize: '20px',
+        color: '#ffe7aa',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+      const hint = this.add.text(0, 66, '靠近交易', {
+        fontSize: '16px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5);
+
+      root.add([shadow, base, hood, face, pack, dice, label, hint]);
+      this.roundVendorVisuals = [root];
+
+      this.tweens.add({
+        targets: [base, hood, pack],
+        y: '+=4',
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.tweens.add({
+        targets: label,
+        angle: { from: -2.8, to: 2.8 },
+        duration: 560,
+        yoyo: true,
+        repeat: 4,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.tweens.add({
+        targets: hint,
+        alpha: { from: 0.55, to: 1 },
+        duration: 720,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.spawnRoundVendorSmoke?.(x, y + 4, 2000);
+      this.systemMessage?.show('小商贩现身，靠近后可反复交易，倒计时结束进入下一轮。', {
+        key: 'round_vendor_spawn',
+        durationMs: 2200
+      });
+      return true;
     },
 
     getRemainingCombatantCounts() {
@@ -102,8 +399,11 @@ export function applyLevelProgressionMixin(GameScene) {
       if (this._roundClearCountdownActive) return;
 
       this._roundClearCountdownActive = true;
+      this._roundVendorPending = true;
+      this._roundVendorSpawned = false;
       this._roundClearCountdownSeconds = 10;
       this.systemMessage?.hide('chaos_remaining_enemies', { immediate: true });
+      this.spawnRoundVendor?.();
 
       const cam = this.cameras.main;
       this.clearChaosArenaCountdownOverlay();
@@ -117,7 +417,7 @@ export function applyLevelProgressionMixin(GameScene) {
         strokeThickness: 8,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(2800);
 
-      this._roundClearCountdownSubText = this.add.text(cam.centerX, cam.centerY + 64, '战场已清空，10 秒后开始下一轮', {
+      this._roundClearCountdownSubText = this.add.text(cam.centerX, cam.centerY + 64, '战场已清空，10 秒后小商贩抵达', {
         fontSize: '24px',
         fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
@@ -133,6 +433,10 @@ export function applyLevelProgressionMixin(GameScene) {
           if (!this.scene?.isActive?.('GameScene')) return;
           this._roundClearCountdownSeconds -= 1;
 
+          if (this.roundVendorActive && this._roundClearCountdownSeconds <= 2) {
+            this.cleanupRoundVendor?.();
+          }
+
           if (this._roundClearCountdownSeconds <= 0) {
             this.resetChaosArenaRoundFlow();
             this.advanceToNextLevel();
@@ -143,7 +447,7 @@ export function applyLevelProgressionMixin(GameScene) {
             this._roundClearCountdownText.setText(String(this._roundClearCountdownSeconds));
           }
           if (this._roundClearCountdownSubText) {
-            this._roundClearCountdownSubText.setText(`战场已清空，${this._roundClearCountdownSeconds} 秒后开始下一轮`);
+            this._roundClearCountdownSubText.setText(`战场已清空，${this._roundClearCountdownSeconds} 秒后小商贩抵达`);
           }
         }
       });
