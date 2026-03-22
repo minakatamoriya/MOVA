@@ -20,12 +20,12 @@ export const TALENT_OFFER_WEIGHT_CONFIG = {
   repeatableTalentDecay: 0.9,
   testing: {
     enabled: false,
-    favoredTree: 'curse',
+    favoredTree: 'summon',
     favoredTreeMultiplier: 3.5,
     favoredOffFactionEntryMultiplier: 4.0,
     favoredIds: {
-      curse_skeleton_guard: 18,
-      curse_skeleton_mage: 10,
+      summon_skeleton_guard: 18,
+      summon_skeleton_mage: 10,
     },
     favoredRepeatableNoDecay: true,
   }
@@ -35,19 +35,19 @@ export const TALENT_OFFER_WEIGHT_CONFIG = {
 export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
   archer: [
-    { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程提升（+12%/+24%/+36%）', icon: '猎主', maxLevel: 3 },
-    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列（中心列始终锁定目标）', icon: '猎主', maxLevel: 3 },
-    { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒', icon: '猎主', maxLevel: 3 },
-    { id: 'archer_evade_mastery', category: 'build', name: '残影步调', desc: '强化灵巧回避：持续时间提高至5/8/10秒', icon: '猎主', maxLevel: 3, requiredSkillId: 'archer_nimble_evade' },
+    { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程加成：0% -> 12% -> 24% -> 36%。', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '箭列数：3 -> 5 -> 5 -> 7；第 2 级额外收束散射角并强化锁定。', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: '低血自动闪避：0% -> 40% -> 60% -> 80%，持续 3 秒，冷却 30 秒。', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_evade_mastery', category: 'build', name: '残影步调', desc: '灵巧回避持续时间：3秒 -> 5秒 -> 8秒 -> 10秒。', icon: '猎主', maxLevel: 3, requiredSkillId: 'archer_nimble_evade' },
   ],
 
   // 🌿 德鲁伊·星落（主职业输出）
-  drone: [
+  druid: [
     { id: 'druid_meteor_shower', category: 'build', name: '流星雨', desc: '星落数量 +2，但单次伤害略微降低', icon: '德主' },
     { id: 'druid_meteor', category: 'build', name: '陨石', desc: '每 10 秒，下一次星落变为巨型陨石：范围更大，伤害更高', icon: '德主' },
     { id: 'druid_starfire', category: 'build', name: '星火', desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）', icon: '德主' },
-    { id: 'druid_nourish', category: 'build', name: '自然滋养', desc: '生命低于30%时自动触发：在15/10/5秒内缓慢回复30%生命，冷却30秒', icon: '德主', maxLevel: 3 },
-    { id: 'druid_nourish_growth', category: 'build', name: '丰饶脉动', desc: '强化自然滋养：总回复量额外提高50%/80%/100%', icon: '德主', maxLevel: 3, requiredSkillId: 'druid_nourish' }
+    { id: 'druid_nourish', category: 'build', name: '自然滋养', desc: '30% 总治疗完成时间：15秒 -> 10秒 -> 5秒，冷却 30 秒。', icon: '德主', maxLevel: 3 },
+    { id: 'druid_nourish_growth', category: 'build', name: '丰饶脉动', desc: '自然滋养总回复加成：0% -> 50% -> 80% -> 100%。', icon: '德主', maxLevel: 3, requiredSkillId: 'druid_nourish' }
   ],
 
   // 🟠 战士·旋风斩（此项目内为“近战挥砍/半月波”）
@@ -55,20 +55,20 @@ export const UPGRADE_POOLS = {
     { id: 'warrior_spin', category: 'build', name: '回旋', desc: '挥砍变为 360° 回旋斩，造成范围伤害', icon: '战主' },
     { id: 'warrior_swordqi', category: 'build', name: '剑气', desc: '挥砍时额外发射一道月牙剑气（保留近战判定）', icon: '战主' },
     { id: 'warrior_endure', category: 'build', name: '持久', desc: '战士近战形态获得 20% 伤害减免', icon: '战主' },
-    { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩有效范围提升（可叠加）', icon: '战主' },
-    { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒', icon: '战主', maxLevel: 3 },
-    { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
+    { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩基础范围：220 -> 245 -> 270 -> 295 -> 320。', icon: '战主' },
+    { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: '低血吸血持续时间：5秒 -> 10秒 -> 15秒；吸血转化固定 100%，冷却 30 秒。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '吸血转化：100% -> 120% -> 150% -> 200%。', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
   ],
 
   // 🔵 法师·冰法
   mage: [
-    { id: 'mage_frostbite', category: 'build', name: '霜蚀', desc: '冰弹基础自带 22% 减速 1.5 秒。1/2/3级强化到 30%/38%/48%，持续 1.9/2.3/2.7 秒', icon: '法主', maxLevel: 3 },
-    { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹索敌范围提升。1/2/3级：+45/+90/+135', icon: '法主', maxLevel: 3 },
-    { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害 +10%/+20%/+30%，飞行更利落', icon: '法主', maxLevel: 3 },
-    { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: '基础 5 层碎冰后额外冻结主目标。1/2/3级：冻结0.8/1.2/1.7秒', icon: '法主', maxLevel: 3 },
-    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '基础 5 层会爆炸并传染。1/2/3级：碎冰半径 120/150/185，造成 70%/100%/135% 伤害，并传染 1/1/2 层寒霜', icon: '法主', maxLevel: 3 },
-    { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: '生命低于30%时自动触发：冻结周围敌人。1/2/3级：冻结3/5/10秒，冷却30秒', icon: '法主', maxLevel: 3 },
-    { id: 'mage_frost_domain', category: 'build', name: '极寒疆域', desc: '强化冰霜新星范围。1/2/3级：作用半径提升至300/380/480', icon: '法主', maxLevel: 3, requiredSkillId: 'mage_frost_nova' }
+    { id: 'mage_frostbite', category: 'build', name: '霜蚀', desc: '冰弹减速：22% -> 30% -> 38% -> 48%；持续：1.5秒 -> 1.9秒 -> 2.3秒 -> 2.7秒。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹索敌范围加成：+0 -> +45 -> +90 -> +135。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害加成：0% -> 10% -> 20% -> 30%。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: '额外冻结时长：0秒 -> 0.8秒 -> 1.2秒 -> 1.7秒。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '碎冰半径：0 -> 120 -> 150 -> 185；伤害：0% -> 70% -> 100% -> 135%；传染层数：0 -> 1 -> 1 -> 2。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: '冰霜新星冻结时长：0秒 -> 3秒 -> 5秒 -> 10秒，冷却 30 秒。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frost_domain', category: 'build', name: '极寒疆域', desc: '冰霜新星范围：0 -> 300 -> 380 -> 480。', icon: '法主', maxLevel: 3, requiredSkillId: 'mage_frost_nova' }
   ],
 
   // 🛡️ 圣骑士·矛
@@ -76,18 +76,18 @@ export const UPGRADE_POOLS = {
     { id: 'paladin_pierce', category: 'build', name: '重锤', desc: '锤击范围与伤害提高', icon: '骑主' },
     { id: 'paladin_repulse', category: 'build', name: '震荡锤击', desc: '锤击命中附带明显击退，更难让敌人贴身', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
-    { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击有 10%/20%/30% 概率使敌人眩晕', icon: '骑主' },
-    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒', icon: '骑主', maxLevel: 3 },
-    { id: 'paladin_shelter_extension', category: 'build', name: '圣佑绵延', desc: '强化神圣庇护：持续时间提高至8/10/12秒', icon: '骑主', maxLevel: 3, requiredSkillId: 'paladin_divine_shelter' }
+    { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击眩晕率：0% -> 10% -> 20% -> 30%。', icon: '骑主' },
+    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: '低血减伤：0% -> 40% -> 60% -> 80%，持续 5 秒，冷却 30 秒。', icon: '骑主', maxLevel: 3 },
+    { id: 'paladin_shelter_extension', category: 'build', name: '圣佑绵延', desc: '神圣庇护持续时间：5秒 -> 8秒 -> 10秒 -> 12秒。', icon: '骑主', maxLevel: 3, requiredSkillId: 'paladin_divine_shelter' }
   ],
 
   // 🟣 术士·暗影箭
   warlock: [
-    { id: 'warlock_toxicity', category: 'build', name: '毒性浓度', desc: '剧毒 debuff 最大层数 +1（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_corrode', category: 'build', name: '腐蚀', desc: '毒圈持续时间 +1 秒（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围 +20%（可叠加，最多 3 层）', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_infernal', category: 'build', name: '炼狱魔火', desc: '生命低于30%时自动触发：消耗15%生命召唤地狱火 10 秒，冷却30秒。等级提升会强化地狱火生命、攻击与每击回血', icon: '术主', maxLevel: 3 },
-    { id: 'warlock_infernal_contract', category: 'build', name: '灰烬契约', desc: '强化炼狱魔火：生命消耗降低至10%/5%/0%', icon: '术主', maxLevel: 3, requiredSkillId: 'warlock_infernal' }
+    { id: 'warlock_toxicity', category: 'build', name: '毒性浓度', desc: '剧毒最大层数：0 -> 1 -> 2 -> 3。', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_corrode', category: 'build', name: '腐蚀', desc: '毒圈持续时间加成：0秒 -> 1秒 -> 2秒 -> 3秒。', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围加成：0% -> 20% -> 40% -> 60%。', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_infernal', category: 'build', name: '炼狱魔火', desc: '地狱火生命系数：0% -> 85% -> 110% -> 145%；伤害系数：0% -> 110% -> 145% -> 185%；每击回复：0 -> 8 -> 14 -> 22。', icon: '术主', maxLevel: 3 },
+    { id: 'warlock_infernal_contract', category: 'build', name: '灰烬契约', desc: '生命消耗：15% -> 10% -> 5% -> 0%。', icon: '术主', maxLevel: 3, requiredSkillId: 'warlock_infernal' }
   ]
 };
 
@@ -95,62 +95,62 @@ export const UPGRADE_POOLS = {
 export const UNIVERSAL_POOLS = {
   // 🔵 法师·奥术
   arcane: [
-    { id: 'arcane_circle', category: 'build', name: '奥能法阵', desc: '周期生成奥能法阵。1/2/3级：每10/8/6秒生成1个法阵，持续3/4/5秒；阵内你的伤害 +10%/+15%/+20%', icon: '法副', maxLevel: 3 },
-    { id: 'arcane_circle_range', category: 'build', name: '法阵扩张', desc: '扩大奥能法阵范围。1/2/3级：法阵半径 +15%/+30%/+45%', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
-    { id: 'arcane_fire_circle', category: 'build', name: '烈焰法阵', desc: '法阵结束时爆炸。1/2/3级：造成80%/120%/160%攻击力范围伤害；2级范围+20%，3级附带2秒灼烧', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
-    { id: 'arcane_frost_circle', category: 'build', name: '冰霜法阵', desc: '法阵内敌人减速。1/2/3级：敌人移动速度 -20%/-30%/-40%；3级离开法阵后仍保留1秒减速', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
-    { id: 'arcane_resonance_mark', category: 'build', name: '共鸣刻印', desc: '进一步扩大奥能法阵增伤。1/2/3级：法阵提供的增伤额外 +6%/+12%/+18%', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
-    { id: 'arcane_flowcasting', category: 'build', name: '流动施法', desc: '离开法阵后短时间保留法阵增益。1/2/3级：保留1/2/3秒', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' }
+    { id: 'arcane_circle', category: 'build', name: '奥术炮台', desc: '法阵内增伤：0% -> 8% -> 16% -> 24%；部署间隔：10.0秒 -> 9.3秒 -> 8.6秒 -> 7.9秒；开火间隔：3.00秒 -> 2.78秒 -> 2.56秒 -> 2.34秒。', icon: '法副', maxLevel: 3 },
+    { id: 'arcane_circle_range', category: 'build', name: '棱镜扩容', desc: '炮台索敌范围：380 -> 460 -> 540 -> 620。', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_fire_circle', category: 'build', name: '奥能灌注', desc: '炮台激光额外伤害系数：0% -> 24% -> 48% -> 72%。', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_frost_circle', category: 'build', name: '晶体固化', desc: '炮台驻场时间：15.0秒 -> 16.8秒 -> 18.6秒 -> 20.4秒。', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_resonance_mark', category: 'build', name: '共鸣裂变', desc: '激光易伤倍率：0% -> 6% -> 12% -> 18%。', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' },
+    { id: 'arcane_flowcasting', category: 'build', name: '多重布阵', desc: '部署间隔额外缩短：0秒 -> 0.9秒 -> 1.8秒 -> 2.7秒；离场保留：0秒 -> 1.2秒 -> 2.0秒 -> 3.0秒；并存炮台上限：1 -> 1 -> 2 -> 3。', icon: '法副', maxLevel: 3, requiredSkillId: 'arcane_circle' }
   ],
 
-  // 🟢 猎人·游侠
+  // 🟢 猎人·猎人
   ranger: [
-    { id: 'ranger_snaretrap', category: 'build', name: '绊索陷阱', desc: '自动布置绊索陷阱。1/2/3级：每10/8/6秒布置1个陷阱，触发后定身敌人1/1.5/2秒', icon: '猎副', maxLevel: 3 },
-    { id: 'ranger_huntmark', category: 'build', name: '猎手印记', desc: '被陷阱触发的敌人受到你的伤害提高。1/2/3级：+10%/+20%/+30%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_spiketrap', category: 'build', name: '钉刺陷阱', desc: '陷阱触发后造成伤害与减速。1/2/3级：造成60%/90%/120%攻击力伤害，并使敌人减速25%/35%/45%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_blasttrap', category: 'build', name: '爆裂陷阱', desc: '陷阱触发时额外爆炸。1/2/3级：造成80%/120%/160%攻击力范围伤害；3级范围+25%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_trapcraft', category: 'build', name: '熟练布置', desc: '强化陷阱覆盖能力。1级：同时存在的陷阱数量 +1；2级：触发范围 +20%；3级：陷阱数量再 +1，触发范围总计 +35%', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_pack_hunter', category: 'build', name: '围猎本能', desc: '强化你对被控制或被标记目标的暴击收益。1/2/3级：暴击率 +8%/+16%/+24%；3级额外获得 +20% 暴击伤害', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_huntmark' }
+    { id: 'ranger_snaretrap', category: 'build', name: '诱饵假人', desc: '牵引半径：172 -> 194 -> 216 -> 238；箭矢伤害系数：18% -> 24% -> 32% -> 42%；定身时长：0毫秒 -> 260毫秒 -> 380毫秒 -> 520毫秒。', icon: '猎副', maxLevel: 3 },
+    { id: 'ranger_huntmark', category: 'build', name: '猎手印记', desc: '猎印承伤：0% -> 10% -> 16% -> 22%；持续时间：0秒 -> 3.9秒 -> 4.3秒 -> 4.7秒。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_spiketrap', category: 'build', name: '缚行力场', desc: '爆炸追加伤害系数：0% -> 18% -> 26% -> 36%；持续伤害系数：0% -> 8% -> 12% -> 18%；持续时间：0秒 -> 2.2秒 -> 3.0秒 -> 3.8秒。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_blasttrap', category: 'build', name: '诱爆装置', desc: '结束爆炸伤害系数：55% -> 78% -> 102% -> 135%。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_trapcraft', category: 'build', name: '拟饵工学', desc: '部署间隔：10.0秒 -> 8.8秒 -> 7.6秒 -> 6.4秒；并存假人上限：1 -> 1 -> 2 -> 2。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_pack_hunter', category: 'build', name: '围猎本能', desc: '对猎印目标的暴击率：0% -> 6% -> 10% -> 14%；暴击伤害：0% -> 12% -> 20% -> 30%。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_huntmark' }
   ],
 
   // 🟠 战士·不屈
   unyielding: [
-    { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '生命越低伤害越高。1/2/3级：生命每降低10%，伤害 +2%/+3%/+4%', icon: '战副', maxLevel: 3 },
-    { id: 'unyielding_battlecry', category: 'build', name: '战吼', desc: '受伤后短时间增伤。1/2/3级：受到伤害时有20%概率触发，3秒内伤害 +10%/+20%/+30%', icon: '战副', maxLevel: 3 },
-    { id: 'unyielding_hamstring', category: 'build', name: '断筋', desc: '近距离命中使敌人减速。1/2/3级：减速15%/25%/35%，持续1.5/1.5/2秒', icon: '战副', maxLevel: 3 },
-    { id: 'unyielding_sunder', category: 'build', name: '破甲', desc: '持续命中同一目标时提高对其伤害。1/2/3级：+6%/+12%/+18%', icon: '战副', maxLevel: 3 },
-    { id: 'unyielding_standfast', category: 'build', name: '不退', desc: '近距离存在敌人时获得减伤与抗击退。1/2/3级：受到伤害 -6%/-12%/-18%；3级额外获得少量抗击退', icon: '战副', maxLevel: 3 },
-    { id: 'unyielding_executioner', category: 'build', name: '处决本能', desc: '对低血敌人造成额外伤害。1/2/3级：对生命低于35%的敌人伤害 +12%/+24%/+36%', icon: '战副', maxLevel: 3 }
+    { id: 'unyielding_bloodrage', category: 'build', name: '血怒', desc: '每损失 10% 生命的增伤：0% -> 2% -> 3% -> 4%。', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_battlecry', category: 'build', name: '战吼', desc: '战吼增伤：0% -> 10% -> 20% -> 30%，持续 3 秒。', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_hamstring', category: 'build', name: '断筋', desc: '断筋减速：0% -> 15% -> 25% -> 35%；持续：0秒 -> 1.5秒 -> 1.5秒 -> 2秒。', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_sunder', category: 'build', name: '破甲', desc: '破甲承伤：0% -> 6% -> 12% -> 18%。', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_standfast', category: 'build', name: '不退', desc: '贴身减伤：0% -> 6% -> 12% -> 18%；3 级额外获得抗击退。', icon: '战副', maxLevel: 3 },
+    { id: 'unyielding_executioner', category: 'build', name: '处决本能', desc: '对 35% 以下生命目标的伤害加成：0% -> 12% -> 24% -> 36%。', icon: '战副', maxLevel: 3 }
   ],
 
-  // 🟣 术士·诅咒
-  curse: [
-    { id: 'curse_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '提高召唤物生命。1/2/3级：召唤物生命 +12%/+24%/+36%', icon: '术副', maxLevel: 3 },
-    { id: 'curse_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '召唤近战骷髅卫士。1/2/3级：上限为 1/3/5', icon: '术副', maxLevel: 3 },
-    { id: 'curse_skeleton_mage', category: 'build', name: '骷髅法师', desc: '召唤远程骷髅法师。1/2/3级：上限为 1/3/5', icon: '术副', maxLevel: 3 },
-    { id: 'curse_mage_empower', category: 'build', name: '白骨灌能', desc: '强化骷髅法师输出。1/2/3级：骷髅法师伤害 +15%/+30%/+45%；3级攻击间隔额外缩短15%', icon: '术副', maxLevel: 3, requiredSkillId: 'curse_skeleton_mage' },
-    { id: 'curse_guard_bulwark', category: 'build', name: '骸骨壁垒', desc: '强化骷髅卫士生存与前排能力。1/2/3级：生命额外 +20%/+40%/+60%，受到伤害 -10%/-15%/-20%；3级额外提高拦截倾向', icon: '术副', maxLevel: 3, requiredSkillId: 'curse_skeleton_guard' },
-    { id: 'curse_ember_echo', category: 'build', name: '魂火余烬', desc: '召唤物死亡后为你提供短时间增伤/减伤。1级：每死1名召唤物获得1层魂火，持续4秒，每层伤害 +3%，最多3层；2级：每层同时提供2%减伤；3级：持续时间延长至6秒，每层伤害提高至 +4%，减伤提高至3%', icon: '术副', maxLevel: 3 }
+  // 🟣 术士·召唤
+  summon: [
+    { id: 'summon_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '召唤物生命加成：0% -> 12% -> 24% -> 36%。', icon: '术副', maxLevel: 3 },
+    { id: 'summon_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '骷髅卫士总上限：1 -> 3 -> 5 -> 7。', icon: '术副', maxLevel: 3 },
+    { id: 'summon_skeleton_mage', category: 'build', name: '骷髅法师', desc: '骷髅法师总上限：1 -> 3 -> 5 -> 7。', icon: '术副', maxLevel: 3 },
+    { id: 'summon_mage_empower', category: 'build', name: '白骨灌能', desc: '骷髅法师伤害加成：0% -> 15% -> 30% -> 45%；3 级额外攻击间隔缩短 15%。', icon: '术副', maxLevel: 3, requiredSkillId: 'summon_skeleton_mage' },
+    { id: 'summon_guard_bulwark', category: 'build', name: '骸骨壁垒', desc: '卫士生命加成：0% -> 20% -> 40% -> 60%；承伤减免：0% -> 10% -> 15% -> 20%。', icon: '术副', maxLevel: 3, requiredSkillId: 'summon_skeleton_guard' },
+    { id: 'summon_ember_echo', category: 'build', name: '魂火余烬', desc: '亡灵死亡获得魂火层数：0 -> 1 -> 1 -> 2；层数上限：0 -> 3 -> 5 -> 6；每层伤害固定 +4%，持续 6 秒。', icon: '术副', maxLevel: 3 }
   ],
 
   // 🛡️ 圣骑士·守护
   guardian: [
-    { id: 'guardian_block', category: 'build', name: '坚盾', desc: '概率格挡，格挡时减伤。1/2/3级：格挡率 5%/8%/12%，格挡减伤 50%', icon: '骑副', maxLevel: 3 },
-    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '固定减伤。1/2/3级：所有受到的伤害 -2/-4/-6', icon: '骑副', maxLevel: 3 },
-    { id: 'guardian_counter', category: 'build', name: '反制', desc: '格挡成功后反击。1/2/3级：反击造成80%/120%/160%攻击力伤害', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
-    { id: 'guardian_sacred_seal', category: 'build', name: '庇护圣印', desc: '受击或格挡时积累圣印。1/2/3级：圣印上限 3/4/5 层', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
-    { id: 'guardian_holy_rebuke', category: 'build', name: '神圣回击', desc: '累计满圣印后，下次格挡或受击触发范围冲击。1/2/3级：造成100%/150%/200%攻击力伤害；3级附带20%减速，持续2秒', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' },
-    { id: 'guardian_light_fortress', category: 'build', name: '光铸壁垒', desc: '低血时自动消耗全部圣印生成护盾。1/2/3级：每层圣印提供4%/6%/8%最大生命护盾', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' }
+    { id: 'guardian_block', category: 'build', name: '坚盾', desc: '格挡率：0% -> 5% -> 10% -> 15%；格挡减伤固定 50%。', icon: '骑副', maxLevel: 3 },
+    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '固定减伤：0 -> 2 -> 4 -> 6。', icon: '骑副', maxLevel: 3 },
+    { id: 'guardian_counter', category: 'build', name: '反制', desc: '反击伤害：0% -> 80% -> 120% -> 160%。', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
+    { id: 'guardian_sacred_seal', category: 'build', name: '庇护圣印', desc: '圣印上限：0 -> 3 -> 4 -> 5；单层减伤：0% -> 2% -> 3% -> 4%。', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_block' },
+    { id: 'guardian_holy_rebuke', category: 'build', name: '神圣回击', desc: '神圣回击半径：0 -> 120 -> 135 -> 150；伤害：0% -> 100% -> 150% -> 200%；3 级追加 0.5 秒冻结。', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' },
+    { id: 'guardian_light_fortress', category: 'build', name: '光铸壁垒', desc: '每层圣印护盾转化：0% -> 4% -> 6% -> 8%。', icon: '骑副', maxLevel: 3, requiredSkillId: 'guardian_sacred_seal' }
   ],
 
   // 🌿 德鲁伊·自然伙伴
   nature: [
-    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '召唤熊灵协同作战。1/2/3级：负责近战拦截；后续提升生命、仇恨与减伤能力', icon: '德副', maxLevel: 3 },
-    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '召唤战鹰协同作战。1/2/3级：负责高频打击；后续提升攻速、索敌与追击倾向', icon: '德副', maxLevel: 3 },
-    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '召唤树精协同作战。1/2/3级：负责周期治疗；后续提升治疗量、频率与护盾能力', icon: '德副', maxLevel: 3 },
-    { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: '强化熊灵承担伤害与拦截能力。1/2/3级：玩家受击时熊灵分担8%/16%/24%伤害；3级额外获得概率震地减速', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
-    { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: '强化战鹰标记与增伤。1/2/3级：战鹰命中的敌人被标记，你对其伤害 +8%/+16%/+24%；3级对Boss稳定生效', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
-    { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: '强化树精治疗与护盾。1/2/3级：治疗量 +15%/+30%/+45%，并有15%/30%/45%概率附带2%最大生命护盾', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
+    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '熊灵生命系数：72% -> 90% -> 108% -> 126%；伤害系数：92% -> 112% -> 132% -> 152%。', icon: '德副', maxLevel: 3 },
+    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '战鹰攻击间隔：520毫秒 -> 458毫秒 -> 395毫秒 -> 333毫秒；伤害系数：18% -> 23% -> 28% -> 33%。', icon: '德副', maxLevel: 3 },
+    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '树精治疗量：4 -> 6 -> 8 -> 10；治疗间隔：3.00秒 -> 2.74秒 -> 2.48秒 -> 2.22秒。', icon: '德副', maxLevel: 3 },
+    { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: '熊灵分担伤害：0% -> 8% -> 16% -> 24%；3 级额外解锁震地减速。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
+    { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: '战鹰猎印增伤：0% -> 8% -> 16% -> 24%；对 Boss 生效率：0% -> 45% -> 70% -> 100%。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
+    { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: '树精治疗加成：0% -> 15% -> 30% -> 45%；附盾概率：0% -> 15% -> 30% -> 45%；护盾值固定为 2% 最大生命。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
   ]
 };
 
@@ -159,12 +159,12 @@ export const UNIVERSAL_POOLS = {
 // - 选中这些节点时，会在 GameScene.applyUpgrade 中自动写入 offFaction
 // - 自然伙伴：这里先解锁德鲁伊副职业，后续再从自然伙伴池中抽取熊/鹰/树精与其强化
 export const OFF_FACTION_ENTRY_OPTIONS = [
-  { id: 'off_arcane', category: 'build', name: '奥术', desc: '获得奥能法阵，并使所有攻击间隔 -8%。', icon: '解锁法师副职业！' },
-  { id: 'off_ranger', category: 'build', name: '游侠', desc: '获得陷阱体系，并使闪避率 +10%。', icon: '解锁猎人副职业！' },
-  { id: 'off_unyielding', category: 'build', name: '不屈', desc: '获得不屈战意，并使暴击率 +15%。', icon: '解锁战士副职业！' },
-  { id: 'off_curse', category: 'build', name: '诅咒', desc: '获得亡灵军势，并使造成的伤害 +8%。', icon: '解锁术士副职业！' },
-  { id: 'off_guardian', category: 'build', name: '守护', desc: '获得格挡与圣印，并使受到的伤害 -10%。', icon: '解锁圣骑士副职业！' },
-  { id: 'off_nature', category: 'build', name: '自然伙伴', desc: '获得自然伙伴，并每秒恢复 0.8% 最大生命。', icon: '解锁德鲁伊副职业！' }
+  { id: 'off_arcane', category: 'build', name: '奥术', desc: '解锁法师副职业，所有攻击间隔 -8%。基础每10秒自动部署1座奥术炮台，驻场15秒，并向射程内目标发射粗直线贯穿激光。', icon: '解锁法师副职业！' },
+  { id: 'off_ranger', category: 'build', name: '猎人', desc: '解锁猎人副职业，闪避率 +10%。基础每10秒自动布置1个诱饵假人，持续15秒，划定吸引范围并向圈内优先目标射出单发箭矢。', icon: '解锁猎人副职业！' },
+  { id: 'off_unyielding', category: 'build', name: '不屈', desc: '解锁战士副职业，暴击率 +10%。生命每损失10%，伤害 +2%。', icon: '解锁战士副职业！' },
+  { id: 'off_summon', category: 'build', name: '召唤', desc: '解锁召唤副职业，造成伤害 +8%。立即获得1名骷髅卫士与1名骷髅法师。', icon: '解锁术士副职业！' },
+  { id: 'off_guardian', category: 'build', name: '守护', desc: '解锁圣骑士副职业，受到伤害 -10%。获得格挡与圣印。', icon: '解锁圣骑士副职业！' },
+  { id: 'off_nature', category: 'build', name: '自然伙伴', desc: '解锁德鲁伊副职业。立即获得1只熊灵，作为前排肉盾协同作战。', icon: '解锁德鲁伊副职业！' }
 ];
 
 // ====== 第三天赋：深度专精 / 双职业专精（占位池，后续由策划填充） ======
@@ -183,32 +183,32 @@ const THIRD_SPEC_CORE_LABELS = {
   warrior: '战士',
   warlock: '术士',
   paladin: '圣骑士',
-  drone: '德鲁伊'
+  druid: '德鲁伊'
 };
 
 const OFF_FACTION_TO_ACCENT_CORE_KEY = {
   arcane: 'mage',
   ranger: 'archer',
   unyielding: 'warrior',
-  curse: 'warlock',
+  summon: 'warlock',
   guardian: 'paladin',
-  nature: 'drone'
+  nature: 'druid'
 };
 
 const DUAL_MAIN_ENTRY_BONUSES = {
   mage: { title: '奥术洪流', stat: 'fireRate', value: 0.15 },
   archer: { title: '致命瞄准', stat: 'critChance', value: 0.15 },
   warrior: { title: '破阵之力', stat: 'damage', value: 0.15 },
-  warlock: { title: '灾厄灌注', stat: 'damage', value: 0.15 },
+  warlock: { title: '召魂灌注', stat: 'damage', value: 0.15 },
   paladin: { title: '圣裁锋芒', stat: 'damage', value: 0.15 },
-  drone: { title: '星怒奔流', stat: 'fireRate', value: 0.15 }
+  druid: { title: '星怒奔流', stat: 'fireRate', value: 0.15 }
 };
 
 const DUAL_OFF_STYLE_BONUSES_BY_FACTION = {
   arcane: { title: '奥术余韵', stat: 'fireRate', value: 0.10 },
-  ranger: { title: '游侠步调', stat: 'dodgeChance', value: 0.10 },
+  ranger: { title: '猎人步调', stat: 'dodgeChance', value: 0.10 },
   unyielding: { title: '不屈战意', stat: 'critChance', value: 0.10 },
-  curse: { title: '诅咒灌注', stat: 'damage', value: 0.10 },
+  summon: { title: '召魂灌注', stat: 'damage', value: 0.10 },
   guardian: { title: '守护庇佑', stat: 'damageReduction', value: 0.10 },
   nature: { title: '自然回响', stat: 'regenRatio', value: 0.01 }
 };
@@ -217,9 +217,9 @@ const DEPTH_ENTRY_BONUSES = {
   mage: { title: '奥术觉醒', stat: 'fireRate', value: 0.30 },
   archer: { title: '猎神凝视', stat: 'critChance', value: 0.30 },
   warrior: { title: '战神附体', stat: 'damage', value: 0.30 },
-  warlock: { title: '灾厄真名', stat: 'damage', value: 0.30 },
+  warlock: { title: '召魂真名', stat: 'damage', value: 0.30 },
   paladin: { title: '圣裁降临', stat: 'damage', value: 0.30 },
-  drone: { title: '星界澎湃', stat: 'fireRate', value: 0.30 }
+  druid: { title: '星界澎湃', stat: 'fireRate', value: 0.30 }
 };
 
 function formatThirdSpecBonusDesc(bonus) {
@@ -342,7 +342,7 @@ export const DEPTH_SPEC_POOLS = {
   ],
   warrior: [
     { id: 'warrior_bladestorm', category: 'third_depth', name: '永动旋刃', desc: '进入持续旋转状态，移动中也不会中断主攻节奏', icon: '战深', maxLevel: 1 },
-    { id: 'warrior_berserkgod', category: 'third_depth', name: '外放剑潮', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
+    { id: 'warrior_berserkgod', category: 'third_depth', name: '破风利刃', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
     { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '血怒、战吼、处决本能收益上限全部提高，低血时旋转更快、剑刃更多', icon: '战深', maxLevel: 1 }
   ],
   warlock: [
@@ -355,7 +355,7 @@ export const DEPTH_SPEC_POOLS = {
     { id: 'paladin_sacredshield', category: 'third_depth', name: '圣棘回响', desc: '格挡、受击、反制时都会反弹一部分神圣伤害', icon: '骑深', maxLevel: 1 },
     { id: 'paladin_divine', category: 'third_depth', name: '审判禁区', desc: '神圣回击、反制、击退彼此联动，在身边形成难以逼近的审判区', icon: '骑深', maxLevel: 1 }
   ],
-  drone: [
+  druid: [
     { id: 'druid_kingofbeasts', category: 'third_depth', name: '群星坠世', desc: '星落覆盖范围显著扩大，单次施法落点数提升', icon: '德深', maxLevel: 1 },
     { id: 'druid_naturefusion', category: 'third_depth', name: '连星陨爆', desc: '陨石命中后引发二次流星坠击，形成连续轰炸区', icon: '德深', maxLevel: 1 },
     { id: 'druid_astralstorm', category: 'third_depth', name: '天穹潮汐', desc: '星落循环显著加速，流星雨与陨石能更高频进入战场', icon: '德深', maxLevel: 3 }
@@ -365,10 +365,10 @@ export const DEPTH_SPEC_POOLS = {
 // 双职业专精池：按（主职业主题 -> 副职业主题）拆分
 const CUSTOM_DUAL_SPEC_POOLS = {
   mage: {
-    drone: [
-      { id: 'dual_mage_drone_arcanebear', category: 'third_dual', name: '奥术之熊', desc: '你的熊灵继承你法阵效果，在法阵内减伤 +20%、攻击力 +30%', icon: '法德', maxLevel: 1 },
-      { id: 'dual_mage_drone_starwisdom', category: 'third_dual', name: '星辰智慧', desc: '每层使星落命中后，你的激光冷却 -2%（最高 30%）', icon: '法德', maxLevel: 3 },
-      { id: 'dual_mage_drone_natureoverflow', category: 'third_dual', name: '自然溢流', desc: '自然伙伴节点出现权重提高，且熊灵/战鹰/树精强化不会晚于对应宠物本体出现', icon: '法德', maxLevel: 1 }
+    druid: [
+      { id: 'dual_mage_druid_arcanebear', category: 'third_dual', name: '奥术之熊', desc: '你的熊灵继承你法阵效果，在法阵内减伤 +20%、攻击力 +30%', icon: '法德', maxLevel: 1 },
+      { id: 'dual_mage_druid_starwisdom', category: 'third_dual', name: '星辰智慧', desc: '每层使星落命中后，你的激光冷却 -2%（最高 30%）', icon: '法德', maxLevel: 3 },
+      { id: 'dual_mage_druid_natureoverflow', category: 'third_dual', name: '自然溢流', desc: '自然伙伴节点出现权重提高，且熊灵/战鹰/树精强化不会晚于对应宠物本体出现', icon: '法德', maxLevel: 1 }
     ]
   },
   archer: {
@@ -386,10 +386,10 @@ const CUSTOM_DUAL_SPEC_POOLS = {
     ]
   },
   warlock: {
-    drone: [
-      { id: 'dual_warlock_drone_decay', category: 'third_dual', name: '腐败滋养', desc: '你的宠物攻击时有 25% 概率施加腐蚀，且腐蚀伤害可治疗宠物', icon: '术德', maxLevel: 1 },
-      { id: 'dual_warlock_drone_witheringroar', category: 'third_dual', name: '凋零咆哮', desc: '熊灵咆哮时，对周围敌人施加虚弱（伤害 -20%）', icon: '术德', maxLevel: 1 },
-      { id: 'dual_warlock_drone_soulbloom', category: 'third_dual', name: '灵魂绽放', desc: '每层使树精的治疗有 10% 概率同时移除一个负面效果', icon: '术德', maxLevel: 3 }
+    druid: [
+      { id: 'dual_warlock_druid_decay', category: 'third_dual', name: '腐败滋养', desc: '你的宠物攻击时有 25% 概率施加腐蚀，且腐蚀伤害可治疗宠物', icon: '术德', maxLevel: 1 },
+      { id: 'dual_warlock_druid_witheringroar', category: 'third_dual', name: '凋零咆哮', desc: '熊灵咆哮时，对周围敌人施加虚弱（伤害 -20%）', icon: '术德', maxLevel: 1 },
+      { id: 'dual_warlock_druid_soulbloom', category: 'third_dual', name: '灵魂绽放', desc: '每层使树精的治疗有 10% 概率同时移除一个负面效果', icon: '术德', maxLevel: 3 }
     ]
   },
   paladin: {
@@ -399,11 +399,11 @@ const CUSTOM_DUAL_SPEC_POOLS = {
       { id: 'dual_paladin_scatter_retribution', category: 'third_dual', name: '惩戒射击', desc: '对攻击你的敌人，你的下次攻击必定暴击，并附带击退或短暂硬直', icon: '骑猎', maxLevel: 1 }
     ]
   },
-  drone: {
+  druid: {
     warrior: [
-      { id: 'dual_drone_warrior_ironbark', category: 'third_dual', name: '铁木之熊', desc: '你的熊灵获得战士不屈特性：生命低于 50% 时伤害 +30%', icon: '德战', maxLevel: 1 },
-      { id: 'dual_drone_warrior_predator', category: 'third_dual', name: '掠食者', desc: '每层使战鹰对生命低于 50% 的敌人伤害 +10%', icon: '德战', maxLevel: 3 },
-      { id: 'dual_drone_warrior_ancestral', category: 'third_dual', name: '先祖韧性', desc: '你的树精每 5 秒为战士提供一层血怒（无伤害，仅增伤）', icon: '德战', maxLevel: 1 }
+      { id: 'dual_druid_warrior_ironbark', category: 'third_dual', name: '铁木之熊', desc: '你的熊灵获得战士不屈特性：生命低于 50% 时伤害 +30%', icon: '德战', maxLevel: 1 },
+      { id: 'dual_druid_warrior_predator', category: 'third_dual', name: '掠食者', desc: '每层使战鹰对生命低于 50% 的敌人伤害 +10%', icon: '德战', maxLevel: 3 },
+      { id: 'dual_druid_warrior_ancestral', category: 'third_dual', name: '先祖韧性', desc: '你的树精每 5 秒为战士提供一层血怒（无伤害，仅增伤）', icon: '德战', maxLevel: 1 }
     ]
   }
 };
@@ -412,18 +412,18 @@ const GENERIC_DUAL_MAIN_TITLES = {
   mage: '奥术过载',
   archer: '致命节律',
   warrior: '战场压制',
-  warlock: '灾厄涌流',
+  warlock: '召魂涌流',
   paladin: '圣裁锋芒',
-  drone: '星潮迸发'
+  druid: '星潮迸发'
 };
 
 const GENERIC_DUAL_OFF_TITLES = {
   mage: '法阵余韵',
-  archer: '游侠步调',
+  archer: '猎人步调',
   warrior: '不屈战意',
-  warlock: '诅咒灌注',
+  warlock: '召魂灌注',
   paladin: '守护庇佑',
-  drone: '自然回响'
+  druid: '自然回响'
 };
 
 function getDualStyleBonusByAccentCore(accentCoreKey) {
@@ -487,15 +487,15 @@ function buildGenericDualPool(mainCoreKey, accentCoreKey) {
 
 export const DUAL_SPEC_GENERIC_BONUS_BY_ID = {};
 
-const THIRD_SPEC_CORE_ORDER = ['mage', 'archer', 'warrior', 'warlock', 'paladin', 'drone'];
+const THIRD_SPEC_CORE_ORDER = ['mage', 'archer', 'warrior', 'warlock', 'paladin', 'druid'];
 
 const CUSTOM_DUAL_SPEC_PAIR_POOLS = {
-  'drone|mage': CUSTOM_DUAL_SPEC_POOLS.mage.drone,
+  'druid|mage': CUSTOM_DUAL_SPEC_POOLS.mage.druid,
   'archer|mage': CUSTOM_DUAL_SPEC_POOLS.archer.mage,
   'paladin|warrior': CUSTOM_DUAL_SPEC_POOLS.warrior.paladin,
-  'drone|warlock': CUSTOM_DUAL_SPEC_POOLS.warlock.drone,
+  'druid|warlock': CUSTOM_DUAL_SPEC_POOLS.warlock.druid,
   'archer|paladin': CUSTOM_DUAL_SPEC_POOLS.paladin.archer,
-  'drone|warrior': CUSTOM_DUAL_SPEC_POOLS.drone.warrior
+  'druid|warrior': CUSTOM_DUAL_SPEC_POOLS.druid.warrior
 };
 
 const DUAL_SPEC_PAIR_POOLS = {};
@@ -545,7 +545,7 @@ export const DUAL_SPEC_POOLS = THIRD_SPEC_CORE_ORDER.reduce((acc, mainCoreKey) =
 // 技能树 id -> GameScene.buildState.core key
 export const TREE_TO_CORE_KEY = {
   archer: 'archer',
-  druid: 'drone',
+  druid: 'druid',
   warrior: 'warrior',
   mage: 'mage',
   paladin: 'paladin',

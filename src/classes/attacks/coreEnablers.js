@@ -8,7 +8,7 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
   const toCoreKey = (id) => {
     if (!id) return null;
     if (id === 'archer_core') return 'archer';
-    if (id === 'drone_core') return 'drone';
+    if (id === 'drone_core' || id === 'druid_core') return 'druid';
     if (id === 'warrior_core') return 'warrior';
     if (id === 'mage_core') return 'mage';
     if (id === 'paladin_core') return 'paladin';
@@ -57,7 +57,7 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
   }
 
   // 兼容：德鲁伊不再走旧 drone 系统
-  if (pickedCore === 'drone') {
+  if (pickedCore === 'druid') {
     scene.droneEnabled = false;
     scene.droneCount = 0;
     scene.droneTracking = false;

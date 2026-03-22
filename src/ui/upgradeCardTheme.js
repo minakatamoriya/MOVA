@@ -6,7 +6,7 @@ const OFF_CLASS_TREE_BY_ID = {
   off_arcane: 'mage',
   off_ranger: 'archer',
   off_unyielding: 'warrior',
-  off_curse: 'warlock',
+  off_summon: 'summon',
   off_guardian: 'paladin',
   off_nature: 'druid'
 };
@@ -21,10 +21,9 @@ const TREE_DISPLAY_NAME = {
   arcane: '法师',
   ranger: '猎人',
   unyielding: '战士',
-  curse: '术士',
+  summon: '术士',
   guardian: '圣骑士',
-  nature: '德鲁伊',
-  drone: '德鲁伊'
+  nature: '德鲁伊'
 };
 
 const TREE_TO_COLOR_KEY = {
@@ -37,13 +36,13 @@ const TREE_TO_COLOR_KEY = {
   arcane: 'mage',
   ranger: 'archer',
   unyielding: 'warrior',
-  curse: 'warlock',
+  summon: 'warlock',
   guardian: 'paladin',
   nature: 'druid'
 };
 
 const MAIN_TREE_IDS = new Set(['archer', 'druid', 'warrior', 'mage', 'paladin', 'warlock']);
-const OFF_TREE_IDS = new Set(['arcane', 'ranger', 'unyielding', 'curse', 'guardian', 'nature']);
+const OFF_TREE_IDS = new Set(['arcane', 'ranger', 'unyielding', 'summon', 'guardian', 'nature']);
 
 const DEPTH_CARD_THEME_BY_ID = (() => {
   const entries = {};
@@ -135,7 +134,7 @@ function getNormalCardAccent(upgrade) {
 }
 
 function createOffClassTheme(treeKey) {
-  const accent = resolveClassColor(treeKey);
+  const accent = resolveClassColor(TREE_TO_COLOR_KEY[treeKey] || treeKey);
   const brightAccent = brighten(accent, 0.22);
   const treeName = TREE_DISPLAY_NAME[treeKey] || treeKey;
   return {
@@ -228,8 +227,12 @@ function createDualTheme(mainKey, offKey) {
   const offAccent = resolveClassColor(TREE_TO_COLOR_KEY[offKey] || offKey);
   const brightMain = brighten(mainAccent, 0.2);
   const brightOff = brighten(offAccent, 0.2);
-  const mainName = TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[mainKey] || mainKey] || TREE_DISPLAY_NAME[mainKey] || mainKey;
-  const offName = TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[offKey] || offKey] || TREE_DISPLAY_NAME[offKey] || offKey;
+  const mainName = TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[mainKey] || mainKey]
+    || TREE_DISPLAY_NAME[mainKey]
+    || mainKey;
+  const offName = TREE_DISPLAY_NAME[offKey]
+    || TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[offKey] || offKey]
+    || offKey;
   return {
     kind: 'third_dual',
     badge: `${mainName} x ${offName}`,

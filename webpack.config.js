@@ -23,7 +23,12 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.js', '.jsx']
+    extensions: ['.js', '.jsx'],
+    symlinks: true
+  },
+  resolveLoader: {
+    modules: ['node_modules', path.resolve(__dirname, 'node_modules')],
+    symlinks: true
   },
   devServer: {
     static: {

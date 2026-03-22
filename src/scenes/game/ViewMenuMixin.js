@@ -788,7 +788,7 @@ export function applyViewMenuMixin(GameScene) {
           continue;
         }
 
-        const allNodes = [def.core, ...(def.nodes || []), def.ultimate].filter(Boolean);
+        const allNodes = [def.core, ...(def.nodes || [])].filter(Boolean);
         const acquired = allNodes.filter(n => (skillTreeLevels[n.id] || 0) > 0);
         if (acquired.length === 0) {
           const tip = this.add.text(cx, (frameTop + frameBottom) / 2, '尚未获得天赋', {
@@ -834,8 +834,7 @@ export function applyViewMenuMixin(GameScene) {
       bg.setStrokeStyle(2, level > 0 ? treeDef.color : 0x333355);
 
       const isCore = node.id === treeDef.core.id;
-      const isUltimate = node.id === treeDef.ultimate.id;
-      const symbol = isUltimate ? '◎' : (isCore ? '★' : '◆');
+      const symbol = isCore ? '★' : '◆';
       const icon = this.add.text(0, -6, symbol, {
         fontSize: `${Math.floor(size * 0.5)}px`,
         color: '#ffffff',

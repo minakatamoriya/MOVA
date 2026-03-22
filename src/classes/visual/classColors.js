@@ -9,8 +9,7 @@ export const CLASS_COLORS = {
   mage: 0x0b3d91, // 普鲁士蓝（偏深，UI/描边更稳）
   warlock: 0xcc00ff, // 荧光紫
   druid: 0x88ffef, // 淡青
-  archer: 0x1f5f34, // 深绿（猎人）
-  drone: 0x88ffef
+  archer: 0x1f5f34 // 深绿（猎人）
 };
 
 export function resolveClassColor(key) {

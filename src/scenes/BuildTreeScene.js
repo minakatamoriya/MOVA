@@ -162,8 +162,8 @@ export default class BuildTreeScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5));
 
-      // 节点布局：自下而上（底部=初始技能；顶部=终极/最高）
-      const nodes = [def.core, ...def.nodes, def.ultimate];
+      // 节点布局：自下而上（底部=初始技能；顶部=最高阶节点）
+      const nodes = [def.core, ...def.nodes].filter(Boolean);
       const yTop = areaTop + 80;
       const yBottom = areaBottom - 50;
       const stepY = (yBottom - yTop) / Math.max(1, nodes.length - 1);
@@ -181,36 +181,29 @@ export default class BuildTreeScene extends Phaser.Scene {
 
         const level = this.skillTreeLevels[node.id] || 0;
         const maxLevel = node.maxLevel || getMaxLevel(node.id) || 1;
-        const isUltimate = node.id === def.ultimate.id;
         const isCore = node.id === def.core.id;
 
         const nodeW = 220;
-        const nodeH = isUltimate ? 64 : 54;
+        const nodeH = 54;
         const nodeBg = this.textures.exists('ui_card')
           ? this.add.image(cx, y, 'ui_card').setDisplaySize(nodeW, nodeH)
           : this.add.rectangle(cx, y, nodeW, nodeH, 0x0b0b18, 1);
         const nodeBorder = this.add.rectangle(cx, y, nodeW, nodeH, 0x000000, 0);
         nodeBorder.setStrokeStyle(2, level > 0 ? def.color : 0x333355);
 
-        const nameText = this.add.text(cx - 98, y - (isUltimate ? 14 : 12), node.name, {
-          fontSize: isUltimate ? '16px' : '14px',
+        const nameText = this.add.text(cx - 98, y - 12, node.name, {
+          fontSize: '14px',
           color: '#ffffff'
         }).setOrigin(0, 0.5);
 
-        const lvText = this.add.text(cx - 98, y + (isUltimate ? 14 : 12), `等级 ${level}/${maxLevel}`, {
+        const lvText = this.add.text(cx - 98, y + 12, `等级 ${level}/${maxLevel}`, {
           fontSize: '12px',
           color: level > 0 ? '#aaffdd' : '#999999'
         }).setOrigin(0, 0.5);
 
         // 右侧标签
         let tag;
-        if (isUltimate) {
-          tag = this.add.text(cx + 88, y, '终极', {
-            fontSize: '12px',
-            color: '#ffff00',
-            fontStyle: 'bold'
-          }).setOrigin(1, 0.5);
-        } else if (isCore) {
+        if (isCore) {
           tag = this.add.text(cx + 88, y, '初始', {
             fontSize: '12px',
             color: `#${def.color.toString(16).padStart(6, '0')}`,
@@ -224,12 +217,6 @@ export default class BuildTreeScene extends Phaser.Scene {
         this.treeArea.add(lvText);
         if (tag) this.treeArea.add(tag);
       }
-
-      // 底部预览说明
-      this.treeArea.add(this.add.text(cx, areaBottom - 12, `终极技能预览：${def.ultimate.name}`, {
-        fontSize: '12px',
-        color: '#cccccc'
-      }).setOrigin(0.5));
     }
   }
 

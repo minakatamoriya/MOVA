@@ -118,7 +118,7 @@ const EMERGENCY_COOLDOWN_DEFS = {
       return `生命低于30%时自动触发：消耗${Math.round((state.hpCostPct || 0) * 100)}%生命召唤地狱火，持续${seconds}秒。当前等级使地狱火生命为玩家${hpScale}%基准、攻击为${damageScale}%基准、每击回复${healPerHit}生命。冷却30秒。`;
     }
   },
-  drone: {
+  druid: {
     talentId: 'druid_nourish',
     enhancementTalentId: 'druid_nourish_growth',
     skillId: 'druid_nourish',
@@ -1710,6 +1710,11 @@ class GameScene extends Phaser.Scene {
 
     this.collisionManager?.createBossBulletHitEffect?.(hitX, hitY, bullet);
 
+    // 玩家受击反馈：轻震屏 + 受击闪红
+    if (this.vfxSystem) {
+      this.vfxSystem.shakeCamera(60, 0.003);
+    }
+
     if (killed) {
       this.collisionManager?.onPlayerDeath?.();
     }
@@ -1730,6 +1735,11 @@ class GameScene extends Phaser.Scene {
     this.player?.onDealDamage?.(damage);
     this.applyWarriorOffclassHitEffects?.(boss, now);
     this.applyMageFrostHitEffects?.(boss, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
+    if ((bullet.onHitApplyArcaneExposure || 0) > 1) {
+      boss.debuffs = boss.debuffs || {};
+      boss.debuffs.arcaneCircleExposureUntil = now + Math.max(200, Number(bullet.onHitApplyArcaneExposureMs || 1200));
+      boss.debuffs.arcaneCircleExposureMult = Number(bullet.onHitApplyArcaneExposure || 1);
+    }
 
     if (!killed && (bullet.stunChance || 0) > 0 && typeof boss.applyStun === 'function') {
       const chance = Phaser.Math.Clamp(Number(bullet.stunChance || 0), 0, 0.95);
@@ -1802,6 +1812,11 @@ class GameScene extends Phaser.Scene {
     this.player?.onDealDamage?.(damage);
     this.applyWarriorOffclassHitEffects?.(enemy, now);
     this.applyMageFrostHitEffects?.(enemy, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
+    if ((bullet.onHitApplyArcaneExposure || 0) > 1) {
+      enemy.debuffs = enemy.debuffs || {};
+      enemy.debuffs.arcaneCircleExposureUntil = now + Math.max(200, Number(bullet.onHitApplyArcaneExposureMs || 1200));
+      enemy.debuffs.arcaneCircleExposureMult = Number(bullet.onHitApplyArcaneExposure || 1);
+    }
     this.presentManagedPlayerMinionHit({ bullet, enemy, hitX, hitY, damage, isCrit });
   }
 
@@ -1830,6 +1845,22 @@ class GameScene extends Phaser.Scene {
 
   presentManagedPlayerBossHit({ bullet, boss, hitX, hitY, damage, isCrit } = {}) {
     if (!bullet || !boss) return;
+
+    // 暴击震屏 + 时停反馈
+    if (isCrit && this.vfxSystem) {
+      this.vfxSystem.shakeCamera(100, 0.006);
+      this.vfxSystem.hitlag(60);
+    }
+
+    // 粒子命中爆发（有 flare 纹理时使用）
+    if (this.vfxSystem) {
+      const hitColor = bullet.hitEffectColor ?? (bullet.poison ? 0x66ff99 : (isCrit ? 0xff3333 : 0xffff00));
+      this.vfxSystem.playParticleHit(hitX, hitY, {
+        color: hitColor,
+        count: isCrit ? 12 : 6,
+        tints: isCrit ? [0xff3333, 0xff6644, 0xffcc88] : [hitColor, 0xffcc88, 0xffd26a]
+      });
+    }
 
     const dmgOptions = { isCrit: !!isCrit };
     if (bullet.hitEffectType === 'moonfire') {
@@ -2380,7 +2411,7 @@ class GameScene extends Phaser.Scene {
   installPassiveCooldownSkills() {
     const potionSmall = getItemById('potion_small');
 
-    ['paladin', 'archer', 'warrior', 'mage', 'warlock', 'drone'].forEach((coreKey) => {
+    ['paladin', 'archer', 'warrior', 'mage', 'warlock', 'druid'].forEach((coreKey) => {
       const state = this.getEmergencyCooldownTalentState(coreKey);
       if (!state) return;
 
@@ -2420,7 +2451,7 @@ class GameScene extends Phaser.Scene {
             this.triggerMageFrostNova(next);
           } else if (coreKey === 'warlock') {
             this.triggerWarlockInfernal(next);
-          } else if (coreKey === 'drone') {
+          } else if (coreKey === 'druid') {
             this.player.activateEmergencyRegen?.(next.value, next.durationMs);
           }
           this.toast?.show?.({ icon: next.iconText, text: `${next.label} 触发` }, { durationMs: 1000 });

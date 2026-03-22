@@ -71,6 +71,20 @@ function segmentDistanceToPoint(ax, ay, bx, by, px, py) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+function getTargetHitbox(target) {
+  if (!target) return null;
+  if (typeof target.getHitboxPosition === 'function') {
+    const hitbox = target.getHitboxPosition();
+    if (hitbox && Number.isFinite(hitbox.x) && Number.isFinite(hitbox.y)) return hitbox;
+  }
+
+  return {
+    x: Number(target.x || 0),
+    y: Number(target.y || 0),
+    radius: Number(target.hitboxRadius || target.hitRadius || target.radius || 16)
+  };
+}
+
 export default class TestMinion extends Phaser.GameObjects.Container {
   constructor(scene, config) {
     super(scene, config.x || 0, config.y || 0);
@@ -1232,6 +1246,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       }
     }
 
+    const target = this.scene?.getPrimaryTarget?.(this) || player;
+    const targetHitbox = getTargetHitbox(target) || getTargetHitbox(player);
+
     // 轻量“体积”分离：避免多个小怪完全重叠
     // 节流：每 3 帧执行一次（O(n²) 检测在小怪多时开销大）
     this._separationFrame = ((this._separationFrame || 0) + 1) % 3;
@@ -1281,27 +1298,27 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       this.y += (dy / dist) * step;
 
       // 玩家-小怪分离：不允许重叠，留一点点距离
-      if (player && player.isAlive) {
-        const pr = player.getHitboxPosition?.().radius ?? (player.hitboxRadius || 16);
-        const ddx = this.x - player.x;
-        const ddy = this.y - player.y;
+      if (target && target.active !== false && target.isAlive !== false && targetHitbox) {
+        const pr = targetHitbox.radius || 16;
+        const ddx = this.x - targetHitbox.x;
+        const ddy = this.y - targetHitbox.y;
         const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
         const minDist = (this.radius || 16) + pr + 4;
         if (d < minDist) {
           const nx = ddx / d;
           const ny = ddy / d;
-          this.x = player.x + nx * minDist;
-          this.y = player.y + ny * minDist;
+          this.x = targetHitbox.x + nx * minDist;
+          this.y = targetHitbox.y + ny * minDist;
         }
       }
 
-      this.tryShoot(time, player);
+      this.tryShoot(time, target);
       return;
     }
 
-    if (this.minionType === 'ring_shooter' && player && player.isAlive) {
-      const dx = player.x - this.x;
-      const dy = player.y - this.y;
+    if (this.minionType === 'ring_shooter' && target && target.active !== false && target.isAlive !== false && targetHitbox) {
+      const dx = targetHitbox.x - this.x;
+      const dy = targetHitbox.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
       const attackRange = Math.max(80, this.shootRange || 210);
       const preferredRange = Math.max(60, attackRange - 40);
@@ -1316,19 +1333,19 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         this.y -= (dy / dist) * backoff;
       }
 
-      this.tryShoot(time, player);
+      this.tryShoot(time, target);
       return;
     }
 
-    if (this.minionType === 'charger' && player && player.isAlive) {
-      this.updateCharger(time, delta, player, speedMult);
+    if (this.minionType === 'charger' && target && target.active !== false && target.isAlive !== false) {
+      this.updateCharger(time, delta, target, speedMult);
       return;
     }
 
     // shooter（不跟随Boss）：缓慢靠近到理想距离并射击
-    if (this.minionType === 'shooter' && player && player.isAlive) {
-      const dx = player.x - this.x;
-      const dy = player.y - this.y;
+    if (this.minionType === 'shooter' && target && target.active !== false && target.isAlive !== false && targetHitbox) {
+      const dx = targetHitbox.x - this.x;
+      const dy = targetHitbox.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
 
       // 远程单位：进入预警范围后，先走到“可攻击距离”再开始攻击
@@ -1339,56 +1356,60 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         this.y += (dy / dist) * step;
       }
 
-      this.tryShoot(time, player);
+      this.tryShoot(time, target);
       return;
     }
 
     // chaser：追玩家
-    if (player && player.isAlive) {
-      const dx = player.x - this.x;
-      const dy = player.y - this.y;
+    if (target && target.active !== false && target.isAlive !== false && targetHitbox) {
+      const dx = targetHitbox.x - this.x;
+      const dy = targetHitbox.y - this.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
       const step = Math.min(dist, (this.moveSpeed * speedMult) * dt);
       this.x += (dx / dist) * step;
       this.y += (dy / dist) * step;
 
-      this.tryContact(time, player);
+      this.tryContact(time, target);
 
       // 玩家-小怪分离：先结算接触伤害，再把小怪推出一点点
-      const pr = player.getHitboxPosition?.().radius ?? (player.hitboxRadius || 16);
-      const ddx = this.x - player.x;
-      const ddy = this.y - player.y;
+      const pr = targetHitbox.radius || 16;
+      const ddx = this.x - targetHitbox.x;
+      const ddy = this.y - targetHitbox.y;
       const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
       const minDist = (this.radius || 16) + pr + 4;
       if (d < minDist) {
         const nx = ddx / d;
         const ny = ddy / d;
-        this.x = player.x + nx * minDist;
-        this.y = player.y + ny * minDist;
+        this.x = targetHitbox.x + nx * minDist;
+        this.y = targetHitbox.y + ny * minDist;
       }
     }
   }
 
   tryContact(time, player) {
-    if (!player || !player.isAlive) return;
+    if (!player || player.isAlive === false || player.active === false) return;
     if (this.contactDamage <= 0) return;
 
     const now = time || (this.scene.time?.now ?? 0);
     if (this._lastContactAt && now - this._lastContactAt < this.contactCdMs) return;
 
-    const pr = player.getHitboxPosition?.().radius ?? (player.hitboxRadius || 16);
-    const dist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+    const hitbox = getTargetHitbox(player);
+    if (!hitbox) return;
+    const pr = hitbox.radius || 16;
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hitbox.x, hitbox.y);
     // 与“玩家-小怪分离”的留缝一致：不重叠但仍算接触伤害
     const separationPad = 4;
     if (dist <= (this.radius + pr + separationPad)) {
       this._lastContactAt = now;
-      player.takeDamage(this.contactDamage);
+      player.takeDamage?.(this.contactDamage, { attacker: this, source: 'minion_contact' });
     }
   }
 
   tryShoot(time, player) {
-    if (!player || !player.isAlive) return;
-    const dist = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+    if (!player || player.isAlive === false || player.active === false) return;
+    const hitbox = getTargetHitbox(player);
+    if (!hitbox) return;
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hitbox.x, hitbox.y);
     if (dist > Math.max(60, this.shootRange || 190)) return;
     const now = time || (this.scene.time?.now ?? 0);
     if (this._lastShotAt && now - this._lastShotAt < this.shootCdMs) return;
@@ -1399,7 +1420,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       return;
     }
 
-    const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+    const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, hitbox.x, hitbox.y);
     const count = Math.max(1, this.shootBulletCount || 1);
     const spread = Number.isFinite(this.shootBulletSpread) ? this.shootBulletSpread : 0.0;
     const speed = Math.max(60, this.shootBulletSpeed || 180);
@@ -1468,7 +1489,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   fireReadableRingShot(player) {
-    const targetHp = player?.getHitboxPosition?.() || { x: player.x, y: player.y };
+    const targetHp = getTargetHitbox(player);
+    if (!targetHp) return;
     const angle = Phaser.Math.Angle.Between(this.x, this.y, targetHp.x, targetHp.y);
     const color = 0xff2ca8;
     const speed = Math.max(90, this.shootBulletSpeed || 140);
@@ -1501,10 +1523,11 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   startChargeWindup(time, player) {
-    if (!player || !player.isAlive) return;
+    if (!player || player.isAlive === false || player.active === false) return;
     if (this._chargeState !== 'idle') return;
 
-    const hp = player.getHitboxPosition?.() || { x: player.x, y: player.y };
+    const hp = getTargetHitbox(player);
+    if (!hp) return;
     const dx = hp.x - this.x;
     const dy = hp.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
@@ -1556,7 +1579,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   updateCharger(time, delta, player, speedMult) {
     const now = time || (this.scene?.time?.now ?? 0);
     const dt = (delta || 0) / 1000;
-    const hp = player.getHitboxPosition?.() || { x: player.x, y: player.y, radius: player.hitboxRadius || 16 };
+    const hp = getTargetHitbox(player);
+    if (!hp) return;
 
     if (this._chargeState === 'windup') {
       const targetDx = hp.x - this.x;
@@ -1632,7 +1656,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         const sweptHit = segmentHitsCircle(prevX, prevY, this.x, this.y, hp.x, hp.y, impactRadius);
         if (directHit || sweptHit) {
           this._chargeHitApplied = true;
-          player.takeDamage(this.chargeDamage);
+          player.takeDamage?.(this.chargeDamage, { attacker: this, source: 'minion_charge' });
           this.scene?.vfxSystem?.playHit?.(hp.x, hp.y, {
             color: 0xffc27a,
             radius: 10,

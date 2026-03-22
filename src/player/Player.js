@@ -250,7 +250,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // 约定：itemId -> cooldownUntilGameplayMs（可暂停的局内时钟）
     this.itemCooldowns = Object.create(null);
 
-    // 副职业：奥术法阵、陷阱、圣印、魂火等运行态
+    // 副职业：奥术炮台、诱饵假人、圣印、魂火等运行态
     this.arcaneCircleEnabled = false;
     this.arcaneCircleLevel = 0;
     this.arcaneCircleRangeLevel = 0;
@@ -264,6 +264,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.arcaneCircleInsideLastFrame = false;
 
     this.rangerSnareTrapLevel = 0;
+    this.rangerBeaconEnabled = false;
     this.rangerHuntmarkLevel = 0;
     this.rangerSpikeTrapLevel = 0;
     this.rangerBlastTrapLevel = 0;
@@ -296,6 +297,8 @@ export default class Player extends Phaser.GameObjects.Container {
     this.curseEmberEchoLevel = 0;
     this.curseEmberStacks = 0;
     this.curseEmberUntil = 0;
+    this.summonStarterGuardCount = 0;
+    this.summonStarterMageCount = 0;
 
     this.druidPetBearLevel = 0;
     this.druidPetHawkLevel = 0;
@@ -361,7 +364,7 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 猎人基础技能（箭矢连射）
     this.archerEnabled = true;
-    this.archerVolleySpread = Phaser.Math.DegToRad(8.6);
+    this.archerVolleySpread = Phaser.Math.DegToRad(6.4);
     this.archerVolleyCount = 3;
     this.archerVolleyMode = 'fan'; // fan | ring
     this.archerVolleyRingCount = 10;
@@ -1027,7 +1030,7 @@ export default class Player extends Phaser.GameObjects.Container {
    * 创建子弹（支持角度散射）
    * 青绿色玩家子弹，具有粒子尾迹效果
    */
-  createBulletAtAngle(angleOffset, isAbsoluteAngle = false) {
+  createBulletAtAngle(angleOffset, isAbsoluteAngle = false, opts = {}) {
     const coreKey = normalizeCoreKey(this.mainCoreKey || this.scene?.registry?.get?.('mainCore') || 'archer');
     const isArcher = coreKey === 'archer';
     const fireAngle = isAbsoluteAngle ? angleOffset : (-Math.PI / 2 + angleOffset);
@@ -1045,8 +1048,12 @@ export default class Player extends Phaser.GameObjects.Container {
 
     const muzzleBaseY = this.y - this.visualRadius * 0.28;
     const muzzleDistance = Math.max(12, this.visualRadius * 0.72);
-    const spawnX = this.x + Math.cos(fireAngle) * muzzleDistance;
-    const spawnY = muzzleBaseY + Math.sin(fireAngle) * muzzleDistance;
+    const spawnX = Number.isFinite(Number(opts.spawnX))
+      ? Number(opts.spawnX)
+      : (this.x + Math.cos(fireAngle) * muzzleDistance);
+    const spawnY = Number.isFinite(Number(opts.spawnY))
+      ? Number(opts.spawnY)
+      : (muzzleBaseY + Math.sin(fireAngle) * muzzleDistance);
 
     // 玩家本体也统一走场景发弹入口，避免武器层关心底层实现。
     const bullet = this.scene.createManagedPlayerBullet(
@@ -2089,14 +2096,14 @@ export default class Player extends Phaser.GameObjects.Container {
     // 基础：3 列；L1: 5 列；L2: 强化弹道质量；L3: 7 列。
     if (this.archerArrowScatterLevel === 1) {
       this.archerVolleyCount = 5;
-      this.archerVolleySpread = Phaser.Math.DegToRad(7.8);
+      this.archerVolleySpread = Phaser.Math.DegToRad(5.6);
     } else if (this.archerArrowScatterLevel === 2) {
       this.archerVolleyCount = 5;
-      this.archerVolleySpread = Phaser.Math.DegToRad(6.3);
+      this.archerVolleySpread = Phaser.Math.DegToRad(4.7);
       this.archerVolleyLockTurn = Phaser.Math.DegToRad(420);
     } else {
       this.archerVolleyCount = 7;
-      this.archerVolleySpread = Phaser.Math.DegToRad(5.8);
+      this.archerVolleySpread = Phaser.Math.DegToRad(4.2);
       this.archerVolleyLockTurn = Phaser.Math.DegToRad(480);
     }
   }
@@ -2125,7 +2132,7 @@ export default class Player extends Phaser.GameObjects.Container {
       // 法师主普攻：单发冰弹
       this.weaponType = 'mage_frostbolt';
       this.baseFireRate = 460;
-    } else if (coreKey === 'drone') {
+    } else if (coreKey === 'druid') {
       // 德鲁伊主普攻：星落
       this.weaponType = 'starfall';
       this.baseFireRate = this.baseFireRateMoonfire;

@@ -108,7 +108,19 @@ export default class PreloadScene extends Phaser.Scene {
 
   create() {
     console.log('PreloadScene: 资源加载完成，切换到主菜单');
-    
+
+    // 生成 flare 纹理（用于粒子系统：命中爆发、弹幕拖尾等）
+    if (!this.textures.exists('flare')) {
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      // 8×8 柔和白色圆点（向外渐隐）
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(4, 4, 3);
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(4, 4, 4);
+      g.generateTexture('flare', 8, 8);
+      g.destroy();
+    }
+
     // 短暂延迟后切换到主菜单
     this.time.delayedCall(500, () => {
       this.scene.start('MenuScene');

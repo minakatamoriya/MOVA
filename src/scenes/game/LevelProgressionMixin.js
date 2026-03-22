@@ -514,7 +514,7 @@ export function applyLevelProgressionMixin(GameScene) {
         { id: 'archer_core', coreKey: 'archer', label: '猎人', glyph: '➶' },
         { id: 'mage_core', coreKey: 'mage', label: '法师', glyph: '✦' },
         { id: 'warlock_core', coreKey: 'warlock', label: '术士', glyph: '☠' },
-        { id: 'drone_core', coreKey: 'drone', label: '德鲁伊', glyph: '✺' }
+        { id: 'druid_core', coreKey: 'druid', label: '德鲁伊', glyph: '✺' }
       ];
 
       const iconR = 34;
@@ -672,6 +672,7 @@ export function applyLevelProgressionMixin(GameScene) {
               return '护盾脉冲';
             case 'warlock_core':
               return '剧毒新星';
+            case 'druid_core':
             case 'drone_core':
               return '星落';
             default:

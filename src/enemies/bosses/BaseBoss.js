@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { organicPulse, breathGlow } from '../../systems/NoiseHelper';
 
 /**
  * Boss 基类
@@ -367,6 +368,13 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.invincibleIndicator.setStrokeStyle(2, 0xffff00, 0.5);
     this.invincibleIndicator.setVisible(!!this.isInvincible);
     this.add(this.invincibleIndicator);
+
+    // PostFX：Boss 本体发光光晕（WebGL 可用时）
+    if (this.sprite?.postFX) {
+      try {
+        this._bossGlowFx = this.sprite.postFX.addGlow(this.bossColor, 4, 0, false, 0.1, 24);
+      } catch (_) { /* Canvas2D 降级 */ }
+    }
 
     this.createScreenHud();
 
@@ -958,6 +966,17 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   update(_time, delta) {
     if (this.isDestroyed || !this.isAlive) return;
 
+    // Boss 呼吸光效：噪声驱动的发光脉动
+    if (this._bossGlowFx && this.sprite?.postFX) {
+      const glowStr = breathGlow(_time, 3, 2, 0.002);
+      this._bossGlowFx.outerStrength = Math.max(0, glowStr);
+    }
+    // Boss 有机呼吸缩放
+    if (this.sprite) {
+      const pulse = organicPulse(_time, 0, 0.03, 0.0015);
+      this.sprite.setScale(pulse * ((this.bossSize || 50) * 2 / (this.sprite.width || 64)));
+    }
+
     // 脱战规则：玩家离开预警圈（红圈）后 Boss 立刻停下（停止移动与攻击）
     const disengageRadius = this.getCombatDisengageRadius();
     if (this.combatActive && disengageRadius > 0) {
@@ -1303,7 +1322,7 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
   }
 
   getPrimaryTarget() {
-    return this.scene?.getPrimaryTarget?.() || this.scene?.player || null;
+    return this.scene?.getPrimaryTarget?.(this) || this.scene?.player || null;
   }
 
   /**

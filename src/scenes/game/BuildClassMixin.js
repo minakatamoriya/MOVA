@@ -100,7 +100,7 @@ export function applyBuildClassMixin(GameScene) {
           off_arcane: 'arcane',
           off_ranger: 'ranger',
           off_unyielding: 'unyielding',
-          off_curse: 'curse',
+          off_summon: 'summon',
           off_guardian: 'guardian',
           off_nature: 'nature'
         };
@@ -109,7 +109,7 @@ export function applyBuildClassMixin(GameScene) {
           || (normalizedUpgradeId.startsWith('arcane_') ? 'arcane' : null)
           || (normalizedUpgradeId.startsWith('ranger_') ? 'ranger' : null)
           || (normalizedUpgradeId.startsWith('unyielding_') ? 'unyielding' : null)
-          || (normalizedUpgradeId.startsWith('curse_') ? 'curse' : null)
+          || (normalizedUpgradeId.startsWith('summon_') ? 'summon' : null)
           || (normalizedUpgradeId.startsWith('guardian_') ? 'guardian' : null)
           || (normalizedUpgradeId.startsWith('nature_') || normalizedUpgradeId.startsWith('druid_pet_') ? 'nature' : null);
         if (inferredFaction) {
@@ -130,16 +130,16 @@ export function applyBuildClassMixin(GameScene) {
         case 'off_arcane':
         case 'off_ranger':
         case 'off_unyielding':
-        case 'off_curse':
+        case 'off_summon':
         case 'off_guardian':
         case 'off_nature': {
           const map = {
             off_arcane: { faction: 'arcane', accentCore: 'mage' },
             off_ranger: { faction: 'ranger', accentCore: 'archer' },
             off_unyielding: { faction: 'unyielding', accentCore: 'warrior' },
-            off_curse: { faction: 'curse', accentCore: 'warlock' },
+            off_summon: { faction: 'summon', accentCore: 'warlock' },
             off_guardian: { faction: 'guardian', accentCore: 'paladin' },
-            off_nature: { faction: 'nature', accentCore: 'drone' }
+            off_nature: { faction: 'nature', accentCore: 'druid' }
           };
           const picked = map[normalizedUpgradeId];
           if (picked) {
@@ -147,31 +147,44 @@ export function applyBuildClassMixin(GameScene) {
             if (this.player?.setOffCore) this.player.setOffCore(picked.accentCore);
 
             if (normalizedUpgradeId === 'off_arcane') {
+              this.player.arcaneCircleEnabled = true;
               this.player.universalFireRateMult = Math.max(0.6, (this.player.universalFireRateMult || 1) * 0.92);
               this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
             }
 
             if (normalizedUpgradeId === 'off_ranger') {
+              this.player.rangerBeaconEnabled = true;
               this.player.offEntryDodgeChance = Math.max(this.player.offEntryDodgeChance || 0, 0.10);
               this.player.dodgeChance = Math.min(0.95, (this.player.dodgeChance || 0) + 0.10);
             }
 
             if (normalizedUpgradeId === 'off_unyielding') {
-              this.player.offEntryCritChance = Math.max(this.player.offEntryCritChance || 0, 0.15);
-              this.player.critChance = Math.min(0.95, (this.player.critChance || this.player.baseCritChance || 0.05) + 0.15);
+              this.player.bloodrageEnabled = true;
+              this.player.bloodragePerStack = Math.max(this.player.bloodragePerStack || 0, 0.02);
+              this.player.offEntryCritChance = Math.max(this.player.offEntryCritChance || 0, 0.10);
+              this.player.critChance = Math.min(0.95, (this.player.critChance || this.player.baseCritChance || 0.05) + 0.10);
             }
 
-            if (normalizedUpgradeId === 'off_curse') {
+            if (normalizedUpgradeId === 'off_summon') {
               this.player.offEntryDamageMult = Math.max(this.player.offEntryDamageMult || 1, 1.08);
+              this.player.summonStarterGuardCount = Math.max(1, this.player.summonStarterGuardCount || 0);
+              this.player.summonStarterMageCount = Math.max(1, this.player.summonStarterMageCount || 0);
+              this.undeadSummonManager?.refreshFromPlayer?.();
+              this.undeadSummonManager?.refreshSummonStats?.();
               this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
             }
 
             if (normalizedUpgradeId === 'off_guardian') {
               this.player.offEntryDamageReduction = Math.max(this.player.offEntryDamageReduction || 0, 0.10);
+              this.player.guardianBlockLevel = Math.max(this.player.guardianBlockLevel || 0, 1);
+              this.player.guardianBlockBonus = Math.max(this.player.guardianBlockBonus || 0, 0.05);
+              this.player.guardianSacredSealLevel = Math.max(this.player.guardianSacredSealLevel || 0, 1);
+              this.player.guardianSealMaxStacks = Math.max(this.player.guardianSealMaxStacks || 0, 3);
             }
 
             if (normalizedUpgradeId === 'off_nature') {
-              this.player.offEntryRegenRatioPerSec = Math.max(this.player.offEntryRegenRatioPerSec || 0, 0.008);
+              this.petManager?.unlockPetByUpgradeId?.('druid_pet_bear');
+              this.petManager?.refreshPetStats?.();
             }
 
             const mainCoreKey = this.registry.get('mainCore') || this.buildState.core;
@@ -182,110 +195,6 @@ export function applyBuildClassMixin(GameScene) {
         }
 
         case 'archer_core':
-          applyCoreUpgrade(this, upgrade.id);
-          break;
-        case 'archer_rapidfire':
-          this.player.archerRapidfire = true;
-          break;
-        case 'archer_pierce':
-          this.player.archerPierce = true;
-          break;
-        case 'archer_arrowrain':
-          this.player.archerArrowRain = true;
-          break;
-
-        case 'archer_range':
-          this.player.upgradeArcherRange();
-          break;
-        case 'archer_rate':
-          this.player.upgradeArcherRate();
-          break;
-        case 'archer_damage':
-          this.player.upgradeArcherDamage();
-          break;
-        case 'archer_volley':
-          this.player.upgradeArcherVolley();
-          break;
-        case 'archer_volley_spread':
-          this.player.upgradeArcherVolleySpread();
-          break;
-        case 'archer_volley_rate':
-          this.player.upgradeArcherVolleyRate();
-          break;
-        case 'archer_volley_count':
-          this.player.upgradeArcherVolleyCount();
-          break;
-        case 'archer_volley_ring':
-          this.player.enableArcherVolleyRing();
-          break;
-        case 'archer_volley_homing':
-          this.player.enableArcherVolleyHoming();
-          break;
-        case 'archer_volley_explode':
-          this.player.enableArcherVolleyExplode();
-          break;
-        case 'drone_core':
-          applyCoreUpgrade(this, upgrade.id);
-          break;
-        case 'druid_pet_bear':
-          this.player.druidPetBearLevel = Math.min(3, (this.player.druidPetBearLevel || 0) + 1);
-          if (this.petManager) {
-            this.petManager.unlockPetByUpgradeId(upgrade.id);
-            this.petManager.refreshPetStats?.();
-          }
-          break;
-        case 'druid_pet_hawk':
-          this.player.druidPetHawkLevel = Math.min(3, (this.player.druidPetHawkLevel || 0) + 1);
-          if (this.petManager) {
-            this.petManager.unlockPetByUpgradeId(upgrade.id);
-            this.petManager.refreshPetStats?.();
-          }
-          break;
-        case 'druid_pet_treant':
-          this.player.druidPetTreantLevel = Math.min(3, (this.player.druidPetTreantLevel || 0) + 1);
-          if (this.petManager) {
-            this.petManager.unlockPetByUpgradeId(upgrade.id);
-            this.petManager.refreshPetStats?.();
-          }
-          break;
-
-        case 'nature_bear_guard':
-          this.player.natureBearGuardLevel = Math.min(3, (this.player.natureBearGuardLevel || 0) + 1);
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'nature_hawk_huntmark':
-          this.player.natureHawkHuntmarkLevel = Math.min(3, (this.player.natureHawkHuntmarkLevel || 0) + 1);
-          break;
-        case 'nature_treant_bloom':
-          this.player.natureTreantBloomLevel = Math.min(3, (this.player.natureTreantBloomLevel || 0) + 1);
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'druid_meteor_shower':
-          this.player.druidMeteorShower = true;
-          break;
-        case 'druid_meteor':
-          this.player.druidMeteor = true;
-          break;
-        case 'druid_starfire':
-          this.player.druidStarfire = true;
-          break;
-        case 'warrior_core':
-          applyCoreUpgrade(this, upgrade.id);
-          break;
-        case 'warrior_spin':
-          this.player.warriorSpin = true;
-          if (this.slashArcSpan) this.slashArcSpan = Math.PI * 2;
-          break;
-        case 'warrior_swordqi':
-          this.player.warriorSwordQi = true;
-          break;
-        case 'warrior_endure':
-          this.player.warriorEndure = true;
-          break;
-        case 'warrior_hp':
-          this.upgradeWarriorHp();
-          break;
-        case 'warrior_thorns':
           this.upgradeWarriorThorns();
           break;
         case 'warrior_range':
@@ -449,27 +358,27 @@ export function applyBuildClassMixin(GameScene) {
           this.player.deathDuelEnabled = true;
           break;
 
-        case 'curse_necrotic_vitality':
+        case 'summon_necrotic_vitality':
           this.player.curseNecroticVitalityLevel = Math.min(3, (this.player.curseNecroticVitalityLevel || 0) + 1);
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
-        case 'curse_skeleton_guard':
+        case 'summon_skeleton_guard':
           this.player.curseSkeletonGuardLevel = Math.min(3, (this.player.curseSkeletonGuardLevel || 0) + 1);
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
-        case 'curse_skeleton_mage':
+        case 'summon_skeleton_mage':
           this.player.curseSkeletonMageLevel = Math.min(3, (this.player.curseSkeletonMageLevel || 0) + 1);
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
-        case 'curse_mage_empower':
+        case 'summon_mage_empower':
           this.player.curseMageEmpowerLevel = Math.min(3, (this.player.curseMageEmpowerLevel || 0) + 1);
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
-        case 'curse_guard_bulwark':
+        case 'summon_guard_bulwark':
           this.player.curseGuardBulwarkLevel = Math.min(3, (this.player.curseGuardBulwarkLevel || 0) + 1);
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
-        case 'curse_ember_echo':
+        case 'summon_ember_echo':
           this.player.curseEmberEchoLevel = Math.min(3, (this.player.curseEmberEchoLevel || 0) + 1);
           break;
 
@@ -598,14 +507,14 @@ export function applyBuildClassMixin(GameScene) {
           break;
 
         // === 第三天赋：双职业专精 ===
-        case 'dual_mage_drone_arcanebear':
+        case 'dual_mage_druid_arcanebear':
           this.player.dualArcanebear = true;
           this.petManager?.refreshPetStats?.();
           break;
-        case 'dual_mage_drone_starwisdom':
+        case 'dual_mage_druid_starwisdom':
           this.player.dualStarwisdomLevel = Math.min(3, (this.player.dualStarwisdomLevel || 0) + 1);
           break;
-        case 'dual_mage_drone_natureoverflow':
+        case 'dual_mage_druid_natureoverflow':
           this.player.dualNatureoverflow = true;
           break;
         case 'dual_scatter_mage_enchantedarrow':
@@ -626,15 +535,15 @@ export function applyBuildClassMixin(GameScene) {
         case 'dual_warrior_paladin_sacredspin':
           this.player.dualSacredspin = true;
           break;
-        case 'dual_warlock_drone_decay':
+        case 'dual_warlock_druid_decay':
           this.player.dualDecay = true;
           this.petManager?.refreshPetStats?.();
           break;
-        case 'dual_warlock_drone_witheringroar':
+        case 'dual_warlock_druid_witheringroar':
           this.player.dualWitheringroar = true;
           this.petManager?.refreshPetStats?.();
           break;
-        case 'dual_warlock_drone_soulbloom':
+        case 'dual_warlock_druid_soulbloom':
           this.player.dualSoulbloomLevel = Math.min(3, (this.player.dualSoulbloomLevel || 0) + 1);
           this.petManager?.refreshPetStats?.();
           break;
@@ -647,15 +556,15 @@ export function applyBuildClassMixin(GameScene) {
         case 'dual_paladin_scatter_retribution':
           this.player.dualRetribution = true;
           break;
-        case 'dual_drone_warrior_ironbark':
+        case 'dual_druid_warrior_ironbark':
           this.player.dualIronbark = true;
           this.petManager?.refreshPetStats?.();
           break;
-        case 'dual_drone_warrior_predator':
+        case 'dual_druid_warrior_predator':
           this.player.dualPredatorLevel = Math.min(3, (this.player.dualPredatorLevel || 0) + 1);
           this.petManager?.refreshPetStats?.();
           break;
-        case 'dual_drone_warrior_ancestral':
+        case 'dual_druid_warrior_ancestral':
           this.player.dualAncestral = true;
           this.petManager?.refreshPetStats?.();
           break;
@@ -683,9 +592,41 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     getPrimaryTarget() {
+      const decoy = this.getEnemyAggroTarget?.();
+      if (decoy) return decoy;
       const tank = this.petManager?.getTankPet?.();
       if (tank) return tank;
       return this.player;
+    },
+
+    getEnemyAggroTarget(source = null) {
+      const decoys = this.getHittableDecoys?.() || [];
+      if (decoys.length > 0 && source && Number.isFinite(source.x) && Number.isFinite(source.y)) {
+        let best = null;
+        let bestDistSq = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < decoys.length; i += 1) {
+          const decoy = decoys[i];
+          const radius = Math.max(1, Number(decoy.tauntRadius || 0));
+          const dx = decoy.x - source.x;
+          const dy = decoy.y - source.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > radius * radius) continue;
+          if (distSq < bestDistSq) {
+            best = decoy;
+            bestDistSq = distSq;
+          }
+        }
+        if (best) return best;
+      }
+
+      const tank = this.petManager?.getTankPet?.();
+      if (tank) return tank;
+      return this.player || null;
+    },
+
+    getHittableDecoys() {
+      const traps = Array.isArray(this._rangerTraps) ? this._rangerTraps : [];
+      return traps.filter((trap) => trap && trap.active !== false && trap.isAlive !== false && (trap.currentHp || 0) > 0 && !trap._consumed);
     },
 
     switchBuildCore(nextCore) {
@@ -708,7 +649,7 @@ export function applyBuildClassMixin(GameScene) {
           this.laserEnabled = false;
           if (this.player?.disableLaserBuild) this.player.disableLaserBuild();
           break;
-        case 'drone':
+        case 'druid':
           this.droneEnabled = false;
           this.droneCount = 0;
           this.droneTracking = false;
@@ -883,6 +824,23 @@ export function applyBuildClassMixin(GameScene) {
       try {
         this.markLevelUpInteraction();
         this.buildState.levelUps += 1;
+
+        const shownEntryIds = (offer?.options || [])
+          .map((opt) => normalizeSkillId(opt?.id))
+          .filter((id) => OFF_FACTION_ENTRY_OPTIONS.some((opt) => opt.id === id));
+        const chosenId = normalizeSkillId(chosen.id);
+        const rejectedEntryIds = shownEntryIds.filter((id) => id !== chosenId);
+
+        if (shownEntryIds.length > 0) {
+          if (OFF_FACTION_ENTRY_OPTIONS.some((opt) => opt.id === chosenId)) {
+            this.registry.set('rejectedOffFactionEntries', []);
+          } else if (rejectedEntryIds.length > 0 && !(this.registry.get('offFaction') || null)) {
+            const existingRejected = this.registry.get('rejectedOffFactionEntries') || [];
+            const mergedRejected = Array.from(new Set([...(Array.isArray(existingRejected) ? existingRejected : []), ...rejectedEntryIds]));
+            this.registry.set('rejectedOffFactionEntries', mergedRejected);
+          }
+        }
+
         this.applyUpgrade(chosen);
 
         this._pendingLevelUpPoints = Math.max(0, this.getPendingLevelUpPoints() - 1);
@@ -1275,6 +1233,7 @@ export function applyBuildClassMixin(GameScene) {
 
       const choiceCount = this.levelUpChoiceCount || 3;
       const offFactionEntryIds = new Set(OFF_FACTION_ENTRY_OPTIONS.map((opt) => opt.id));
+      const rejectedOffFactionEntries = new Set(this.registry.get('rejectedOffFactionEntries') || []);
 
       const skillTreeLevels = this.registry.get('skillTreeLevels') || {};
       const getSkillLevelValue = (id) => {
@@ -1344,10 +1303,15 @@ export function applyBuildClassMixin(GameScene) {
       let options = this.pickWeightedUpgrades(combinedPool, choiceCount, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
 
       if (!offFaction && stage !== 'main_only') {
+        let entryOptions = OFF_FACTION_ENTRY_OPTIONS.filter((opt) => !rejectedOffFactionEntries.has(opt.id));
+        if (entryOptions.length <= 0) {
+          this.registry.set('rejectedOffFactionEntries', []);
+          entryOptions = [...OFF_FACTION_ENTRY_OPTIONS];
+        }
         const desiredCount = choiceCount + 1;
         options = this.appendWeightedUniqueUpgrades(
           options,
-          OFF_FACTION_ENTRY_OPTIONS,
+          entryOptions,
           Math.max(0, desiredCount - options.length),
           (opt) => this.getUpgradeOfferWeight(opt, weightContext)
         );
@@ -2317,7 +2281,7 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       const mainCore = this.registry?.get?.('mainCore') || this.buildState?.core;
-      const active = mainCore === 'drone' || this.player.mainCoreKey === 'drone'
+      const active = mainCore === 'druid' || this.player.mainCoreKey === 'druid'
         || this.player.weaponType === 'starfall';
       if (!active) {
         if (this._druidRangeRing) this._druidRangeRing.setVisible(false);
@@ -2454,7 +2418,21 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     updateOffclassSystems(time, delta) {
-      if (!this.player || this.player.isAlive === false) return;
+      if (!this.player || this.player.isAlive === false) {
+        if (Array.isArray(this._offArcaneTurrets) && this._offArcaneTurrets.length > 0) {
+          this._offArcaneTurrets.forEach((turret) => this.destroyArcaneTurret?.(turret));
+          this._offArcaneTurrets = [];
+        }
+        if (Array.isArray(this._rangerTraps) && this._rangerTraps.length > 0) {
+          this._rangerTraps.forEach((trap) => {
+            [trap?.base, trap?.body, trap?.head, trap?.lure, trap?.tauntRing, trap?.shotRing, trap?.hpBarBg, trap?.hpBarFill].forEach((node) => {
+              try { node?.destroy?.(); } catch (_) { /* ignore */ }
+            });
+          });
+          this._rangerTraps = [];
+        }
+        return;
+      }
       const now = this.time?.now ?? time ?? 0;
       this.updateOffclassTargetDebuffs(now);
       this.updateWarriorOffclassState(time, delta);
@@ -2831,152 +2809,332 @@ export function applyBuildClassMixin(GameScene) {
       }
     },
 
-    updateArcaneCircleOffclassEffects(time, delta) {
+    destroyArcaneTurret(turret) {
+      if (!turret) return;
+      [turret.aura, turret.ring, turret.innerRing, turret.crystal, turret.core].forEach((node) => {
+        try { node?.destroy?.(); } catch (_) { /* ignore */ }
+      });
+      turret._consumed = true;
+    },
+
+    spawnArcaneTurret(x, y, now) {
       const player = this.player;
-      if (!player) return;
+      if (!player) return null;
 
-      const now = this.time?.now ?? time ?? 0;
+      const aura = this.add.circle(x, y + 10, 34, 0x73bfff, 0.06);
+      aura.setDepth(46);
+      aura.setStrokeStyle(2, 0x73bfff, 0.18);
+
+      const ring = this.add.circle(x, y + 10, 18, 0x7bc6ff, 0.09);
+      ring.setDepth(47);
+      ring.setStrokeStyle(2, 0x7bc6ff, 0.76);
+
+      const innerRing = this.add.circle(x, y + 10, 9, 0xb7ebff, 0.08);
+      innerRing.setDepth(48);
+      innerRing.setStrokeStyle(1, 0xdff6ff, 0.54);
+
+      const crystal = this.add.rectangle(x, y - 8, 16, 28, 0x8de4ff, 0.92);
+      crystal.setDepth(49);
+      crystal.setAngle(45);
+      crystal.setBlendMode(Phaser.BlendModes.ADD);
+
+      const core = this.add.circle(x, y - 8, 4, 0xf4fdff, 0.95);
+      core.setDepth(50);
+      core.setBlendMode(Phaser.BlendModes.ADD);
+
       const level = Math.max(0, player.arcaneCircleLevel || 0);
-      if (level <= 0) {
-        player.arcaneCircleState = null;
-        player.setArcaneCircleBuffActive?.(false);
-        if (this._offArcaneCircleRing) this._offArcaneCircleRing.setVisible(false);
-        return;
-      }
-
-      const durationMs = [0, 2600, 3200, 3800][level] || 2600;
-      const cooldownFactor = [1, 0.92, 0.84, 0.76][Math.max(0, Math.min(3, player.arcaneFlowcastingLevel || 0))] || 1;
-      const cooldownMs = Math.round(([0, 4200, 3600, 3000][level] || 4200) * cooldownFactor);
-      const radius = 110 + (player.arcaneCircleRangeLevel || 0) * 24 + level * 8;
-
-      if (!player.arcaneCircleState) {
-        player.arcaneCircleState = { x: player.x, y: player.y, radius, endsAt: 0, nextSpawnAt: 0, nextPulseAt: 0, spawnId: 0, explodedSpawnId: 0 };
-      }
-
-      const state = player.arcaneCircleState;
-      if (now >= (state.endsAt || 0) && now >= (state.nextSpawnAt || 0)) {
-        state.x = player.x;
-        state.y = player.y;
-        state.radius = radius;
-        state.endsAt = now + durationMs;
-        state.nextSpawnAt = now + cooldownMs;
-        state.nextPulseAt = now;
-        state.spawnId = (state.spawnId || 0) + 1;
-      }
-
-      const active = now < (state.endsAt || 0);
-      state.radius = radius;
-
-      if (!active && (state.endsAt || 0) > 0 && (state.explodedSpawnId || 0) !== (state.spawnId || 0)) {
-        state.explodedSpawnId = state.spawnId || 0;
-        this.triggerArcaneCircleExpiration?.(state, now);
-      }
-
-      if (!this._offArcaneCircleRing || !this._offArcaneCircleRing.active) {
-        this._offArcaneCircleRing = this.add.circle(0, 0, radius, 0x7bc6ff, 0.08);
-        this._offArcaneCircleRing.setDepth(48);
-        this._offArcaneCircleRing.setStrokeStyle(3, 0x7bc6ff, 0.72);
-      }
-
-      this._offArcaneCircleRing.setVisible(active);
-      if (active) {
-        this._offArcaneCircleRing.setPosition(state.x, state.y);
-        this._offArcaneCircleRing.setRadius(state.radius);
-        this._offArcaneCircleRing.setAlpha(0.16 + Math.sin((time || 0) * 0.008) * 0.04);
-      }
-
-      player.updateArcaneCircle?.(delta, false);
-      if (!active) return;
-      if (now < (state.nextPulseAt || 0)) return;
-
-      state.nextPulseAt = now + 700;
-
-      const targets = this.getOffclassCombatTargets();
       const fireLevel = Math.max(0, player.arcaneFireCircleLevel || 0);
-      const frostLevel = Math.max(0, player.arcaneFrostCircleLevel || 0);
-      const resonanceLevel = Math.max(0, player.arcaneResonanceMarkLevel || 0);
-      const exposureMult = [1, 1.08, 1.16, 1.24][resonanceLevel] || 1;
-      const freezeMs = [0, 260, 420, 600][frostLevel] || 0;
+      const durationLevel = Math.max(0, player.arcaneFrostCircleLevel || 0);
+      const rangeLevel = Math.max(0, player.arcaneCircleRangeLevel || 0);
+      const flowLevel = Math.max(0, player.arcaneFlowcastingLevel || 0);
 
-      const pulse = this.add.circle(state.x, state.y, Math.max(22, state.radius * 0.22), 0xbfe7ff, 0.14);
-      pulse.setDepth(49);
-      pulse.setStrokeStyle(2, 0xdff4ff, 0.55);
+      return {
+        x,
+        y,
+        aura,
+        ring,
+        innerRing,
+        crystal,
+        core,
+        spawnedAt: now,
+        expiresAt: now + (15000 + durationLevel * 1800),
+        nextShotAt: now + 900,
+        bobSeed: Math.random() * Math.PI * 2,
+        range: 380 + rangeLevel * 80,
+        fireIntervalMs: Math.max(1800, 3000 - level * 220),
+        damageScale: 0.62 + fireLevel * 0.24 + level * 0.08,
+        beamWidth: 30 + level * 10 + fireLevel * 3,
+        windupMs: Math.max(120, 210 - level * 18),
+        exposureMult: [1, 1.06, 1.12, 1.18][Math.max(0, Math.min(3, player.arcaneResonanceMarkLevel || 0))] || 1
+      };
+    },
+
+    beginArcaneTurretPulse(turret, target, now) {
+      if (!turret || turret._consumed || !target || !target.isAlive || target.isInvincible) return;
+
+      const originX = turret.core?.x ?? turret.x;
+      const originY = turret.core?.y ?? (turret.y - 10);
+      const aimAngle = Phaser.Math.Angle.Between(originX, originY, target.x, target.y);
+      const windupMs = Math.max(90, turret.windupMs || 180);
+
+      const flash = this.add.circle(originX, originY, Math.max(12, (turret.beamWidth || 30) * 0.42), 0xe3fbff, 0.2);
+      flash.setDepth(52);
+      flash.setBlendMode(Phaser.BlendModes.ADD);
+
+      const spark = this.add.rectangle(originX, originY, Math.max(18, (turret.beamWidth || 30) * 0.9), Math.max(10, (turret.beamWidth || 30) * 0.22), 0xb7efff, 0.36);
+      spark.setDepth(53);
+      spark.setAngle(Phaser.Math.RadToDeg(aimAngle));
+      spark.setBlendMode(Phaser.BlendModes.ADD);
+
       this.tweens.add({
-        targets: pulse,
-        alpha: 0,
-        scaleX: 2.1,
-        scaleY: 2.1,
-        duration: 280,
-        onComplete: () => pulse.destroy()
+        targets: [flash, spark],
+        alpha: { from: 0.18, to: 0.95 },
+        scaleX: { from: 0.75, to: 1.9 },
+        scaleY: { from: 0.75, to: 1.25 },
+        duration: windupMs,
+        ease: 'Sine.Out',
+        onComplete: () => {
+          try { flash.destroy(); } catch (_) { /* ignore */ }
+          try { spark.destroy(); } catch (_) { /* ignore */ }
+        }
       });
 
-      for (let i = 0; i < targets.length; i++) {
-        const target = targets[i];
-        if (!target || !target.isAlive || target.isInvincible) continue;
-        const dx = target.x - state.x;
-        const dy = target.y - state.y;
-        if ((dx * dx + dy * dy) > (state.radius * state.radius)) continue;
+      this.time.delayedCall(windupMs, () => {
+        if (!turret || turret._consumed || !target || !target.isAlive || target.isInvincible) return;
+        this.fireArcaneTurretPulse(turret, target, this.time?.now ?? now + windupMs);
+      });
+    },
 
-        target.debuffs = target.debuffs || {};
-        if (resonanceLevel > 0) {
-          target.debuffs.arcaneCircleExposureUntil = now + 900;
-          target.debuffs.arcaneCircleExposureMult = exposureMult;
+    fireArcaneTurretPulse(turret, target, now) {
+      const player = this.player;
+      if (!player || !turret || !target || !target.isAlive || target.isInvincible) return;
+
+      const startX = turret.core?.x ?? turret.x;
+      const startY = turret.core?.y ?? (turret.y - 8);
+      const beamAngle = Phaser.Math.Angle.Between(startX, startY, target.x, target.y);
+      const beamLength = Math.max(40, turret.range || 280);
+      const fadeTailLength = Math.max(140, beamLength * 0.42);
+      const visualLength = beamLength + fadeTailLength;
+      const dirX = Math.cos(beamAngle);
+      const dirY = Math.sin(beamAngle);
+      const endX = startX + dirX * visualLength;
+      const endY = startY + dirY * visualLength;
+      const beamWidth = Math.max(20, turret.beamWidth || 30);
+
+      const bodyLength = beamLength;
+      const tailLength = fadeTailLength;
+      const segments = [];
+      const segmentDefs = [
+        {
+          length: bodyLength,
+          offset: bodyLength * 0.5,
+          glowAlpha: 0.18,
+          shellAlpha: 0.32,
+          coreAlpha: 0.96,
+          widthMult: 1
+        },
+        {
+          length: tailLength * 0.38,
+          offset: bodyLength + (tailLength * 0.19),
+          glowAlpha: 0.13,
+          shellAlpha: 0.18,
+          coreAlpha: 0.28,
+          widthMult: 0.92
+        },
+        {
+          length: tailLength * 0.34,
+          offset: bodyLength + (tailLength * 0.55),
+          glowAlpha: 0.08,
+          shellAlpha: 0.1,
+          coreAlpha: 0.12,
+          widthMult: 0.74
+        },
+        {
+          length: tailLength * 0.28,
+          offset: bodyLength + (tailLength * 0.86),
+          glowAlpha: 0.03,
+          shellAlpha: 0.04,
+          coreAlpha: 0.04,
+          widthMult: 0.54
         }
-        if (freezeMs > 0 && typeof target.applyFreeze === 'function') {
-          target.applyFreeze(freezeMs, { source: 'off_arcane_circle', player, radius: state.radius });
+      ];
+      for (let i = 0; i < segmentDefs.length; i++) {
+        const segment = segmentDefs[i];
+        const centerX = startX + dirX * segment.offset;
+        const centerY = startY + dirY * segment.offset;
+        const width = beamWidth * segment.widthMult;
+
+        const glow = this.add.rectangle(centerX, centerY, segment.length, width * 1.7, 0x6ed8ff, segment.glowAlpha);
+        glow.setDepth(48);
+        glow.setAngle(Phaser.Math.RadToDeg(beamAngle));
+        glow.setBlendMode(Phaser.BlendModes.ADD);
+
+        const shell = this.add.rectangle(centerX, centerY, segment.length, width, 0x93ebff, segment.shellAlpha);
+        shell.setDepth(49);
+        shell.setAngle(Phaser.Math.RadToDeg(beamAngle));
+        shell.setBlendMode(Phaser.BlendModes.ADD);
+
+        const core = this.add.rectangle(centerX, centerY, segment.length, Math.max(6, width * 0.42), 0xf6feff, segment.coreAlpha);
+        core.setDepth(50);
+        core.setAngle(Phaser.Math.RadToDeg(beamAngle));
+        core.setBlendMode(Phaser.BlendModes.ADD);
+
+        segments.push(glow, shell, core);
+      }
+
+      const muzzle = this.add.circle(startX, startY, Math.max(12, beamWidth * 0.48), 0xc8f6ff, 0.52);
+      muzzle.setDepth(51);
+      muzzle.setBlendMode(Phaser.BlendModes.ADD);
+
+      const beamFx = [...segments, muzzle];
+      this.tweens.add({
+        targets: beamFx,
+        alpha: 0,
+        duration: 170,
+        ease: 'Quad.Out',
+        onComplete: () => {
+          for (let i = 0; i < beamFx.length; i++) {
+            try { beamFx[i].destroy(); } catch (_) { /* ignore */ }
+          }
         }
+      });
+
+      const targets = this.getOffclassCombatTargets();
+      const beamHalfWidth = beamWidth * 0.5;
+      const pierced = [];
+      for (let i = 0; i < targets.length; i++) {
+        const enemy = targets[i];
+        if (!enemy || !enemy.isAlive || enemy.isInvincible) continue;
+        const relX = enemy.x - startX;
+        const relY = enemy.y - startY;
+        const projected = relX * dirX + relY * dirY;
+        const targetRadius = Math.max(10, Number(enemy.bossSize ?? enemy.radius ?? 18));
+        if (projected < -targetRadius || projected > beamLength + targetRadius) continue;
+        const perpendicular = Math.abs(relX * dirY - relY * dirX);
+        if (perpendicular > beamHalfWidth + targetRadius) continue;
+        pierced.push({ enemy, projected });
+      }
+
+      pierced.sort((a, b) => a.projected - b.projected);
+      for (let i = 0; i < pierced.length; i++) {
+        const enemy = pierced[i].enemy;
+        const frostStacks = Math.max(0, enemy.debuffs?.mageFrost?.stacks || 0);
+        const synergyMult = frostStacks > 0 ? (1 + Math.min(0.18, frostStacks * 0.04)) : 1;
+        const damageResult = calculateResolvedDamage({
+          attacker: player,
+          target: enemy,
+          baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * turret.damageScale * synergyMult)),
+          now,
+          canCrit: true
+        });
+        enemy.takeDamage?.(damageResult.amount, { attacker: player, source: 'arcane_turret_beam', suppressHitReaction: i > 0 });
+        player.onDealDamage?.(damageResult.amount);
+        this.applyWarriorOffclassHitEffects?.(enemy, now);
+        if (turret.exposureMult > 1) {
+          enemy.debuffs = enemy.debuffs || {};
+          enemy.debuffs.arcaneCircleExposureUntil = now + 1200;
+          enemy.debuffs.arcaneCircleExposureMult = turret.exposureMult;
+        }
+        this.showDamageNumber?.(enemy.x, enemy.y - Math.max(20, (enemy.bossSize || enemy.radius || 18) + 14), damageResult.amount, {
+          color: '#96ddff',
+          isCrit: damageResult.isCrit,
+          whisper: true
+        });
+        this.createHitEffect?.(enemy.x, enemy.y, 0xc9f4ff);
       }
     },
 
     triggerArcaneCircleExpiration(state, now) {
+      if (!state) return;
+      this.destroyArcaneTurret(state);
+    },
+
+    updateArcaneCircleOffclassEffects(time, delta) {
       const player = this.player;
-      const fireLevel = Math.max(0, player?.arcaneFireCircleLevel || 0);
-      if (!player || fireLevel <= 0 || !state) return;
+      const now = this.time?.now ?? time ?? 0;
+      if (!player) return;
 
-      const radius = Math.max(64, Math.round((state.radius || 120) * 0.75));
-      const explosion = this.add.circle(state.x, state.y, 24, 0xff9850, 0.18);
-      explosion.setDepth(49);
-      explosion.setStrokeStyle(3, 0xffd2a3, 0.9);
-      this.tweens.add({
-        targets: explosion,
-        alpha: 0,
-        scaleX: radius / 24,
-        scaleY: radius / 24,
-        duration: 260,
-        onComplete: () => explosion.destroy()
-      });
+      player.arcaneCircleState = null;
+      player.setArcaneCircleBuffActive?.(false);
 
-      const burnDuration = [0, 1600, 2400, 3200][fireLevel] || 0;
-      const burnInterval = 800;
-      const explosionDamageScale = [0, 1.0, 1.35, 1.7][fireLevel] || 0;
-      const burnTickScale = [0, 0.14, 0.2, 0.28][fireLevel] || 0;
-      const targets = this.getOffclassCombatTargets();
-      for (let i = 0; i < targets.length; i++) {
-        const target = targets[i];
-        if (!target || !target.isAlive || target.isInvincible) continue;
-        const dx = target.x - state.x;
-        const dy = target.y - state.y;
-        if ((dx * dx + dy * dy) > (radius * radius)) continue;
+      if (!player.arcaneCircleEnabled) {
+        const turrets = Array.isArray(this._offArcaneTurrets) ? this._offArcaneTurrets : [];
+        turrets.forEach((turret) => this.destroyArcaneTurret(turret));
+        this._offArcaneTurrets = [];
+        return;
+      }
 
-        const damageResult = calculateResolvedDamage({
-          attacker: player,
-          target,
-          baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * explosionDamageScale)),
-          now,
-          canCrit: false
-        });
-        target.takeDamage?.(damageResult.amount, { attacker: player, source: 'arcane_circle_explosion' });
-        player.onDealDamage?.(damageResult.amount);
-        this.applyWarriorOffclassHitEffects?.(target, now);
-        this.showDamageNumber?.(target.x, target.y - 28, damageResult.amount, { color: '#ffb36b' });
+      const level = Math.max(0, player?.arcaneCircleLevel || 0);
+      const flowLevel = Math.max(0, Math.min(3, player.arcaneFlowcastingLevel || 0));
+      const maxTurrets = 1 + (flowLevel >= 2 ? 1 : 0) + (flowLevel >= 3 ? 1 : 0);
+      const cooldownMs = Math.max(6500, 10000 - level * 700 - flowLevel * 900);
 
-        if (burnDuration > 0 && burnTickScale > 0) {
-          target.debuffs = target.debuffs || {};
-          target.debuffs.arcaneBurnUntil = now + burnDuration;
-          target.debuffs.arcaneBurnTickAt = now + burnInterval;
-          target.debuffs.arcaneBurnInterval = burnInterval;
-          target.debuffs.arcaneBurnDamage = Math.max(1, Math.round((player.bulletDamage || 1) * burnTickScale));
+      this._offArcaneTurrets = (this._offArcaneTurrets || []).filter((turret) => turret && !turret._consumed);
+      for (let i = this._offArcaneTurrets.length - 1; i >= 0; i--) {
+        const turret = this._offArcaneTurrets[i];
+        if (!turret) continue;
+        if (now >= (turret.expiresAt || 0)) {
+          this.triggerArcaneCircleExpiration(turret, now);
+          this._offArcaneTurrets.splice(i, 1);
         }
+      }
+
+      if (!player._arcaneTurretLastPos) {
+        player._arcaneTurretLastPos = { x: player.x, y: player.y };
+      }
+      if (!Number.isFinite(player._arcaneTurretNextAt)) player._arcaneTurretNextAt = 0;
+
+      if (now >= player._arcaneTurretNextAt) {
+        const turret = this.spawnArcaneTurret(player.x, player.y, now);
+        if (turret) {
+          this._offArcaneTurrets.push(turret);
+          while (this._offArcaneTurrets.length > maxTurrets) {
+            const oldest = this._offArcaneTurrets.shift();
+            if (oldest) this.triggerArcaneCircleExpiration(oldest, now);
+          }
+          player._arcaneTurretLastPos = { x: player.x, y: player.y };
+          player._arcaneTurretNextAt = now + cooldownMs;
+        }
+      }
+
+      const targets = this.getOffclassCombatTargets();
+      for (let i = 0; i < this._offArcaneTurrets.length; i++) {
+        const turret = this._offArcaneTurrets[i];
+        if (!turret || turret._consumed) continue;
+
+        const bob = Math.sin((now * 0.0055) + turret.bobSeed);
+        turret.crystal?.setPosition?.(turret.x, turret.y - 10 + bob * 3.5);
+        turret.core?.setPosition?.(turret.x, turret.y - 10 + bob * 3.5);
+        turret.ring?.setAlpha?.(0.16 + Math.sin((now * 0.007) + turret.bobSeed) * 0.06);
+        turret.innerRing?.setScale?.(1 + Math.sin((now * 0.0065) + turret.bobSeed) * 0.08);
+        turret.aura?.setAlpha?.(0.08 + Math.sin((now * 0.0048) + turret.bobSeed) * 0.03);
+
+        if (now < (turret.nextShotAt || 0)) continue;
+
+        let target = null;
+        let bestScore = Number.POSITIVE_INFINITY;
+        for (let t = 0; t < targets.length; t++) {
+          const enemy = targets[t];
+          if (!enemy || !enemy.isAlive || enemy.isInvincible) continue;
+          const dx = enemy.x - turret.x;
+          const dy = enemy.y - turret.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > (turret.range * turret.range)) continue;
+          const frostStacks = Math.max(0, enemy.debuffs?.mageFrost?.stacks || 0);
+          const score = distSq - frostStacks * 2400;
+          if (score < bestScore) {
+            bestScore = score;
+            target = enemy;
+          }
+        }
+
+        if (!target) {
+          turret.nextShotAt = now + 120;
+          continue;
+        }
+
+        turret.nextShotAt = now + turret.fireIntervalMs;
+        this.beginArcaneTurretPulse(turret, target, now);
       }
     },
 
@@ -2993,27 +3151,170 @@ export function applyBuildClassMixin(GameScene) {
       const player = this.player;
       if (!player) return;
 
-      const hasSnare = (player.rangerSnareTrapLevel || 0) > 0;
-      const hasBlast = (player.rangerBlastTrapLevel || 0) > 0;
-      if (!hasSnare && !hasBlast) return;
+      const hasBeacon = !!player.rangerBeaconEnabled || (player.rangerSnareTrapLevel || 0) > 0;
+      if (!hasBeacon) return;
 
       const target = this.getNearestEnemy(Math.max(180, player.archerArrowRange || 300));
-      const type = hasSnare && hasBlast
-        ? (((this._rangerTrapCycle = (this._rangerTrapCycle || 0) + 1) % 2 === 0) ? 'snare' : 'blast')
-        : (hasBlast ? 'blast' : 'snare');
-      const radius = type === 'blast' ? 24 : 22;
-      const x = target?.x ?? (player.x + 90);
-      const y = target?.y ?? player.y;
-      const color = type === 'blast' ? 0xff945f : 0xa6ff7b;
-      const trap = this.add.circle(x, y, radius, color, 0.18);
-      trap.setDepth(52);
-      trap.setStrokeStyle(2, color, 0.88);
-      trap.type = type;
-      trap.radius = radius;
-      trap.effectRadius = type === 'blast' ? (84 + (player.rangerBlastTrapLevel || 0) * 18) : (72 + (player.rangerSnareTrapLevel || 0) * 12);
-      trap.expiresAt = (this.time?.now ?? time ?? 0) + 5200;
+      const angle = target ? Phaser.Math.Angle.Between(player.x, player.y, target.x, target.y) : 0;
+      const placeDist = 70;
+      const x = player.x + Math.cos(angle) * placeDist;
+      const y = player.y + Math.sin(angle) * placeDist;
+
+      const base = this.add.circle(x, y + 12, 18, 0xa6ff7b, 0.16);
+      base.setDepth(52);
+      base.setStrokeStyle(2, 0xc9ff9a, 0.85);
+      const body = this.add.rectangle(x, y - 2, 16, 28, 0x85d95f, 0.86);
+      body.setDepth(53);
+      const head = this.add.circle(x, y - 22, 8, 0xe8ffd6, 0.9);
+      head.setDepth(54);
+      const lure = this.add.circle(x, y - 2, 28, 0xc3ff85, 0.06);
+      lure.setDepth(51);
+      lure.setStrokeStyle(2, 0xdfffaa, 0.26);
+      const tauntRing = this.add.circle(x, y, 1, 0xb7ff84, 0.025);
+      tauntRing.setDepth(50);
+      tauntRing.setStrokeStyle(2, 0xdfffaa, 0.28);
+      tauntRing.setVisible(this.isRangeIndicatorEnabled());
+      const shotRing = this.add.circle(x, y, 1, 0xf3ffe1, 0.012);
+      shotRing.setDepth(49);
+      shotRing.setStrokeStyle(1, 0xf3ffe1, 0.24);
+      shotRing.setVisible(this.isRangeIndicatorEnabled());
+      const hpBarBg = this.add.rectangle(x, y - 34, 30, 3, 0x091109, 0.68);
+      hpBarBg.setOrigin(0.5, 0.5);
+      hpBarBg.setDepth(55);
+      hpBarBg.setStrokeStyle(1, 0xe8ffd6, 0.16);
+      const hpBarFill = this.add.rectangle(x - 14, y - 34, 28, 1.5, 0xb7ff84, 0.96);
+      hpBarFill.setOrigin(0, 0.5);
+      hpBarFill.setDepth(56);
+
+      const tauntRadius = 172 + (player.rangerSnareTrapLevel || 0) * 22 + (player.rangerTrapcraftLevel || 0) * 18;
+      const shotRange = Math.max(
+        tauntRadius + 28,
+        228 + (player.rangerSnareTrapLevel || 0) * 26 + (player.rangerTrapcraftLevel || 0) * 22 + (player.rangerSpikeTrapLevel || 0) * 12
+      );
+
+      const trap = {
+        type: 'decoy',
+        active: true,
+        isAlive: true,
+        isDecoy: true,
+        x,
+        y,
+        radius: 20,
+        hitRadius: 22,
+        maxHp: Math.round((player.maxHp || 100) * 0.45),
+        currentHp: Math.round((player.maxHp || 100) * 0.45),
+        damageTakenMult: 1,
+        base,
+        body,
+        head,
+        lure,
+        tauntRing,
+        shotRing,
+        hpBarBg,
+        hpBarFill,
+        tauntRadius,
+        effectRadius: 96 + (player.rangerBlastTrapLevel || 0) * 22,
+        shotRange,
+        expiresAt: (this.time?.now ?? time ?? 0) + 15000,
+        nextShotAt: (this.time?.now ?? time ?? 0) + 1200,
+        bobSeed: Math.random() * Math.PI * 2,
+        _consumed: false,
+        getHitboxPosition() {
+          return { x: this.x, y: this.y, radius: this.hitRadius || this.radius || 20 };
+        }
+      };
+      const updateTrapHpBar = () => {
+        const pct = Phaser.Math.Clamp((trap.currentHp || 0) / Math.max(1, trap.maxHp || 1), 0, 1);
+        const width = 28;
+        trap.hpBarBg?.setPosition?.(trap.x, trap.y - 34);
+        trap.hpBarFill?.setPosition?.(trap.x - 14, trap.y - 34);
+        trap.hpBarFill?.setSize?.(Math.max(1.2, width * pct), 1.5);
+        trap.hpBarFill?.setFillStyle?.(pct >= 0.55 ? 0xb7ff84 : (pct >= 0.25 ? 0xffd36e : 0xff8a6e), 0.96);
+      };
+      updateTrapHpBar();
+      trap.takeDamage = (damage) => {
+        if (trap._consumed || trap.isAlive === false) return true;
+        const incoming = Math.max(1, Math.round(Number(damage) || 0));
+        trap.currentHp = Math.max(0, (trap.currentHp || 0) - incoming);
+
+        const alphaPct = Phaser.Math.Clamp((trap.currentHp || 0) / Math.max(1, trap.maxHp || 1), 0.25, 1);
+        trap.body?.setAlpha?.(0.45 + alphaPct * 0.41);
+        trap.head?.setAlpha?.(0.55 + alphaPct * 0.35);
+        trap.base?.setAlpha?.(0.08 + alphaPct * 0.18);
+        updateTrapHpBar();
+
+        const hitFlash = this.add.circle(trap.x, trap.y - 12, 10, 0xf6ffe8, 0.18);
+        hitFlash.setDepth(57);
+        this.tweens.add({
+          targets: hitFlash,
+          alpha: 0,
+          scaleX: 1.6,
+          scaleY: 1.6,
+          duration: 140,
+          onComplete: () => hitFlash.destroy()
+        });
+
+        if (trap.currentHp <= 0) {
+          trap.isAlive = false;
+          this.triggerRangerTrap(trap, null, this.time?.now ?? time ?? 0);
+          return true;
+        }
+        return false;
+      };
       this._rangerTraps = this._rangerTraps || [];
       this._rangerTraps.push(trap);
+    },
+
+    fireRangerTrapArrow(trap, target, now) {
+      const player = this.player;
+      if (!trap || !target || !player || !target.isAlive || target.isInvincible) return false;
+
+      const snareLevel = Math.max(0, Math.min(3, player.rangerSnareTrapLevel || 0));
+      const spikeLevel = Math.max(0, Math.min(3, player.rangerSpikeTrapLevel || 0));
+      const arrowScale = ([0.18, 0.24, 0.32, 0.42][snareLevel] || 0.18) + ([0, 0.05, 0.08, 0.12][spikeLevel] || 0);
+      const aimAngle = Phaser.Math.Angle.Between(trap.x, trap.y - 8, target.x, target.y);
+      const speed = 520;
+      const rangeLifeMs = Math.max(260, Math.round((Math.max(120, trap.shotRange || trap.tauntRadius || 180) / speed) * 1000));
+      const arrow = this.createManagedPlayerBullet(
+        trap.x + Math.cos(aimAngle) * 18,
+        trap.y - 12 + Math.sin(aimAngle) * 18,
+        0x9dff72,
+        {
+          radius: 6,
+          speed,
+          damage: Math.max(1, Math.round((player.bulletDamage || 1) * arrowScale)),
+          angleOffset: aimAngle,
+          isAbsoluteAngle: true,
+          type: 'arrow',
+          hasGlow: true,
+          glowRadius: 15,
+          glowColor: 0xdcffb2,
+          strokeColor: 0xf6ffe8,
+          arrowLenMult: 1.45,
+          arrowThickMult: 0.88,
+          arrowHighlightColor: 0xf6ffe8,
+          arrowFeatherColor: 0x88dd63,
+          trailColor: 0xa8ff7f,
+          trailIntervalMs: 44,
+          trailLifeMs: 180,
+          trailAlpha: 0.72,
+          trailMode: 'streak',
+          trailScaleX: 3.8,
+          trailScaleY: 0.2,
+          noCrit: true,
+          maxLifeMs: rangeLifeMs,
+          tags: ['off_ranger_decoy_arrow']
+        }
+      );
+      if (!arrow) return false;
+
+      arrow.hitEffectColor = 0xdfffaa;
+      arrow.visualCoreColor = 0x9dff72;
+      arrow.visualAccentColor = 0xf6ffe8;
+
+      this.applyRangerTrapMark(target, now);
+      this.showDamageNumber?.(trap.x, trap.y - 34, '射', { color: '#dcffb2', fontSize: 14, whisper: true });
+      return true;
     },
 
     triggerRangerTrap(trap, triggerTarget, now) {
@@ -3021,17 +3322,17 @@ export function applyBuildClassMixin(GameScene) {
       if (!trap || !player) return;
 
       const targets = this.getOffclassCombatTargets();
-      const snareMs = [0, 900, 1200, 1600][Math.max(0, Math.min(3, player.rangerSnareTrapLevel || 0))] || 0;
-      const blastDamageBase = [0, 0.9, 1.25, 1.6][Math.max(0, Math.min(3, player.rangerBlastTrapLevel || 0))] || 0;
+      const snareMs = [0, 260, 380, 520][Math.max(0, Math.min(3, player.rangerSnareTrapLevel || 0))] || 0;
+      const blastDamageBase = [0.55, 0.78, 1.02, 1.35][Math.max(0, Math.min(3, player.rangerBlastTrapLevel || 0))] || 0.55;
       const spikeLevel = Math.max(0, Math.min(3, player.rangerSpikeTrapLevel || 0));
-      const spikeDamageBase = [0, 0.35, 0.55, 0.8][spikeLevel] || 0;
-      const spikeSlowMs = [0, 260, 420, 620][spikeLevel] || 0;
+      const spikeDamageBase = [0.08, 0.18, 0.26, 0.36][spikeLevel] || 0.08;
+      const spikeSlowMs = [0, 180, 260, 360][spikeLevel] || 0;
       const spikeDotDuration = [0, 2200, 3000, 3800][spikeLevel] || 0;
-      const spikeDotScale = [0, 0.12, 0.18, 0.24][spikeLevel] || 0;
+      const spikeDotScale = [0, 0.08, 0.12, 0.18][spikeLevel] || 0;
 
-      const burst = this.add.circle(trap.x, trap.y, Math.max(18, trap.radius), trap.type === 'blast' ? 0xffcc7a : 0xc7ff9a, 0.2);
+      const burst = this.add.circle(trap.x, trap.y, Math.max(18, trap.radius), 0xffcc7a, 0.2);
       burst.setDepth(53);
-      burst.setStrokeStyle(2, trap.type === 'blast' ? 0xffa25a : 0xa6ff7b, 0.9);
+      burst.setStrokeStyle(2, 0xffa25a, 0.9);
       this.tweens.add({
         targets: burst,
         alpha: 0,
@@ -3051,14 +3352,13 @@ export function applyBuildClassMixin(GameScene) {
         this.applyRangerTrapMark(target, now);
 
         if (snareMs > 0 && typeof target.applyFreeze === 'function') {
-          target.applyFreeze(snareMs, { source: 'off_ranger_trap', player, radius: trap.effectRadius });
+          target.applyFreeze(snareMs, { source: 'off_ranger_decoy', player, radius: trap.effectRadius });
         }
         if (spikeSlowMs > 0 && typeof target.applyFreeze === 'function') {
-          target.applyFreeze(spikeSlowMs, { source: 'ranger_spike_trap', player, radius: trap.effectRadius });
+          target.applyFreeze(spikeSlowMs, { source: 'ranger_decoy_field', player, radius: trap.effectRadius });
         }
 
-        const isBlastTrap = trap.type === 'blast';
-        const damageScale = (isBlastTrap ? blastDamageBase : 0) + spikeDamageBase;
+        const damageScale = blastDamageBase + spikeDamageBase;
         if (damageScale > 0) {
           const damageResult = calculateResolvedDamage({
             attacker: player,
@@ -3067,7 +3367,7 @@ export function applyBuildClassMixin(GameScene) {
             now,
             canCrit: true
           });
-          target.takeDamage?.(damageResult.amount);
+          target.takeDamage?.(damageResult.amount, { attacker: player, source: 'ranger_decoy_explosion' });
           player.onDealDamage?.(damageResult.amount);
           this.applyWarriorOffclassHitEffects?.(target, now);
           this.showDamageNumber?.(target.x, target.y - 28, damageResult.amount, { color: '#ffe082', isCrit: damageResult.isCrit });
@@ -3082,7 +3382,11 @@ export function applyBuildClassMixin(GameScene) {
         }
       }
 
-      trap.destroy();
+      [trap.base, trap.body, trap.head, trap.lure, trap.tauntRing, trap.shotRing, trap.hpBarBg, trap.hpBarFill].forEach((node) => {
+        try { node?.destroy?.(); } catch (_) { /* ignore */ }
+      });
+      trap.active = false;
+      trap.isAlive = false;
       trap._consumed = true;
     },
 
@@ -3090,19 +3394,32 @@ export function applyBuildClassMixin(GameScene) {
       const player = this.player;
       if (!player) return;
 
-      const hasTrapKit = (player.rangerSnareTrapLevel || 0) > 0 || (player.rangerBlastTrapLevel || 0) > 0;
+      const hasTrapKit = !!player.rangerBeaconEnabled || (player.rangerSnareTrapLevel || 0) > 0;
       if (!hasTrapKit) {
         if (Array.isArray(this._rangerTraps)) {
-          this._rangerTraps.forEach((trap) => trap?.destroy?.());
+          this._rangerTraps.forEach((trap) => {
+            [trap?.base, trap?.body, trap?.head, trap?.lure, trap?.tauntRing, trap?.shotRing, trap?.hpBarBg, trap?.hpBarFill].forEach((node) => {
+              try { node?.destroy?.(); } catch (_) { /* ignore */ }
+            });
+          });
         }
         this._rangerTraps = [];
         return;
       }
 
       const now = this.time?.now ?? time ?? 0;
-      const cooldownMs = Math.max(1200, 3000 - (player.rangerTrapcraftLevel || 0) * 350);
+      const cooldownMs = Math.max(6500, 10000 - (player.rangerTrapcraftLevel || 0) * 1200);
       const maxTrapCount = 1 + ((player.rangerTrapcraftLevel || 0) >= 2 ? 1 : 0);
-      this._rangerTraps = (this._rangerTraps || []).filter((trap) => trap && trap.active && !trap._consumed && (trap.expiresAt || 0) > now);
+      this._rangerTraps = (this._rangerTraps || []).filter((trap) => trap && !trap._consumed);
+
+      for (let i = this._rangerTraps.length - 1; i >= 0; i--) {
+        const trap = this._rangerTraps[i];
+        if (!trap) continue;
+        if ((trap.expiresAt || 0) <= now) {
+          this.triggerRangerTrap(trap, null, now);
+          this._rangerTraps.splice(i, 1);
+        }
+      }
 
       if (!Number.isFinite(this._rangerTrapNextAt)) this._rangerTrapNextAt = 0;
       if (now >= this._rangerTrapNextAt && this._rangerTraps.length < maxTrapCount) {
@@ -3113,22 +3430,84 @@ export function applyBuildClassMixin(GameScene) {
       const targets = this.getOffclassCombatTargets();
       for (let i = 0; i < this._rangerTraps.length; i++) {
         const trap = this._rangerTraps[i];
-        if (!trap || !trap.active) continue;
-        trap.setAlpha(0.18 + Math.sin((time || 0) * 0.01 + i) * 0.06);
+        if (!trap || trap._consumed) continue;
 
+        const bob = Math.sin((now * 0.006) + (trap.bobSeed || i));
+        trap.head?.setPosition?.(trap.x, trap.y - 22 + bob * 2.5);
+        trap.body?.setPosition?.(trap.x, trap.y - 2 + bob * 1.5);
+        trap.base?.setAlpha?.(0.18 + Math.sin((time || 0) * 0.01 + i) * 0.06);
+        trap.lure?.setScale?.(1 + Math.sin((time || 0) * 0.008 + i) * 0.08);
+        trap.lure?.setAlpha?.(0.08 + Math.sin((time || 0) * 0.008 + i) * 0.04);
+        trap.tauntRing?.setPosition?.(trap.x, trap.y);
+        trap.tauntRing?.setRadius?.(trap.tauntRadius);
+        trap.tauntRing?.setVisible?.(this.isRangeIndicatorEnabled());
+        trap.tauntRing?.setAlpha?.(0.1 + Math.sin((now * 0.004) + i) * 0.03);
+        trap.shotRing?.setPosition?.(trap.x, trap.y);
+        trap.shotRing?.setRadius?.(trap.shotRange);
+        trap.shotRing?.setVisible?.(this.isRangeIndicatorEnabled());
+        trap.shotRing?.setAlpha?.(0.08 + Math.sin((now * 0.0032) + i) * 0.025);
+        trap.hpBarBg?.setPosition?.(trap.x, trap.y - 34 + bob * 1.4);
+        trap.hpBarFill?.setPosition?.(trap.x - 14, trap.y - 34 + bob * 1.4);
+
+        let tauntedTarget = null;
+        let bestTauntedDistSq = Number.POSITIVE_INFINITY;
+        let shotTarget = null;
+        let bestShotDistSq = Number.POSITIVE_INFINITY;
         for (let t = 0; t < targets.length; t++) {
           const target = targets[t];
-          if (!target || !target.isAlive) continue;
+          if (!target || !target.isAlive || target.isInvincible) continue;
           const dx = target.x - trap.x;
           const dy = target.y - trap.y;
-          if ((dx * dx + dy * dy) <= (trap.radius * trap.radius)) {
-            this.triggerRangerTrap(trap, target, now);
-            break;
+          const distSq = dx * dx + dy * dy;
+
+          if (distSq <= (trap.tauntRadius * trap.tauntRadius)) {
+            this.applyRangerTrapMark(target, now);
+            if (distSq < bestTauntedDistSq) {
+              bestTauntedDistSq = distSq;
+              tauntedTarget = target;
+            }
+
+            const dist = Math.sqrt(distSq) || 0.0001;
+            const desiredDist = trap.radius + (target.bossSize || target.radius || 18) + 10;
+            if (dist > desiredDist) {
+              const force = target.bossSize ? 32 : 72;
+              const step = Math.min(dist - desiredDist, force * (delta / 1000));
+              target.x -= (dx / dist) * step;
+              target.y -= (dy / dist) * step;
+            }
+
+            const slowMs = [0, 110, 150, 200][Math.max(0, Math.min(3, player.rangerSpikeTrapLevel || 0))] || 0;
+            if (slowMs > 0 && typeof target.applyFreeze === 'function') {
+              target.applyFreeze(slowMs, { source: 'ranger_decoy_pull', player, radius: trap.tauntRadius });
+            }
           }
+
+          if (distSq <= (trap.shotRange * trap.shotRange) && distSq < bestShotDistSq) {
+            bestShotDistSq = distSq;
+            shotTarget = target;
+          }
+        }
+
+        const resolvedShotTarget = tauntedTarget || shotTarget;
+        if (resolvedShotTarget && now >= (trap.nextShotAt || 0)) {
+          this.fireRangerTrapArrow(trap, resolvedShotTarget, now);
+          trap.nextShotAt = now + 1100;
+
+          const pulse = this.add.circle(trap.x, trap.y - 18, 10, 0xdfffaa, 0.16);
+          pulse.setDepth(54);
+          pulse.setStrokeStyle(2, 0xf2ffd6, 0.75);
+          this.tweens.add({
+            targets: pulse,
+            alpha: 0,
+            scaleX: 1.55,
+            scaleY: 1.55,
+            duration: 180,
+            onComplete: () => pulse.destroy()
+          });
         }
       }
 
-      this._rangerTraps = this._rangerTraps.filter((trap) => trap && trap.active && !trap._consumed);
+      this._rangerTraps = this._rangerTraps.filter((trap) => trap && !trap._consumed);
     },
 
     updatePaladinPulse(time) {

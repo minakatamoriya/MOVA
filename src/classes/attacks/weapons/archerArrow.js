@@ -69,7 +69,11 @@ export function fireArcherArrow(player) {
   const dy = aimY - rangeY;
   if ((dx * dx + dy * dy) > acquireRange * acquireRange) return false;
 
-  const angle = Phaser.Math.Angle.Between(spawnX, spawnY, aimX, aimY);
+  const muzzleBaseY = player.y - player.visualRadius * 0.28;
+  const muzzleDistance = Math.max(12, player.visualRadius * 0.72);
+  const volleyOriginX = player.x + Math.cos(Phaser.Math.Angle.Between(spawnX, spawnY, aimX, aimY)) * muzzleDistance;
+  const volleyOriginY = muzzleBaseY + Math.sin(Phaser.Math.Angle.Between(spawnX, spawnY, aimX, aimY)) * muzzleDistance;
+  const angle = Phaser.Math.Angle.Between(volleyOriginX, volleyOriginY, aimX, aimY);
 
   const now = scene.time?.now ?? 0;
 
@@ -158,7 +162,10 @@ export function fireArcherArrow(player) {
       const count = Math.max(1, Math.round(player.archerVolleyRingCount || 8));
       for (let i = 0; i < count; i++) {
         const shotAngle = (Math.PI * 2 * i) / count;
-        const bullet = player.createBulletAtAngle(shotAngle, true);
+        const bullet = player.createBulletAtAngle(shotAngle, true, {
+          spawnX: volleyOriginX,
+          spawnY: volleyOriginY
+        });
         applyArrowVisuals(bullet);
       }
     } else {
@@ -167,7 +174,10 @@ export function fireArcherArrow(player) {
       const start = -spread * (count - 1) / 2;
       for (let i = 0; i < count; i++) {
         const shotAngle = angle + start + spread * i;
-        const bullet = player.createBulletAtAngle(shotAngle, true);
+        const bullet = player.createBulletAtAngle(shotAngle, true, {
+          spawnX: volleyOriginX,
+          spawnY: volleyOriginY
+        });
         if (bullet) {
           bullet.damage = Math.max(1, Math.round((bullet.damage || 0) * getArrowDamageScale(i, count)));
           if (player.archerVolleyLockAim && target && target.isAlive && isCenterArrow(i, count)) {

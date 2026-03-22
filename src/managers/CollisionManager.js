@@ -159,22 +159,29 @@ export default class CollisionManager {
     const rawDmg = Math.max(0, Math.round(10 * bossDamageMult));
     const dmgMult = Math.max(0.1, Number(pet.damageTakenMult || 1));
     const dmg = Math.max(1, Math.round(rawDmg * dmgMult));
-    pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
+    let killed = false;
+
+    if (typeof pet.takeDamage === 'function') {
+      killed = !!pet.takeDamage(dmg, { attacker: boss, bullet, source: 'boss_bullet' });
+    } else {
+      pet.currentHp = Math.max(0, (pet.currentHp || 0) - dmg);
+      killed = (pet.currentHp || 0) <= 0;
+    }
 
     this.notifyBulletHit({
       bullet,
       side: 'boss',
       attacker: boss,
       target: pet,
-      targetType: pet.isUndeadSummon ? 'summon' : 'pet',
+      targetType: pet.isDecoy ? 'decoy' : (pet.isUndeadSummon ? 'summon' : 'pet'),
       hitX: pet.x,
       hitY: pet.y,
       damage: dmg,
       isCrit: false,
-      killed: (pet.currentHp || 0) <= 0
+      killed
     });
 
-    return { amount: dmg, killed: (pet.currentHp || 0) <= 0 };
+    return { amount: dmg, killed };
   }
 
   /**
@@ -517,7 +524,8 @@ export default class CollisionManager {
 
     const hittablePets = this.scene?.petManager?.getHittablePets?.() || [];
     const hittableUndead = this.scene?.undeadSummonManager?.getHittableSummons?.() || [];
-    const hittableAllies = hittablePets.concat(hittableUndead);
+    const hittableDecoys = this.scene?.getHittableDecoys?.() || [];
+    const hittableAllies = hittableDecoys.concat(hittablePets, hittableUndead);
     
     if (allBossBullets.length === 0) {
       return;

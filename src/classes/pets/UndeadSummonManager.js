@@ -12,9 +12,9 @@ const SUMMON_TYPES = /** @type {const} */ ({
 
 const LEVEL_TO_CAP = {
   0: 0,
-  1: 1,
-  2: 3,
-  3: 5
+  1: 2,
+  2: 4,
+  3: 6
 };
 
 const MELEE_TARGET_VISION_PADDING = 72;
@@ -52,7 +52,13 @@ export default class UndeadSummonManager {
 
   getDesiredCount(type) {
     const lvl = Math.min(3, this.getOwnedLevel(type));
-    return LEVEL_TO_CAP[lvl] || 0;
+    const base = LEVEL_TO_CAP[lvl] || 0;
+    if (!this.player) return base;
+
+    const starter = type === SUMMON_TYPES.guard
+      ? Math.max(0, Math.round(this.player.summonStarterGuardCount || 0))
+      : Math.max(0, Math.round(this.player.summonStarterMageCount || 0));
+    return base + starter;
   }
 
   getSummonHealthMultiplier() {

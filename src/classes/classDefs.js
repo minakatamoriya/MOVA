@@ -15,19 +15,25 @@ export const CORE_KEYS = /** @type {const} */ ({
   paladin: 'paladin',
   mage: 'mage',
   archer: 'archer',
-  druid: 'drone',
+  druid: 'druid',
   warlock: 'warlock'
 });
 
-export const CORE_KEY_ALIASES = /** @type {const} */ ({});
+export const CORE_KEY_ALIASES = /** @type {const} */ ({
+  drone: 'druid'
+});
 
 export const CORE_UPGRADE_IDS = /** @type {const} */ ({
   warrior: 'warrior_core',
   paladin: 'paladin_core',
   mage: 'mage_core',
   archer: 'archer_core',
-  druid: 'drone_core',
+  druid: 'druid_core',
   warlock: 'warlock_core'
+});
+
+export const CORE_UPGRADE_ID_ALIASES = /** @type {const} */ ({
+  drone_core: 'druid_core'
 });
 
 export const CLASSES = [
@@ -90,7 +96,8 @@ export const CORE_OPTIONS = CLASSES.map(c => ({
 }));
 
 export function getClassByCoreUpgradeId(coreUpgradeId) {
-  return CLASSES.find(c => c.coreUpgradeId === coreUpgradeId) || null;
+  const normalizedUpgradeId = CORE_UPGRADE_ID_ALIASES[coreUpgradeId] || coreUpgradeId;
+  return CLASSES.find(c => c.coreUpgradeId === normalizedUpgradeId) || null;
 }
 
 export function coreUpgradeIdToCoreKey(coreUpgradeId) {

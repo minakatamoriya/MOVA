@@ -552,17 +552,14 @@ export default function App() {
 
     const getNodeKind = (node, def) => {
       if (node.id === def.core?.id) return 'core';
-      if (node.id === def.ultimate?.id) return 'ultimate';
       return 'talent';
     };
 
     const getNodeBadgeText = (node, def) => {
       const kind = getNodeKind(node, def);
       if (kind === 'core') return '初始';
-      if (kind === 'ultimate') return '终极';
       const cleaned = String(node.name || '')
         .replace(/^初始：/, '')
-        .replace(/^终极：/, '')
         .replace(/^选择：/, '')
         .replace(/^（预留）/, '预留')
         .trim();
@@ -706,7 +703,7 @@ export default function App() {
           {panels.map((panel) => {
             const def = panel.def;
             const borderColor = toCssHex(def?.color);
-            const allNodes = def ? [def.core, ...(def.nodes || []), def.ultimate].filter(Boolean) : [];
+            const allNodes = def ? [def.core, ...(def.nodes || [])].filter(Boolean) : [];
             const acquired = def ? allNodes.filter((n) => (skillTreeLevels?.[n.id] || 0) > 0) : [];
 
             return (

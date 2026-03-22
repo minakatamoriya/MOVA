@@ -20,6 +20,24 @@ export function migrateLegacyProgressionRegistry(registry) {
     changed = true;
   }
 
+  const offFaction = registry.get('offFaction');
+  if (offFaction === 'curse') {
+    registry.set('offFaction', 'summon');
+    changed = true;
+  }
+
+  const selectedTrees = registry.get('selectedTrees') || [];
+  if (Array.isArray(selectedTrees) && selectedTrees.includes('curse')) {
+    registry.set('selectedTrees', selectedTrees.map((treeId) => (treeId === 'curse' ? 'summon' : treeId)));
+    changed = true;
+  }
+
+  const rejectedOffFactionEntries = registry.get('rejectedOffFactionEntries') || [];
+  if (Array.isArray(rejectedOffFactionEntries) && rejectedOffFactionEntries.includes('off_curse')) {
+    registry.set('rejectedOffFactionEntries', rejectedOffFactionEntries.map((entryId) => (entryId === 'off_curse' ? 'off_summon' : entryId)));
+    changed = true;
+  }
+
   const skillTreeLevels = registry.get('skillTreeLevels') || {};
   const migratedSkillTreeLevels = {};
   let levelMapChanged = false;
