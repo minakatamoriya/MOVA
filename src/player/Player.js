@@ -222,6 +222,14 @@ export default class Player extends Phaser.GameObjects.Container {
     this.mageShatterLevel = 0;
     this.mageFrostNovaLevel = 0;
     this.mageFrostDomainLevel = 0;
+    this.warriorArcLevel = 0;
+    this.warriorSwordQiLevel = 0;
+    this.warriorEndureLevel = 0;
+    this.warriorGuardUntil = 0;
+    this.warriorGuardReduction = 0;
+    this.druidMeteorShowerLevel = 0;
+    this.druidMeteorLevel = 0;
+    this.druidStarfireLevel = 0;
 
     // 通用被动（副职业派系）
     this.universalFireRateMult = 1;
@@ -348,6 +356,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // 德鲁伊：星落索敌范围（不再无限距离）
     this.druidStarfallRangeBase = 310;
     this.druidStarfallRange = this.druidStarfallRangeBase;
+    this.druidStarfallBaseRadius = 70;
 
     // 法师飞弹：用于范围圈对齐（飞弹本身已用 maxLifeMs 限制）
     this.mageMissileRangeBase = 280;
@@ -361,6 +370,7 @@ export default class Player extends Phaser.GameObjects.Container {
     // 战士：近战基础索敌/挥砍范围
     this.warriorRangeBase = 220;
     this.warriorRange = this.warriorRangeBase;
+    this.warriorArcBaseDeg = 90;
 
     // 猎人基础技能（箭矢连射）
     this.archerEnabled = true;

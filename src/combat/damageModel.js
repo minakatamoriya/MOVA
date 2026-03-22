@@ -282,8 +282,9 @@ export function resolvePlayerIncomingDamage(defender, incomingDamage, now = 0) {
     finalDamage = Math.max(0, Math.round(finalDamage * toMultiplier(defender?.emergencyMitigationMult, 1)));
   }
 
-  if (defender?.warriorEndure && defender?.mainCoreKey === 'warrior') {
-    finalDamage = Math.max(0, Math.round(finalDamage * 0.8));
+  if (defender?.mainCoreKey === 'warrior' && toNumber(defender?.warriorGuardUntil, 0) > now) {
+    const guardReduction = Math.max(0, Math.min(0.8, toNumber(defender?.warriorGuardReduction, 0)));
+    finalDamage = Math.max(0, Math.round(finalDamage * (1 - guardReduction)));
   }
 
   if (defender?.unyieldingStandfastActive && toNumber(defender?.unyieldingStandfastLevel, 0) > 0) {

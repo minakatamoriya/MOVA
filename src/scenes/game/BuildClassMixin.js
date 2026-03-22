@@ -197,8 +197,14 @@ export function applyBuildClassMixin(GameScene) {
         case 'archer_core':
           this.upgradeWarriorThorns();
           break;
+        case 'warrior_swordqi':
+          this.player.warriorSwordQiLevel = Math.min(3, (this.player.warriorSwordQiLevel || 0) + 1);
+          break;
+        case 'warrior_endure':
+          this.player.warriorEndureLevel = Math.min(3, (this.player.warriorEndureLevel || 0) + 1);
+          break;
         case 'warrior_range':
-          this.upgradeWarriorRange();
+          this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
           break;
         case 'warrior_lifesteal':
           this.upgradeWarriorLifesteal();
@@ -431,6 +437,19 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'druid_nourish':
           this.player.druidNourishLevel = Math.min(3, (this.player.druidNourishLevel || 0) + 1);
+          break;
+        case 'druid_meteor_shower': {
+          this.player.druidMeteorShowerLevel = Math.min(3, (this.player.druidMeteorShowerLevel || 0) + 1);
+          const rangeByLevel = [310, 350, 395, 440];
+          this.player.druidStarfallRangeBase = rangeByLevel[this.player.druidMeteorShowerLevel] || 310;
+          this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
+          break;
+        }
+        case 'druid_meteor':
+          this.player.druidMeteorLevel = Math.min(3, (this.player.druidMeteorLevel || 0) + 1);
+          break;
+        case 'druid_starfire':
+          this.player.druidStarfireLevel = Math.min(3, (this.player.druidStarfireLevel || 0) + 1);
           break;
         case 'druid_nourish_growth':
           this.player.druidNourishGrowthLevel = Math.min(3, (this.player.druidNourishGrowthLevel || 0) + 1);
@@ -1689,8 +1708,45 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradeWarriorRange() {
-      this.player.warriorRangeBase = Math.min(360, (this.player.warriorRangeBase || 220) + 25);
-      this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
+      this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
+    },
+
+    getWarriorArcSpanDeg() {
+      const level = Math.max(0, Math.min(3, Math.round(this.player?.warriorArcLevel || 0)));
+      return [90, 120, 180, 270][level] || 90;
+    },
+
+    triggerWarriorSwingHit(facingAngle, swingDir) {
+      this.spawnWarriorMeleeHit(facingAngle);
+
+      const swordQiLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorSwordQiLevel || 0)));
+      if (swordQiLevel <= 0) return;
+
+      this.spawnWarriorCrescentProjectile(facingAngle, swingDir);
+
+      if (swordQiLevel >= 3) {
+        this.time?.delayedCall?.(90, () => {
+          if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
+          this.spawnWarriorCrescentProjectile(facingAngle, -swingDir);
+        });
+      }
+    },
+
+    applyWarriorMainHitEffects(target, now, bullet) {
+      const player = this.player;
+      if (!player || !target || player.mainCoreKey !== 'warrior') return;
+
+      const tags = Array.isArray(bullet?.tags) ? bullet.tags : [];
+      const isWarriorHit = tags.includes('warrior_melee') || tags.includes('warrior_crescent');
+      if (!isWarriorHit) return;
+
+      const endureLevel = Math.max(0, Math.min(3, Math.round(player.warriorEndureLevel || 0)));
+      if (endureLevel <= 0) return;
+
+      const reductionByLevel = [0, 0.08, 0.12, 0.16];
+      const durationByLevel = [0, 1400, 1600, 1800];
+      player.warriorGuardReduction = reductionByLevel[endureLevel] || 0;
+      player.warriorGuardUntil = Math.max(Number(player.warriorGuardUntil || 0), Number(now || 0) + (durationByLevel[endureLevel] || 1400));
     },
 
     upgradeWarriorLifesteal() {
@@ -1825,19 +1881,15 @@ export function applyBuildClassMixin(GameScene) {
       const facingAngle = this.slashLockedFacingAngle;
       this.slashFacingAngle = facingAngle;
 
-      this.slashArcSpan = this.player.warriorSpin ? Math.PI * 2 : Math.PI;
+      this.slashArcSpan = this.player.warriorSpin
+        ? Math.PI * 2
+        : Phaser.Math.DegToRad(this.getWarriorArcSpanDeg());
 
       // 进入攻击范围后的“当前这一挥”：立刻生成一次命中判定
       // 注意：后续挥砍的判定仍由 while 循环在“新一挥开始”时生成。
       if (this.slashLastHitSwingStartTime !== this.slashSwingStartTime) {
         this.slashLastHitSwingStartTime = this.slashSwingStartTime;
-        if (this.player.warriorSpin) {
-          this.spawnWarriorMeleeHit(facingAngle);
-        } else if (this.player.warriorSwordQi) {
-          this.spawnWarriorCrescentProjectile(facingAngle, this.slashSwingDir);
-        } else {
-          this.spawnWarriorMeleeHit(facingAngle);
-        }
+        this.triggerWarriorSwingHit(facingAngle, this.slashSwingDir);
       }
 
       while (time - this.slashSwingStartTime >= swingDuration) {
@@ -1853,13 +1905,7 @@ export function applyBuildClassMixin(GameScene) {
           this.slashSwingDir = 1;
         }
 
-        if (this.player.warriorSpin) {
-          this.spawnWarriorMeleeHit(facingAngle);
-        } else if (this.player.warriorSwordQi) {
-          this.spawnWarriorCrescentProjectile(facingAngle, this.slashSwingDir);
-        } else {
-          this.spawnWarriorMeleeHit(facingAngle);
-        }
+        this.triggerWarriorSwingHit(facingAngle, this.slashSwingDir);
 
         // while 循环生成的判定对应“新一挥开始”，同步标记避免下一帧重复生成
         this.slashLastHitSwingStartTime = this.slashSwingStartTime;

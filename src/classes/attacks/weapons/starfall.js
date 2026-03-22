@@ -143,28 +143,20 @@ export function fireStarfall(player) {
 
   const scheme = getBasicSkillColorScheme(player.mainCoreKey, player.offCoreKey);
   const now = scene.time?.now ?? 0;
+  const radiusByLevel = [70, 80, 92, 106];
+  const impactDamageMultByLevel = [1, 1.15, 1.30, 1.45];
+  const fallMsByLevel = [260, 235, 210, 185];
+  const starfireChanceByLevel = [0, 0.20, 0.30, 0.40];
+  const starfireDamageByLevel = [0, 0.45, 0.60, 0.75];
+  const starfallShapeLevel = Phaser.Math.Clamp(Math.round(player.druidMeteorShowerLevel || 0), 0, 3);
+  const impactLevel = Phaser.Math.Clamp(Math.round(player.druidMeteorLevel || 0), 0, 3);
+  const starfireLevel = Phaser.Math.Clamp(Math.round(player.druidStarfireLevel || 0), 0, 3);
 
   const baseTargetX = target.x;
   const baseTargetY = target.y;
 
-  // 陨石：每 10 秒下一次强化
-  let isMeteor = false;
-  if (player.druidMeteor) {
-    player._druidMeteorNextAt = player._druidMeteorNextAt || (now + 10000);
-    if (!player._druidMeteorCharged && now >= player._druidMeteorNextAt) {
-      player._druidMeteorCharged = true;
-    }
-    if (player._druidMeteorCharged) {
-      player._druidMeteorCharged = false;
-      player._druidMeteorNextAt = now + 10000;
-      isMeteor = true;
-    }
-  }
-
-  const count = player.druidMeteorShower ? 3 : 1;
-
   const spawnOne = (aim, opts = {}) => {
-    const { big = false, damageMult = 1, allowStarfire = true } = opts;
+    const { damageMult = 1, allowStarfire = true } = opts;
 
     const aimTarget = (aim && typeof aim === 'object') ? (aim.target || null) : null;
     const aimOffsetX = (aim && typeof aim === 'object' && Number.isFinite(aim.offsetX)) ? aim.offsetX : 0;
@@ -190,11 +182,13 @@ export function fireStarfall(player) {
     const outlineColor = scheme.accentColor;
     const glowColor = scheme.glowColor;
 
-    const glow = scene.add.circle(p0.x, startY, big ? 34 : 24, glowColor, 0.22);
+    const aoeRadius = radiusByLevel[starfallShapeLevel] || 70;
+    const isHeavyImpact = impactLevel >= 2;
+    const glow = scene.add.circle(p0.x, startY, isHeavyImpact ? 28 : 24, glowColor, 0.22);
     glow.setStrokeStyle(1, glowColor, 0.35);
     glow.setDepth(58);
 
-    const star = scene.add.star(p0.x, startY, 5, 6, big ? 22 : 15, starColor, 1);
+    const star = scene.add.star(p0.x, startY, 5, 6, isHeavyImpact ? 18 : 15, starColor, 1);
     star.setStrokeStyle(2, outlineColor, 0.95);
     star.setDepth(59);
     star.setScale(0.6);
@@ -210,7 +204,7 @@ export function fireStarfall(player) {
       ease: 'Sine.Out'
     });
 
-    const fallMs = big ? 320 : 260;
+    const fallMs = fallMsByLevel[impactLevel] || 260;
     const tracker = { p: 0 };
     scene.tweens.add({
       targets: tracker,
@@ -238,8 +232,7 @@ export function fireStarfall(player) {
         const impactX = pos.x;
         const impactY = pos.y;
 
-        const aoeRadius = big ? 110 : 70;
-        const damage = Math.max(1, Math.round(player.bulletDamage * 0.92 * damageMult));
+        const damage = Math.max(1, Math.round(player.bulletDamage * 0.92 * (impactDamageMultByLevel[impactLevel] || 1) * damageMult));
 
         const aoeBullet = scene.createManagedPlayerAreaBullet?.(
           impactX,
@@ -271,18 +264,12 @@ export function fireStarfall(player) {
         // 性能：星落属于高频普攻，砍掉 sparkles/dust 的对象与 tween 量，避免移动+射击时掉帧
 
         // 星火：30% 概率额外触发一次（不连锁）
-        if (allowStarfire && player.druidStarfire && Math.random() < 0.3) {
-          spawnOne({ x: impactX, y: impactY }, { big: false, damageMult: 0.82, allowStarfire: false });
+        if (allowStarfire && starfireLevel > 0 && Math.random() < (starfireChanceByLevel[starfireLevel] || 0)) {
+          spawnOne({ x: impactX, y: impactY }, { damageMult: starfireDamageByLevel[starfireLevel] || 0.45, allowStarfire: false });
         }
       }
     });
   };
 
-  for (let i = 0; i < count; i++) {
-    const dx = count > 1 ? Phaser.Math.Between(-34, 34) : 0;
-    const dy = count > 1 ? Phaser.Math.Between(-34, 34) : 0;
-    const dmgMult = player.druidMeteorShower ? 0.78 : 1;
-    // 追踪命中：锁定目标本体（而非地点），偏移仅用于多颗散布
-    spawnOne({ target, offsetX: dx, offsetY: dy }, { big: isMeteor, damageMult: isMeteor ? 1.35 * dmgMult : dmgMult, allowStarfire: i === 0 });
-  }
+  spawnOne({ target, offsetX: 0, offsetY: 0 }, { damageMult: 1, allowStarfire: true });
 }

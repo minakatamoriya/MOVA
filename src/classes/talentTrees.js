@@ -23,9 +23,9 @@ export const TREE_DEFS = [
     color: resolveClassColor('druid'),
     core: { id: 'druid_core', name: '初始：德鲁伊', maxLevel: 1, desc: '解锁星落（定位敌方，星星下落造成范围伤害）。' },
     nodes: [
-      { id: 'druid_meteor_shower', name: '流星雨', maxLevel: 1, desc: '星落数量 +2，但单次伤害略微降低。' },
-      { id: 'druid_meteor', name: '陨石', maxLevel: 1, desc: '每 10 秒，下一次星落变为巨型陨石：范围更大，伤害更高。' },
-      { id: 'druid_starfire', name: '星火', maxLevel: 1, desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）。' },
+      { id: 'druid_meteor_shower', name: '星域牵引', maxLevel: 3, desc: '强化星落的锁定与落点覆盖。1/2/3级分别将索敌范围提高到 350/395/440，爆炸半径提高到 80/92/106。' },
+      { id: 'druid_meteor', name: '坠星', maxLevel: 3, desc: '强化单次星落质量。1/2/3级分别使星落伤害提高 15%/30%/45%，下坠时间压缩到 235/210/185 毫秒。' },
+      { id: 'druid_starfire', name: '星火', maxLevel: 3, desc: '星落命中后有概率在原地引发一次追击星火。1/2/3级概率与伤害分别为 20%/45%、30%/60%、40%/75%（不连锁）。' },
       { id: 'druid_nourish', name: '自然滋养', maxLevel: 3, desc: '生命低于30%时自动触发：在15/10/5秒内缓慢回复30%生命，冷却30秒。' },
       { id: 'druid_nourish_growth', name: '丰饶脉动', maxLevel: 3, desc: '强化自然滋养：总回复量额外提高50%/80%/100%。' }
     ]
@@ -36,10 +36,9 @@ export const TREE_DEFS = [
     color: resolveClassColor('warrior'),
     core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为劈砍。' },
     nodes: [
-      { id: 'warrior_spin', name: '回旋', maxLevel: 1, desc: '挥砍变为 360° 回旋斩，造成范围伤害。' },
-      { id: 'warrior_swordqi', name: '剑气', maxLevel: 1, desc: '挥砍时额外发射一道月牙剑气，近战判定仍保留。' },
-      { id: 'warrior_endure', name: '持久', maxLevel: 1, desc: '战士近战形态获得 20% 伤害减免。' },
-      { id: 'warrior_range', name: '月牙扩展', maxLevel: 4, desc: '月牙斩有效范围提升（可叠加）。' },
+      { id: 'warrior_range', name: '横扫拓宽', maxLevel: 3, desc: '月牙斩弧度拓宽：基础 90°；1/2/3级分别提升到 120°/180°/270°。' },
+      { id: 'warrior_swordqi', name: '月牙外放', maxLevel: 3, desc: '挥砍后额外放出月牙剑气，近战判定始终保留。1级解锁外放，2级强化速度/伤害并获得轻度追踪，3级每次挥砍连续放出两道月牙。' },
+      { id: 'warrior_endure', name: '斩势护体', maxLevel: 3, desc: '月牙斩或外放月牙命中后获得短暂减伤。1/2/3级分别获得 8%/12%/16% 减伤，持续 1.4/1.6/1.8 秒，可刷新。' },
       { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒。' },
       { id: 'warrior_bloodlust_mastery', name: '狂血渴饮', maxLevel: 3, desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%。' }
     ]

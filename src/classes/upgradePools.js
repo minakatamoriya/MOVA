@@ -43,19 +43,18 @@ export const UPGRADE_POOLS = {
 
   // 🌿 德鲁伊·星落（主职业输出）
   druid: [
-    { id: 'druid_meteor_shower', category: 'build', name: '流星雨', desc: '星落数量 +2，但单次伤害略微降低', icon: '德主' },
-    { id: 'druid_meteor', category: 'build', name: '陨石', desc: '每 10 秒，下一次星落变为巨型陨石：范围更大，伤害更高', icon: '德主' },
-    { id: 'druid_starfire', category: 'build', name: '星火', desc: '星落命中后有 30% 概率在同位置额外触发一次（不连锁）', icon: '德主' },
+    { id: 'druid_meteor_shower', category: 'build', name: '星域牵引', desc: '星落索敌范围：310 -> 350 -> 395 -> 440；爆炸半径：70 -> 80 -> 92 -> 106。', icon: '德主', maxLevel: 3 },
+    { id: 'druid_meteor', category: 'build', name: '坠星', desc: '星落伤害：100% -> 115% -> 130% -> 145%；下坠时间：260ms -> 235ms -> 210ms -> 185ms。', icon: '德主', maxLevel: 3 },
+    { id: 'druid_starfire', category: 'build', name: '星火', desc: '追击星火触发率：0% -> 20% -> 30% -> 40%；追击伤害：0% -> 45% -> 60% -> 75%。', icon: '德主', maxLevel: 3 },
     { id: 'druid_nourish', category: 'build', name: '自然滋养', desc: '30% 总治疗完成时间：15秒 -> 10秒 -> 5秒，冷却 30 秒。', icon: '德主', maxLevel: 3 },
     { id: 'druid_nourish_growth', category: 'build', name: '丰饶脉动', desc: '自然滋养总回复加成：0% -> 50% -> 80% -> 100%。', icon: '德主', maxLevel: 3, requiredSkillId: 'druid_nourish' }
   ],
 
-  // 🟠 战士·旋风斩（此项目内为“近战挥砍/半月波”）
+  // 🟠 战士·月牙斩（此项目内为“近战挥砍/半月波”）
   warrior: [
-    { id: 'warrior_spin', category: 'build', name: '回旋', desc: '挥砍变为 360° 回旋斩，造成范围伤害', icon: '战主' },
-    { id: 'warrior_swordqi', category: 'build', name: '剑气', desc: '挥砍时额外发射一道月牙剑气（保留近战判定）', icon: '战主' },
-    { id: 'warrior_endure', category: 'build', name: '持久', desc: '战士近战形态获得 20% 伤害减免', icon: '战主' },
-    { id: 'warrior_range', category: 'build', name: '月牙扩展', desc: '月牙斩基础范围：220 -> 245 -> 270 -> 295 -> 320。', icon: '战主' },
+    { id: 'warrior_range', category: 'build', name: '横扫拓宽', desc: '月牙斩弧度：90° -> 120° -> 180° -> 270°。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_swordqi', category: 'build', name: '月牙外放', desc: '每次挥砍额外放出月牙：1级解锁单发，2级强化伤害/飞行质量，3级变为双发连斩。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_endure', category: 'build', name: '斩势护体', desc: '月牙斩命中后获得减伤：0% -> 8% -> 12% -> 16%；持续：0秒 -> 1.4秒 -> 1.6秒 -> 1.8秒。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: '低血吸血持续时间：5秒 -> 10秒 -> 15秒；吸血转化固定 100%，冷却 30 秒。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '吸血转化：100% -> 120% -> 150% -> 200%。', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
   ],

@@ -1733,6 +1733,7 @@ class GameScene extends Phaser.Scene {
     if (!bullet || !boss || boss.isAlive === false) return;
 
     this.player?.onDealDamage?.(damage);
+    this.applyWarriorMainHitEffects?.(boss, now, bullet);
     this.applyWarriorOffclassHitEffects?.(boss, now);
     this.applyMageFrostHitEffects?.(boss, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
     if ((bullet.onHitApplyArcaneExposure || 0) > 1) {
@@ -1810,6 +1811,7 @@ class GameScene extends Phaser.Scene {
     if (!bullet || !enemy) return;
 
     this.player?.onDealDamage?.(damage);
+    this.applyWarriorMainHitEffects?.(enemy, now, bullet);
     this.applyWarriorOffclassHitEffects?.(enemy, now);
     this.applyMageFrostHitEffects?.(enemy, { bullet, now, hitX, hitY, killedByHit: !!payload.killed });
     if ((bullet.onHitApplyArcaneExposure || 0) > 1) {
