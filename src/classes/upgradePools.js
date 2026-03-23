@@ -50,11 +50,11 @@ export const UPGRADE_POOLS = {
     { id: 'druid_nourish_growth', category: 'build', name: '丰饶脉动', desc: '自然滋养总回复加成：0% -> 50% -> 80% -> 100%。', icon: '德主', maxLevel: 3, requiredSkillId: 'druid_nourish' }
   ],
 
-  // 🟠 战士·月牙斩（此项目内为“近战挥砍/半月波”）
+  // 🟠 战士·次元斩（近战挥砍驱动的多段风刃组合）
   warrior: [
-    { id: 'warrior_range', category: 'build', name: '横扫拓宽', desc: '月牙斩弧度：90° -> 120° -> 180° -> 270°。', icon: '战主', maxLevel: 3 },
-    { id: 'warrior_swordqi', category: 'build', name: '月牙外放', desc: '每次挥砍额外放出月牙：1级解锁单发，2级强化伤害/飞行质量，3级变为双发连斩。', icon: '战主', maxLevel: 3 },
-    { id: 'warrior_endure', category: 'build', name: '斩势护体', desc: '月牙斩命中后获得减伤：0% -> 8% -> 12% -> 16%；持续：0秒 -> 1.4秒 -> 1.6秒 -> 1.8秒。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_range', category: 'build', name: '斩域展开', desc: '次元斩展开角度：90° -> 120° -> 180° -> 270°。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_swordqi', category: 'build', name: '真空刃强化', desc: '基础真空刃持续强化：1级提升飞行质量，2级强化伤害/速度并获得轻度追踪，3级变为双发连斩。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_endure', category: 'build', name: '斩势护体', desc: '次元斩命中后获得减伤：0% -> 8% -> 12% -> 16%；持续：0秒 -> 1.4秒 -> 1.6秒 -> 1.8秒。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: '低血吸血持续时间：5秒 -> 10秒 -> 15秒；吸血转化固定 100%，冷却 30 秒。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_bloodlust_mastery', category: 'build', name: '狂血渴饮', desc: '吸血转化：100% -> 120% -> 150% -> 200%。', icon: '战主', maxLevel: 3, requiredSkillId: 'warrior_blood_conversion' }
   ],

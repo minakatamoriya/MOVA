@@ -43,7 +43,7 @@ export const CLASSES = [
     icon: '战主',
     coreUpgradeId: CORE_UPGRADE_IDS.warrior,
     coreKey: CORE_KEYS.warrior,
-    coreDesc: '基础攻击变为劈砍，生命上限提升'
+    coreDesc: '基础攻击变为近战挥砍并外放真空刃，生命上限提升'
   },
   {
     id: CLASS_IDS.archer,

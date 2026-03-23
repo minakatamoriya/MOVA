@@ -1710,11 +1710,15 @@ export function applyBuildClassMixin(GameScene) {
 
       this.slashFan = null;
       this.slashGraphics = [];
-      this.meleeCooldown = 700;
+      this.meleeCooldown = 2000;
       this.slashFacingAngle = null;
       this.slashSwingDir = 1;
       this.slashSwingStartTime = 0;
-      this.slashSwingDuration = 700;
+      this.slashSwingDuration = 420;
+      this.warriorBladeCycleMs = 2000;
+      this.warriorBladeBurstCount = 5;
+      this.warriorBladeNextCycleAt = 0;
+      this.warriorBladeCycleSeq = 0;
       // 每一挥开始时只生成一次命中判定（用于修复“第一挥只出动画不出判定”）
       this.slashLastHitSwingStartTime = null;
       // 保证一次挥砍完整性：挥砍进行中不因击杀/重选目标而重置或瞬间改向
@@ -1755,23 +1759,51 @@ export function applyBuildClassMixin(GameScene) {
       return [90, 120, 180, 270][level] || 90;
     },
 
-    triggerWarriorSwingHit(facingAngle, swingDir) {
-      this.spawnWarriorMeleeHit(facingAngle);
+    getWarriorBladeComboPattern(swordQiLevel = 0) {
+      const spreadScale = Phaser.Math.Clamp(this.getWarriorArcSpanDeg() / 120, 0.85, 2.1);
+      const pattern = [
+        { delayMs: 0, angleDeg: -22 * spreadScale, swingDir: 1 },
+        { delayMs: 72, angleDeg: -8 * spreadScale, swingDir: -1 },
+        { delayMs: 144, angleDeg: 10 * spreadScale, swingDir: 1 },
+        { delayMs: 216, angleDeg: 24 * spreadScale, swingDir: -1 },
+        { delayMs: 288, angleDeg: 2 * spreadScale, swingDir: 1 }
+      ];
 
+      if (swordQiLevel >= 2) {
+        pattern.push({ delayMs: 360, angleDeg: -14 * spreadScale, swingDir: -1 });
+      }
+
+      return pattern;
+    },
+
+    triggerWarriorSwingHit(facingAngle, swingDir) {
       const swordQiLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorSwordQiLevel || 0)));
       const berserkgodLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBerserkgodLevel || 0)));
       const bladestormLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBladestorm || 0)));
       const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
       const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
-      const allowCrescent = swordQiLevel > 0 || berserkgodLevel > 0;
-      if (!allowCrescent) return;
 
-      this.spawnWarriorCrescentProjectile(facingAngle, swingDir);
+      const comboSeq = (this.warriorBladeCycleSeq || 0) + 1;
+      this.warriorBladeCycleSeq = comboSeq;
+      const comboPattern = this.getWarriorBladeComboPattern(swordQiLevel);
+      const comboSign = swingDir >= 0 ? 1 : -1;
+
+      this.player?.playAttackAnimation?.();
+
+      comboPattern.forEach((shot) => {
+        this.time?.delayedCall?.(shot.delayMs, () => {
+          if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
+          if (this.warriorBladeCycleSeq !== comboSeq) return;
+          const shotAngle = facingAngle + Phaser.Math.DegToRad(shot.angleDeg || 0);
+          this.spawnWarriorCrescentProjectile(shotAngle, (shot.swingDir || 1) * comboSign);
+        });
+      });
 
       if (swordQiLevel >= 3) {
-        this.time?.delayedCall?.(90, () => {
+        this.time?.delayedCall?.(440, () => {
           if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
-          this.spawnWarriorCrescentProjectile(facingAngle, -swingDir);
+          if (this.warriorBladeCycleSeq !== comboSeq) return;
+          this.spawnWarriorCrescentProjectile(facingAngle + Phaser.Math.DegToRad(6 * comboSign), -comboSign);
         });
       }
 
@@ -1845,15 +1877,7 @@ export function applyBuildClassMixin(GameScene) {
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
-      const baseSwingDuration = this.slashSwingDuration || 700;
-      const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
-      const bladestormLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBladestorm || 0)));
-      const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
-      const bladestormSpeedMult = ([1, 0.58, 0.50, 0.42][bladestormLevel] || 1);
-      const unyieldingSpeedMult = lowHpRatio <= 0.35 ? ([1, 0.88, 0.78, 0.68][unyieldingLevel] || 1) : 1;
-      const swingDuration = Math.max(140, Math.round((this.player?.fireRate || baseSwingDuration) * bladestormSpeedMult * unyieldingSpeedMult));
-      const swingElapsed = (this.slashSwingStartTime != null) ? (time - this.slashSwingStartTime) : 0;
-      const swingInProgress = Number.isFinite(swingElapsed) && swingElapsed >= 0 && swingElapsed < swingDuration;
+      const cycleDuration = Math.max(1600, Math.round((this.player?.fireRate || 700) * 2.85));
 
       // 索敌范围（用于“找目标开始挥砍”）：初始更短
       const acquireRange = Math.max(220, range * 1.6);
@@ -1861,131 +1885,42 @@ export function applyBuildClassMixin(GameScene) {
 
       this.updateWarriorRangeRing(time);
 
-      // 若正在挥砍中，即使目标被消灭/暂时丢失，也要把本次挥动完整播放完。
       if (!target || !target.isAlive) {
-        if (swingInProgress && Number.isFinite(this.slashLockedFacingAngle)) {
-          const facingAngle = this.slashLockedFacingAngle;
-          this.slashFacingAngle = facingAngle;
-          const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
-          const bezier01 = (t, p1, p2) => {
-            const u = 1 - t;
-            return (3 * u * u * t * p1) + (3 * u * t * t * p2) + (t * t * t);
-          };
-          const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
-          const visualRange = range * 0.48;
-          this.displaySlashFan(
-            px,
-            py,
-            visualRange,
-            facingAngle,
-            this.slashSwingDir,
-            swingProgress
-          );
-          return;
-        }
-
         this.destroySlashFan();
         this.slashLockedFacingAngle = null;
         this.slashLockUntil = 0;
-        this.slashSwingStartTime = time;
         return;
       }
 
       const dist = Phaser.Math.Distance.Between(px, py, target.x, target.y);
-      const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
-      const attackStartRange = this.player.warriorSpin || this.player?.warriorBladestorm ? range : halfMoonR;
+      const bladeStartRange = Phaser.Math.Clamp(Math.floor(range * 0.92), 90, 320);
+      const attackStartRange = this.player.warriorSpin || this.player?.warriorBladestorm ? range : bladeStartRange;
       const targetR = Number.isFinite(target?.bossSize)
         ? target.bossSize
         : (Number.isFinite(target?.radius) ? target.radius : 0);
       const inAttackRange = dist <= (attackStartRange + Math.max(0, targetR));
 
       if (!inAttackRange) {
-        if (swingInProgress && Number.isFinite(this.slashLockedFacingAngle)) {
-          const facingAngle = this.slashLockedFacingAngle;
-          this.slashFacingAngle = facingAngle;
-          const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
-          const bezier01 = (t, p1, p2) => {
-            const u = 1 - t;
-            return (3 * u * u * t * p1) + (3 * u * t * t * p2) + (t * t * t);
-          };
-          const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
-          const visualRange = range * 0.48;
-          this.displaySlashFan(
-            px,
-            py,
-            visualRange,
-            facingAngle,
-            this.slashSwingDir,
-            swingProgress
-          );
-          return;
-        }
-
         this.destroySlashFan();
         this.slashLockedFacingAngle = null;
         this.slashLockUntil = 0;
-        this.slashSwingStartTime = time;
         return;
       }
 
-      // 正常开打：锁定本次挥砍的朝向，避免中途因重选目标而瞬间改向/重置
       const computedFacingAngle = Math.atan2(target.y - py, target.x - px);
-      if (!Number.isFinite(this.slashSwingStartTime) || this.slashSwingStartTime <= 0) {
-        this.slashSwingStartTime = time;
-      }
-      if (!Number.isFinite(this.slashLockUntil) || time >= this.slashLockUntil || !Number.isFinite(this.slashLockedFacingAngle)) {
-        this.slashLockedFacingAngle = computedFacingAngle;
-        this.slashLockUntil = this.slashSwingStartTime + swingDuration;
-      }
-
-      const facingAngle = this.slashLockedFacingAngle;
+      const facingAngle = computedFacingAngle;
       this.slashFacingAngle = facingAngle;
+      this.destroySlashFan();
 
-      this.slashArcSpan = (this.player.warriorSpin || this.player?.warriorBladestorm)
-        ? Math.PI * 2
-        : Phaser.Math.DegToRad(this.getWarriorArcSpanDeg());
-
-      // 进入攻击范围后的“当前这一挥”：立刻生成一次命中判定
-      // 注意：后续挥砍的判定仍由 while 循环在“新一挥开始”时生成。
-      if (this.slashLastHitSwingStartTime !== this.slashSwingStartTime) {
-        this.slashLastHitSwingStartTime = this.slashSwingStartTime;
-        this.triggerWarriorSwingHit(facingAngle, this.slashSwingDir);
+      if (!Number.isFinite(this.warriorBladeNextCycleAt) || this.warriorBladeNextCycleAt <= 0) {
+        this.warriorBladeNextCycleAt = time;
       }
 
-      while (time - this.slashSwingStartTime >= swingDuration) {
-        this.slashSwingStartTime += swingDuration;
-
-        // 新一挥开始：刷新锁定朝向（下一挥可以重新对准新的最近目标）
-        this.slashLockedFacingAngle = computedFacingAngle;
-        this.slashLockUntil = this.slashSwingStartTime + swingDuration;
-
-        if (!(this.player.warriorSpin || this.player?.warriorBladestorm)) {
-          this.slashSwingDir *= -1;
-        } else {
-          this.slashSwingDir = 1;
-        }
-
+      if (time >= this.warriorBladeNextCycleAt) {
+        this.slashSwingDir *= -1;
+        this.warriorBladeNextCycleAt = time + cycleDuration;
         this.triggerWarriorSwingHit(facingAngle, this.slashSwingDir);
-
-        // while 循环生成的判定对应“新一挥开始”，同步标记避免下一帧重复生成
-        this.slashLastHitSwingStartTime = this.slashSwingStartTime;
       }
-      const swingProgressLinear = Phaser.Math.Clamp((time - this.slashSwingStartTime) / swingDuration, 0, 1);
-      const bezier01 = (t, p1, p2) => {
-        const u = 1 - t;
-        return (3 * u * u * t * p1) + (3 * u * t * t * p2) + (t * t * t);
-      };
-      const swingProgress = Phaser.Math.Clamp(bezier01(swingProgressLinear, 0.55, 0.98), 0, 1);
-
-      const visualRange = range * 0.48;
-      this.displaySlashFan(
-        px,
-        py,
-        visualRange,
-        facingAngle,
-        this.slashSwingDir,
-        swingProgress
-      );
     },
 
     spawnWarriorMeleeHit(facingAngle) {

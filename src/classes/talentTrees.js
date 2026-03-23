@@ -34,11 +34,11 @@ export const TREE_DEFS = [
     id: 'warrior',
     name: '战士-主',
     color: resolveClassColor('warrior'),
-    core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为劈砍。' },
+    core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为近战挥砍并外放真空刃。' },
     nodes: [
-      { id: 'warrior_range', name: '横扫拓宽', maxLevel: 3, desc: '月牙斩弧度拓宽：基础 90°；1/2/3级分别提升到 120°/180°/270°。' },
-      { id: 'warrior_swordqi', name: '月牙外放', maxLevel: 3, desc: '挥砍后额外放出月牙剑气，近战判定始终保留。1级解锁外放，2级强化速度/伤害并获得轻度追踪，3级每次挥砍连续放出两道月牙。' },
-      { id: 'warrior_endure', name: '斩势护体', maxLevel: 3, desc: '月牙斩或外放月牙命中后获得短暂减伤。1/2/3级分别获得 8%/12%/16% 减伤，持续 1.4/1.6/1.8 秒，可刷新。' },
+      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '次元斩组合的展开角度提升：基础 90°；1/2/3级分别提升到 120°/180°/270°。' },
+      { id: 'warrior_swordqi', name: '真空刃强化', maxLevel: 3, desc: '基础真空刃持续强化。1级提升飞行质量，2级进一步强化速度/伤害并获得轻度追踪，3级每次挥砍连续放出两道真空刃。' },
+      { id: 'warrior_endure', name: '斩势护体', maxLevel: 3, desc: '次元斩命中后获得短暂减伤。1/2/3级分别获得 8%/12%/16% 减伤，持续 1.4/1.6/1.8 秒，可刷新。' },
       { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒。' },
       { id: 'warrior_bloodlust_mastery', name: '狂血渴饮', maxLevel: 3, desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%。' }
     ]

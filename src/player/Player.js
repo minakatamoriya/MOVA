@@ -697,7 +697,7 @@ export default class Player extends Phaser.GameObjects.Container {
       return;
     }
 
-    // 战士（月牙斩近战）由 GameScene.updateMelee 驱动；此处不发射投射物
+    // 战士（次元斩连发）由 GameScene.updateMelee 驱动；此处不直接发射投射物
     if (this.weaponType === 'warrior_melee') {
       this.playAttackAnimation();
       return;
@@ -2202,7 +2202,7 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 主职业锁定普攻形态
     if (coreKey === 'warrior') {
-      // 战士主普攻：回退为旧“月牙斩近战”系统（在 GameScene.updateMelee 里渲染/结算）
+      // 战士主普攻：近战挥砍 + 真空刃（在 GameScene.updateMelee 里统一渲染/结算）
       this.weaponType = 'warrior_melee';
       this.baseFireRate = 999999;
     } else if (coreKey === 'paladin') {

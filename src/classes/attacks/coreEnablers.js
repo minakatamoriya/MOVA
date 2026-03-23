@@ -37,7 +37,7 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
   if (scene.player?.setMainCoreAttack) scene.player.setMainCoreAttack(pickedCore);
   if (scene.player) scene.player.canFire = true;
 
-  // 战士：启用旧月牙斩近战系统（身前挥砍、左右交替、按旧弧度显示）
+  // 战士：启用近战挥砍 + 真空刃基础攻击系统（身前挥砍、左右交替、同步外放刀波）
   if (pickedCore === 'warrior' && typeof scene.enableWarriorBuild === 'function') {
     scene.enableWarriorBuild();
   }
