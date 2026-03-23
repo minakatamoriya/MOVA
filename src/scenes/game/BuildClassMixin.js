@@ -200,11 +200,11 @@ export function applyBuildClassMixin(GameScene) {
         case 'warrior_swordqi':
           this.player.warriorSwordQiLevel = Math.min(3, (this.player.warriorSwordQiLevel || 0) + 1);
           break;
-        case 'warrior_endure':
-          this.player.warriorEndureLevel = Math.min(3, (this.player.warriorEndureLevel || 0) + 1);
+        case 'warrior_damage':
+          this.player.warriorDamageLevel = Math.min(3, (this.player.warriorDamageLevel || 0) + 1);
           break;
         case 'warrior_range':
-          this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
+          this.upgradeWarriorRange();
           break;
         case 'warrior_lifesteal':
           this.upgradeWarriorLifesteal();
@@ -494,8 +494,11 @@ export function applyBuildClassMixin(GameScene) {
         case 'archer_eagleeye':
           this.player.archerEagleeye = Math.min(3, (this.player.archerEagleeye || 0) + 1);
           break;
-        case 'warrior_bladestorm':
-          this.player.warriorBladestorm = Math.min(3, (this.player.warriorBladestorm || 0) + 1);
+        case 'warrior_spin':
+          this.player.warriorBladestorm = 1;
+          this.player.warriorSpin = true;
+          this.player.warriorSpinActiveUntil = Math.max(Number(this.time?.now || 0) + 10000, Number(this.player.warriorSpinActiveUntil || 0));
+          this.player.warriorSpinNextAt = Math.max(Number(this.player.warriorSpinNextAt || 0), Number(this.time?.now || 0) + 30000);
           break;
         case 'warrior_berserkgod':
           this.player.warriorBerserkgodLevel = Math.min(3, (this.player.warriorBerserkgodLevel || 0) + 1);
@@ -1752,34 +1755,91 @@ export function applyBuildClassMixin(GameScene) {
 
     upgradeWarriorRange() {
       this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
+      const rangeByLevel = [220, 280, 340, 420];
+      this.player.warriorRangeBase = rangeByLevel[this.player.warriorArcLevel] || rangeByLevel[0];
+      this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
     },
 
     getWarriorArcSpanDeg() {
-      const level = Math.max(0, Math.min(3, Math.round(this.player?.warriorArcLevel || 0)));
-      return [90, 120, 180, 270][level] || 90;
+      return 90;
+    },
+
+    getWarriorSenseRange() {
+      const range = this.player?.warriorRange || this.meleeRange || 150;
+      if (this.player?.warriorSpin) {
+        return Phaser.Math.Clamp(Math.round(range * 0.72), 160, 260);
+      }
+      return Phaser.Math.Clamp(Math.round(range * 0.58), 140, 230);
+    },
+
+    updateWarriorSpinState(time) {
+      const player = this.player;
+      if (!player) return false;
+
+      if (Math.max(0, Math.round(player.warriorBladestorm || 0)) <= 0) {
+        player.warriorSpin = false;
+        player.warriorSpinActiveUntil = 0;
+        player.warriorSpinNextAt = 0;
+        return false;
+      }
+
+      const now = Number(time || 0);
+      const durationMs = 10000;
+      const cooldownMs = 30000;
+
+      if (!Number.isFinite(player.warriorSpinNextAt) || player.warriorSpinNextAt <= 0) {
+        player.warriorSpinNextAt = now + cooldownMs;
+      }
+
+      if (player.warriorSpin && now >= Number(player.warriorSpinActiveUntil || 0)) {
+        player.warriorSpin = false;
+      }
+
+      if (!player.warriorSpin && now >= Number(player.warriorSpinNextAt || 0)) {
+        player.warriorSpin = true;
+        player.warriorSpinActiveUntil = now + durationMs;
+        player.warriorSpinNextAt = now + cooldownMs;
+      }
+
+      return !!player.warriorSpin;
     },
 
     getWarriorBladeComboPattern(swordQiLevel = 0) {
-      const spreadScale = Phaser.Math.Clamp(this.getWarriorArcSpanDeg() / 120, 0.85, 2.1);
-      const pattern = [
-        { delayMs: 0, angleDeg: -22 * spreadScale, swingDir: 1 },
-        { delayMs: 72, angleDeg: -8 * spreadScale, swingDir: -1 },
-        { delayMs: 144, angleDeg: 10 * spreadScale, swingDir: 1 },
-        { delayMs: 216, angleDeg: 24 * spreadScale, swingDir: -1 },
-        { delayMs: 288, angleDeg: 2 * spreadScale, swingDir: 1 }
+      const normalizedLevel = Math.max(0, Math.min(3, Math.round(swordQiLevel || 0)));
+      const offsetsByLevel = [
+        [0],
+        [0, -7, 7],
+        [0, -9, 9, -5, 5],
+        [0, -12, 12, -9, 9, -6, 6, -3, 3, 1]
       ];
+      const baseOffsets = [...(offsetsByLevel[normalizedLevel] || offsetsByLevel[0])];
 
-      if (swordQiLevel >= 2) {
-        pattern.push({ delayMs: 360, angleDeg: -14 * spreadScale, swingDir: -1 });
+      if (baseOffsets.length <= 1) {
+        return [{ delayMs: 0, angleDeg: 0, swingDir: 1 }];
       }
 
-      return pattern;
+      const firstShot = baseOffsets.shift();
+      for (let i = baseOffsets.length - 1; i > 0; i -= 1) {
+        const j = Phaser.Math.Between(0, i);
+        [baseOffsets[i], baseOffsets[j]] = [baseOffsets[j], baseOffsets[i]];
+      }
+
+      const pattern = [firstShot, ...baseOffsets];
+
+      return pattern.map((offsetDeg, index) => {
+        const jitter = index === 0 ? 0 : Phaser.Math.FloatBetween(-1.1, 1.1);
+        return {
+          delayMs: index * 42,
+          angleDeg: offsetDeg + jitter,
+          swingDir: Math.random() < 0.5 ? 1 : -1
+        };
+      });
     },
 
     triggerWarriorSwingHit(facingAngle, swingDir) {
       const swordQiLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorSwordQiLevel || 0)));
       const berserkgodLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBerserkgodLevel || 0)));
-      const bladestormLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBladestorm || 0)));
+      const spinUnlocked = Math.max(0, Math.min(1, Math.round(this.player?.warriorBladestorm || 0)));
       const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
       const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
 
@@ -1799,16 +1859,8 @@ export function applyBuildClassMixin(GameScene) {
         });
       });
 
-      if (swordQiLevel >= 3) {
-        this.time?.delayedCall?.(440, () => {
-          if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
-          if (this.warriorBladeCycleSeq !== comboSeq) return;
-          this.spawnWarriorCrescentProjectile(facingAngle + Phaser.Math.DegToRad(6 * comboSign), -comboSign);
-        });
-      }
-
-      if (bladestormLevel > 0 && berserkgodLevel > 0) {
-        const extraShots = Math.min(3, berserkgodLevel + Math.max(0, bladestormLevel - 1) + (lowHpRatio <= 0.35 ? unyieldingLevel : 0));
+      if (this.player?.warriorSpin && spinUnlocked > 0 && berserkgodLevel > 0) {
+        const extraShots = Math.min(3, berserkgodLevel + (lowHpRatio <= 0.35 ? unyieldingLevel : 0));
         for (let i = 0; i < extraShots; i++) {
           this.time?.delayedCall?.(120 + i * 70, () => {
             if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
@@ -1820,20 +1872,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     applyWarriorMainHitEffects(target, now, bullet) {
-      const player = this.player;
-      if (!player || !target || player.mainCoreKey !== 'warrior') return;
-
-      const tags = Array.isArray(bullet?.tags) ? bullet.tags : [];
-      const isWarriorHit = tags.includes('warrior_melee') || tags.includes('warrior_crescent');
-      if (!isWarriorHit) return;
-
-      const endureLevel = Math.max(0, Math.min(3, Math.round(player.warriorEndureLevel || 0)));
-      if (endureLevel <= 0) return;
-
-      const reductionByLevel = [0, 0.08, 0.12, 0.16];
-      const durationByLevel = [0, 1400, 1600, 1800];
-      player.warriorGuardReduction = reductionByLevel[endureLevel] || 0;
-      player.warriorGuardUntil = Math.max(Number(player.warriorGuardUntil || 0), Number(now || 0) + (durationByLevel[endureLevel] || 1400));
+      return;
     },
 
     upgradeWarriorLifesteal() {
@@ -1853,15 +1892,11 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_warriorTargetRing', 'warrior');
 
-      const range = this.player?.warriorRange || this.meleeRange || 150;
       const hp = this.player.getHitboxPosition?.();
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
 
-      const halfMoonR = Phaser.Math.Clamp(Math.floor(range * 0.60), 46, 260);
-      const r = this.player.warriorSpin
-        ? Phaser.Math.Clamp(range, 90, 420)
-        : Phaser.Math.Clamp(halfMoonR, 46, 220);
+      const r = this.getWarriorSenseRange();
 
       this._warriorTargetRing.setRadius(r);
       this._warriorTargetRing.setPosition(px, py);
@@ -1871,7 +1906,10 @@ export function applyBuildClassMixin(GameScene) {
     updateMelee(time) {
       if (!this.meleeEnabled || !this.player || this.player.isAlive === false) return;
 
+      this.updateWarriorSpinState(time);
+
       const range = this.player?.warriorRange || this.meleeRange || 150;
+      const senseRange = this.getWarriorSenseRange();
 
       const hp = this.player.getHitboxPosition?.();
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
@@ -1879,8 +1917,8 @@ export function applyBuildClassMixin(GameScene) {
 
       const cycleDuration = Math.max(1600, Math.round((this.player?.fireRate || 700) * 2.85));
 
-      // 索敌范围（用于“找目标开始挥砍”）：初始更短
-      const acquireRange = Math.max(220, range * 1.6);
+      // 近战只在较短半径内开始感知与出手，风刃本体的飞行距离独立处理。
+      const acquireRange = senseRange;
       const target = this.getNearestEnemy(acquireRange);
 
       this.updateWarriorRangeRing(time);
@@ -1893,8 +1931,7 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       const dist = Phaser.Math.Distance.Between(px, py, target.x, target.y);
-      const bladeStartRange = Phaser.Math.Clamp(Math.floor(range * 0.92), 90, 320);
-      const attackStartRange = this.player.warriorSpin || this.player?.warriorBladestorm ? range : bladeStartRange;
+      const attackStartRange = senseRange;
       const targetR = Number.isFinite(target?.bossSize)
         ? target.bossSize
         : (Number.isFinite(target?.radius) ? target.radius : 0);

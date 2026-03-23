@@ -251,8 +251,10 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   const arcDegByLevel = [90, 120, 180, 270];
   const arcLevel = Phaser.Math.Clamp(Math.round(player.warriorArcLevel || 0), 0, 3);
   const bladestormLevel = Phaser.Math.Clamp(Math.round(player.warriorBladestorm || 0), 0, 3);
-  const hasBladestorm = bladestormLevel > 0;
+  const hasBladestorm = !!player.warriorSpin && bladestormLevel > 0;
   const unyieldingLevel = Phaser.Math.Clamp(Math.round(player.warriorUnyielding || 0), 0, 3);
+  const warriorDamageLevel = Phaser.Math.Clamp(Math.round(player.warriorDamageLevel || 0), 0, 3);
+  const warriorDamageMult = [1, 1.12, 1.24, 1.40][warriorDamageLevel] || 1;
   const lowHpRatio = (player.maxHp || 0) > 0 ? ((player.hp || 0) / player.maxHp) : 1;
   const unyieldingDamageMult = lowHpRatio <= 0.35 ? ([1, 1.12, 1.24, 1.40][unyieldingLevel] || 1) : 1;
   const arcSpan = (player.warriorSpin || hasBladestorm) ? Math.PI * 2 : Phaser.Math.DegToRad(arcDegByLevel[arcLevel] || 90);
@@ -289,7 +291,7 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
     scheme.coreBright,
     {
       radius: 14,
-      damage: Math.max(1, Math.round((player.bulletDamage || 34) * (1.05 + bladestormLevel * 0.14) * unyieldingDamageMult)),
+      damage: Math.max(1, Math.round((player.bulletDamage || 34) * (1.05 + bladestormLevel * 0.14) * warriorDamageMult * unyieldingDamageMult)),
       alpha: 0.001,
       maxLifeMs: 140,
       pierce: true,
@@ -323,6 +325,8 @@ export function spawnWarriorCrescentProjectile(scene, facingAngle, swingDir) {
   if (!player) return;
 
   const swordQiLevel = Phaser.Math.Clamp(Math.round(player.warriorSwordQiLevel || 0), 0, 3);
+  const warriorDamageLevel = Phaser.Math.Clamp(Math.round(player.warriorDamageLevel || 0), 0, 3);
+  const warriorDamageMult = [1, 1.12, 1.24, 1.40][warriorDamageLevel] || 1;
 
   const angle = (typeof facingAngle === 'number') ? facingAngle : -Math.PI / 2;
 
@@ -335,12 +339,11 @@ export function spawnWarriorCrescentProjectile(scene, facingAngle, swingDir) {
   const scheme = getWarriorScheme(player);
   const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
 
-  const rangeScaleByLevel = [0.92, 1.0, 1.16, 1.24];
+  const rangeScaleByLevel = [1.0, 1.0, 1.0, 1.0];
   const widthScaleByLevel = [0.94, 1.0, 1.06, 1.10];
   const damageScaleByLevel = [0.48, 0.60, 0.75, 0.70];
-  const speedByLevel = [700, 760, 860, 940];
-  const lifeByLevel = [320, 360, 430, 500];
-  const homingTurnByLevel = [0, 0.04, 0.08, 0.11];
+  const speedByLevel = [700, 860, 1020, 1180];
+  const lifeByLevel = [340, 380, 430, 500];
 
   const bladeLength = Phaser.Math.Clamp(Math.floor((scene.meleeRange || 220) * 0.70 * (rangeScaleByLevel[swordQiLevel] || 1)), 96, 168);
   const bladeWidth = Phaser.Math.Clamp(Math.floor(bladeLength * 0.11 * (widthScaleByLevel[swordQiLevel] || 1)), 10, 20);
@@ -365,13 +368,12 @@ export function spawnWarriorCrescentProjectile(scene, facingAngle, swingDir) {
     {
       radius: collisionRadius,
       speed: speedByLevel[swordQiLevel] || 640,
-      damage: Math.max(1, Math.round((player.bulletDamage || 34) * (damageScaleByLevel[swordQiLevel] || 0.6))),
+      damage: Math.max(1, Math.round((player.bulletDamage || 34) * (damageScaleByLevel[swordQiLevel] || 0.6) * warriorDamageMult)),
       angleOffset: angle,
       isAbsoluteAngle: true,
       hasGlow: false,
       hasTrail: false,
-      homing: swordQiLevel >= 2,
-      homingTurn: homingTurnByLevel[swordQiLevel] || 0.04,
+      homing: false,
       maxLifeMs: lifeByLevel[swordQiLevel] || 520,
       tags: ['warrior_crescent'],
     }

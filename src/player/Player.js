@@ -227,9 +227,10 @@ export default class Player extends Phaser.GameObjects.Container {
     this.mageFrostDomainLevel = 0;
     this.warriorArcLevel = 0;
     this.warriorSwordQiLevel = 0;
-    this.warriorEndureLevel = 0;
-    this.warriorGuardUntil = 0;
-    this.warriorGuardReduction = 0;
+    this.warriorDamageLevel = 0;
+    this.warriorSpin = false;
+    this.warriorSpinActiveUntil = 0;
+    this.warriorSpinNextAt = 0;
     this.druidMeteorShowerLevel = 0;
     this.druidMeteorLevel = 0;
     this.druidStarfireLevel = 0;
@@ -405,6 +406,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.mageDualcaster = 0;
     this.mageTrilaser = 0;
     this.warriorBladestorm = 0;
+    this.warriorSpin = false;
     this.warriorUnyielding = 0;
     this.warlockPoisonAutoSeek = 0;
     this.warlockNetherlord = 0;

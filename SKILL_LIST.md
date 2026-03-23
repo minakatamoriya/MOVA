@@ -10,7 +10,7 @@
 - 副职业通用池：不切主武器，只提供副玩法系统与被动。
 - 深度预备：主副同主题时出现，进入本职业深度专精。
 - 双职预备：主副不同主题时出现，进入双职业专精。
-- 多级节点统一展开为 Lv1 / Lv2 / Lv3；战士的 [warrior_range](src/classes/upgradePools.js) 当前仍是 4 级。
+- 多级节点统一展开为 Lv1 / Lv2 / Lv3。
 - 旧 id 别名：mage_refract -> mage_frostbite，mage_arcane_perception -> mage_cold_focus，mage_energy_focus -> mage_ice_veins。
 - 以下 2 个深度节点当前仍未完全接入最终数值公式：mage_arcanomorph、paladin_avenger。
 
@@ -83,10 +83,9 @@
 
 ### 主职业专精
 
-- warrior_spin：Lv1 挥砍变为 360° 回旋斩，造成范围伤害。
-- warrior_swordqi：Lv1 挥砍时额外发射一道月牙剑气。
-- warrior_endure：Lv1 战士近战形态获得 20% 伤害减免。
-- warrior_range，4级：Lv1 月牙斩基础范围 220 -> 245；Lv2 245 -> 270；Lv3 270 -> 295；Lv4 295 -> 320。
+- warrior_damage，3级：Lv1 基础技能伤害提高 0% -> 12%；Lv2 12% -> 24%；Lv3 24% -> 40%。
+- warrior_swordqi，3级：基础每次挥砍放出 1 枚风刃；Lv1 1 -> 3，并提升风刃速度；Lv2 3 -> 5，并继续提升速度；Lv3 5 -> 10，并达到最高飞行速度。
+- warrior_range，3级：Lv1 风刃基础射程提升约 27%（220 -> 280）；Lv2 提升约 55%（280 -> 340）；Lv3 提升约 91%（340 -> 420）。
 - warrior_blood_conversion，3级：Lv1 解锁低血吸血，持续 5 秒，吸血转化固定 100%，冷却 30 秒；Lv2 持续时间 5秒 -> 10秒；Lv3 10秒 -> 15秒。
 - warrior_bloodlust_mastery，3级：Lv1 吸血转化 100% -> 120%；Lv2 120% -> 150%；Lv3 150% -> 200%。
 
@@ -103,7 +102,7 @@
 ### 深度专精
 
 - third_depth_prep：Lv1 解锁战士深度专精，并获得造成伤害 +30%。
-- warrior_bladestorm：Lv1 永动旋刃，近战挥砍改为全周持续旋转，攻击频率显著加快，并持续维持贴身绞杀范围。
+- warrior_spin：Lv1 回旋斩，作为终极技能进入第三列天赋池；每 30 秒自动触发一次，持续 10 秒，期间战士进入 360° 回旋斩状态。
 - warrior_berserkgod，3级：Lv1 旋转期间每轮额外追加 1 道延迟破风刃；Lv2 追加数提高到 2 道；Lv3 提高到 3 道，形成连续外放压制。
 - warrior_unyielding：Lv1 暴走战躯，低血量时永动旋刃进一步提速；当前代码阈值为生命低于 35% 时额外加快旋转频率。
 

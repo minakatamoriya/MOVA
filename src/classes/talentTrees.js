@@ -36,9 +36,9 @@ export const TREE_DEFS = [
     color: resolveClassColor('warrior'),
     core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为近战挥砍并外放真空刃。' },
     nodes: [
-      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '次元斩组合的展开角度提升：基础 90°；1/2/3级分别提升到 120°/180°/270°。' },
-      { id: 'warrior_swordqi', name: '真空刃强化', maxLevel: 3, desc: '基础真空刃持续强化。1级提升飞行质量，2级进一步强化速度/伤害并获得轻度追踪，3级每次挥砍连续放出两道真空刃。' },
-      { id: 'warrior_endure', name: '斩势护体', maxLevel: 3, desc: '次元斩命中后获得短暂减伤。1/2/3级分别获得 8%/12%/16% 减伤，持续 1.4/1.6/1.8 秒，可刷新。' },
+      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '强化风刃射程。1/2/3级分别提高基础射程约 27%/55%/91%（对应 280/340/420）。' },
+      { id: 'warrior_swordqi', name: '真空刃强化', maxLevel: 3, desc: '提升每次挥砍放出的风刃数量与飞行速度。基础 1 枚；1/2/3级分别提升到 3/5/10 枚，并同步提高风刃飞行速度。' },
+      { id: 'warrior_damage', name: '破军刃势', maxLevel: 3, desc: '直接提高战士基础技能伤害。1/2/3级分别提高 12%/24%/40%。' },
       { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒。' },
       { id: 'warrior_bloodlust_mastery', name: '狂血渴饮', maxLevel: 3, desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%。' }
     ]
@@ -196,9 +196,8 @@ export const SKILL_TO_TREE = {
 
   // 其余职业
   warrior_core: 'warrior',
-  warrior_spin: 'warrior',
   warrior_swordqi: 'warrior',
-  warrior_endure: 'warrior',
+  warrior_damage: 'warrior',
   warrior_range: 'warrior',
   warrior_blood_conversion: 'warrior',
   warrior_bloodlust_mastery: 'warrior',
@@ -304,7 +303,7 @@ export const SKILL_TO_TREE = {
   archer_windfury: 'third',
   archer_eagleeye: 'third',
 
-  warrior_bladestorm: 'third',
+  warrior_spin: 'third',
   warrior_berserkgod: 'third',
   warrior_unyielding: 'third',
 
