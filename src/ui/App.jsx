@@ -354,12 +354,55 @@ export default function App() {
 
   const attemptRoundVendorPurchase = (item) => {
     if (!item?.id || item?.canBuy === false) {
-      if (item?.disabledReason === 'carry_limit') showFloatingInfo('当前已达携带上限');
+      if (item?.disabledReason === 'carry_limit') {
+        showFloatingInfo(`已达携带上限 ${Math.max(0, Number(item?.carryLimit || 0))}`);
+      }
+      if (item?.disabledReason === 'backpack_full') {
+        showFloatingInfo(`背包已满 ${Math.max(0, Number(item?.backpackCount || 0))}/${Math.max(0, Number(item?.backpackCapacity || 0))}`);
+      }
       if (item?.disabledReason === 'not_enough_session_coins') showFloatingInfo('局内金币不足');
       if (item?.disabledReason === 'sold_out') showFloatingInfo('该商品已售出');
       return;
     }
     uiBus.emit('ui:shop:buy', item.id);
+    return true;
+  };
+
+  const getRoundVendorDisabledText = (item) => {
+    const reason = item?.disabledReason || '';
+    if (reason === 'carry_limit') {
+      const current = Math.max(0, Number(item?.currentCount || 0));
+      const limit = Math.max(0, Number(item?.carryLimit || 0));
+      return limit > 0 ? `已满 ${current}/${limit}` : '已满';
+    }
+    if (reason === 'backpack_full') {
+      const current = Math.max(0, Number(item?.backpackCount || 0));
+      const limit = Math.max(0, Number(item?.backpackCapacity || 0));
+      return limit > 0 ? `背包满 ${current}/${limit}` : '背包已满';
+    }
+    if (reason === 'not_enough_session_coins') return '金币不足';
+    if (reason === 'sold_out') return '已售';
+    return '';
+  };
+
+  const getRoundVendorDetailHint = (item) => {
+    const reason = item?.disabledReason || '';
+    if (reason === 'carry_limit') {
+      const current = Math.max(0, Number(item?.currentCount || 0));
+      const limit = Math.max(0, Number(item?.carryLimit || 0));
+      return `当前携带 ${current}/${limit}，已达到本轮上限`;
+    }
+    if (reason === 'backpack_full') {
+      const current = Math.max(0, Number(item?.backpackCount || 0));
+      const limit = Math.max(0, Number(item?.backpackCapacity || 0));
+      return `背包容量 ${current}/${limit}，请先清出空位后再购买`;
+    }
+    if (reason === 'not_enough_session_coins') return '局内金币不足，暂时无法购买';
+    if (reason === 'sold_out') return '该商品本轮已售出';
+    if (item?.kind === 'consumable') {
+      return `背包占用 ${Math.max(0, Number(item?.backpackCount || 0))}/${Math.max(0, Number(item?.backpackCapacity || 0))}，当前携带 ${Math.max(0, Number(item?.currentCount || 0))}/${Math.max(0, Number(item?.carryLimit || 0))}`;
+    }
+    return '购入后直接收入局内装备，装备栏当前不限制格子';
   };
 
   const getNextAutoEquipSlot = () => {
@@ -2434,7 +2477,7 @@ export default function App() {
             <div style={{ fontSize: 18, fontWeight: 900, color: '#ffff00' }}>金币: {shop?.coins ?? 0}</div>
             {isRoundVendorShop ? (
               <div style={{ fontSize: 14, opacity: 0.82 }}>
-                轻触购买，长按查看详情，松手后说明卡片自动隐藏。
+                点击商品查看详情，在下方卡片中购买或取消。
               </div>
             ) : null}
 
@@ -2445,38 +2488,19 @@ export default function App() {
                   ? !!item.canBuy
                   : (!purchased && (shop?.coins ?? 0) >= Number(item.price || 0));
                 const disabledText = isRoundVendorShop
-                  ? (item.disabledReason === 'carry_limit' ? '已满' : (item.disabledReason === 'not_enough_session_coins' ? '金币不足' : (item.disabledReason === 'sold_out' ? '已售' : '')))
+                  ? getRoundVendorDisabledText(item)
                   : '';
                 return (
                   <button
                     key={item.id}
                     type="button"
-                    onPointerDown={(e) => {
-                      startLongPress(`vendor:${item.id}`, () => showShopDetail(item), e);
+                    onClick={() => {
+                      if (isRoundVendorShop) {
+                        showShopDetail(item);
+                        return;
+                      }
+                      uiBus.emit('ui:shop:buy', item.id);
                     }}
-                    onPointerUp={(e) => {
-                      endLongPress(`vendor:${item.id}`, () => {
-                        if (isRoundVendorShop) {
-                          attemptRoundVendorPurchase(item);
-                          return;
-                        }
-                        uiBus.emit('ui:shop:buy', item.id);
-                      }, e);
-                      setShopDetailItem(null);
-                    }}
-                    onPointerCancel={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      clearPressState();
-                      setShopDetailItem(null);
-                    }}
-                    onPointerLeave={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      clearPressState();
-                      setShopDetailItem(null);
-                    }}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -2527,7 +2551,7 @@ export default function App() {
                         {disabledText || (purchased ? '已购' : '不可购')}
                       </div>
                     ) : (
-                      <div style={{ fontSize: 11, opacity: 0.62 }}>轻触购买</div>
+                      <div style={{ fontSize: 11, opacity: 0.62 }}>{isRoundVendorShop ? '点击查看' : '轻触购买'}</div>
                     )}
                   </button>
                 );
@@ -2591,14 +2615,56 @@ export default function App() {
                     <div style={{ fontWeight: 900, color: '#ffd700' }}>{shopDetailItem.price} G</div>
                     {isRoundVendorShop ? (
                       <div style={{ fontSize: 12, opacity: 0.72 }}>
-                        {shopDetailItem.kind === 'consumable'
-                          ? `当前携带 ${Math.max(0, Number(shopDetailItem.currentCount || 0))}/${Math.max(0, Number(shopDetailItem.carryLimit || 0))}`
-                          : (shopDetailItem.purchased ? '本轮已购入' : '购入后直接进入局内装备栏')}
+                        {getRoundVendorDetailHint(shopDetailItem)}
                       </div>
                     ) : null}
                   </div>
 
-                  <div style={{ fontSize: 12, opacity: 0.68 }}>松手即隐藏说明，轻触商品直接购买</div>
+                  {isRoundVendorShop ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (attemptRoundVendorPurchase(shopDetailItem)) {
+                            setShopDetailItem(null);
+                          }
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          height: 36,
+                          padding: '0 16px',
+                          borderRadius: 12,
+                          border: `1px solid ${shopDetailItem.canBuy ? 'rgba(96,165,250,0.72)' : 'rgba(255,255,255,0.16)'}`,
+                          background: shopDetailItem.canBuy ? 'rgba(59,130,246,0.24)' : 'rgba(255,255,255,0.06)',
+                          color: '#fff',
+                          fontSize: 14,
+                          fontWeight: 900,
+                          opacity: shopDetailItem.canBuy ? 1 : 0.72
+                        }}
+                      >
+                        {shopDetailItem.canBuy ? '购买' : (getRoundVendorDisabledText(shopDetailItem) || '无法购买')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShopDetailItem(null)}
+                        style={{
+                          cursor: 'pointer',
+                          height: 36,
+                          padding: '0 16px',
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.18)',
+                          background: 'rgba(255,255,255,0.08)',
+                          color: '#fff',
+                          fontSize: 14,
+                          fontWeight: 800
+                        }}
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, opacity: 0.68 }}>轻触商品直接购买</div>
+                  )}
                 </div>
               </div>
             ) : null}

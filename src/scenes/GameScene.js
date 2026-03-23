@@ -283,6 +283,7 @@ class GameScene extends Phaser.Scene {
     this._roundVendorPending = false;
     this._roundVendorOpen = false;
     this._roundVendorSpawned = false;
+    this._roundVendorRequireExitBeforeReopen = false;
     this.roundVendorStock = [];
     this._postBossRewardActive = false;
     this._postBossRewardChoiceMade = false;
@@ -2372,7 +2373,19 @@ class GameScene extends Phaser.Scene {
     const count = this.getRunConsumableCount(itemId);
     const carryLimit = Math.max(0, Math.floor(Number(item.carryLimit || item.maxOwned || 0)));
     const price = this.getRunVendorPrice(item);
+    const backpackState = this.getRunConsumableBackpackState?.() || { usedSlots: 0, capacity: 0, full: false };
     if (count >= carryLimit) return { ok: false, reason: 'carry_limit', price, count, carryLimit };
+    if (backpackState.full) {
+      return {
+        ok: false,
+        reason: 'backpack_full',
+        price,
+        count,
+        carryLimit,
+        backpackCount: backpackState.usedSlots,
+        backpackCapacity: backpackState.capacity
+      };
+    }
     if (Number(this.sessionCoins || 0) < price) return { ok: false, reason: 'not_enough_session_coins', price, count, carryLimit };
     return { ok: true, reason: '', price, count, carryLimit };
   }
@@ -2409,7 +2422,7 @@ class GameScene extends Phaser.Scene {
       ...entry.item,
       source: 'vendor'
     });
-    this.toast?.show?.({ icon: entry.item.icon || '✦', text: `${entry.item.name} 已装入本局装备` }, { durationMs: 1200 });
+    this.toast?.show?.({ icon: entry.item.icon || '✦', text: `${entry.item.name} 已收入局内装备` }, { durationMs: 1200 });
     this.emitUiSnapshot?.();
     return { ok: true, reason: '', price: state.price };
   }
@@ -3513,7 +3526,11 @@ class GameScene extends Phaser.Scene {
       const dy = this.player.y - this.roundVendorZone.y;
       const hx = (this.roundVendorZone.width || 0) * 0.5;
       const hy = (this.roundVendorZone.height || 0) * 0.5;
-      if (Math.abs(dx) <= hx && Math.abs(dy) <= hy) {
+      const touched = Math.abs(dx) <= hx && Math.abs(dy) <= hy;
+      if (!touched && this._roundVendorRequireExitBeforeReopen) {
+        this._roundVendorRequireExitBeforeReopen = false;
+      }
+      if (touched && !this._roundVendorRequireExitBeforeReopen) {
         this.openRoundVendorScene?.();
       }
     }
