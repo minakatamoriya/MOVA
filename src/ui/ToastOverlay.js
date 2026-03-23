@@ -38,9 +38,11 @@ export default class ToastOverlay {
         const value = String(payload.value ?? '');
         const icon = payload.icon == null ? '' : String(payload.icon);
         const variant = payload.variant == null ? 'default' : String(payload.variant);
-        return { text, title, value, icon: icon || '✦', variant };
+        const accentColor = payload.accentColor == null ? '' : String(payload.accentColor);
+        const accentFill = payload.accentFill == null ? '' : String(payload.accentFill);
+        return { text, title, value, icon: icon || '✦', variant, accentColor, accentFill };
       }
-      return { text: String(payload ?? ''), title: '', value: '', icon: '✦', variant: 'default' };
+      return { text: String(payload ?? ''), title: '', value: '', icon: '✦', variant: 'default', accentColor: '', accentFill: '' };
     })();
 
     const durationMs = Math.max(0, opts.durationMs ?? this.durationMs);
@@ -83,7 +85,27 @@ export default class ToastOverlay {
     return '';
   }
 
-  _createToast({ id, text, title, value, icon, variant, durationMs }) {
+  _resolveColor(value, fallback = 0xffffff) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.floor(value));
+    }
+
+    const text = String(value || '').trim();
+    if (!text) return fallback;
+
+    if (text.startsWith('#')) {
+      return Phaser.Display.Color.HexStringToColor(text).color;
+    }
+
+    if (/^0x/i.test(text)) {
+      const parsed = Number.parseInt(text.slice(2), 16);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    return fallback;
+  }
+
+  _createToast({ id, text, title, value, icon, variant, durationMs, accentColor, accentFill }) {
     if (!this.scene) return null;
 
     const { cam, x, y } = this._getAnchor();
@@ -102,14 +124,19 @@ export default class ToastOverlay {
       const nameW = 92;
       const valueW = w - padX * 2 - iconW - sepGap - nameW - 10;
 
+      const strokeColor = accentColor || '#ffffff';
+      const fillColor = accentFill || '#0b0b18';
+      const strokeValue = this._resolveColor(strokeColor, 0xffffff);
+      const fillValue = this._resolveColor(fillColor, 0x0b0b18);
+
       const bg = this.scene.add.graphics();
-      bg.fillStyle(0x0b0b18, 0.9);
+      bg.fillStyle(fillValue, 0.94);
       bg.fillRoundedRect(-w, -h / 2, w, h, 10);
-      bg.lineStyle(2, 0xffffff, 0.16);
+      bg.lineStyle(2, strokeValue, 0.52);
       bg.strokeRoundedRect(-w, -h / 2, w, h, 10);
 
       const divider = this.scene.add.graphics();
-      divider.lineStyle(2, 0xffffff, 0.12);
+      divider.lineStyle(2, strokeValue, 0.28);
       const dividerX = -w + padX + iconW + sepGap + nameW + 4;
       divider.beginPath();
       divider.moveTo(dividerX, -12);
@@ -118,7 +145,7 @@ export default class ToastOverlay {
 
       const iconText = this.scene.add.text(0, 0, icon, {
         fontSize: '18px',
-        color: '#ffffff',
+        color: strokeColor,
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 3
@@ -126,7 +153,7 @@ export default class ToastOverlay {
 
       const titleText = this.scene.add.text(0, 0, '', {
         fontSize: '17px',
-        color: '#ffffff',
+        color: strokeColor,
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 3
@@ -134,7 +161,7 @@ export default class ToastOverlay {
 
       const valueText = this.scene.add.text(0, 0, '', {
         fontSize: '16px',
-        color: '#dfe6f5',
+        color: '#f8fafc',
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 3

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { getEquippedSupportSummary, getItemById } from '../../data/items';
+import { getCoinMagnetConfig, rollBossCoinDrops } from '../../data/currencyConfig';
 import { calculateResolvedDamage, combineStatMods, normalizeStatMods } from '../../combat/damageModel';
 import { formatLootEffectLines, formatLootPickupLine, getLootRarity, getLootSourceProfile, rollLootEquipment } from '../../data/lootItems';
 
@@ -153,8 +154,8 @@ export function applyDropsInventoryMixin(GameScene) {
         });
         if (guaranteedLegendary) {
           this.spawnItemDrop(
-            x + Phaser.Math.Between(-40, 40),
-            y + Phaser.Math.Between(-18, 22),
+            x + Phaser.Math.Between(-110, 110),
+            y + Phaser.Math.Between(-32, 30),
             guaranteedLegendary
           );
           spawned += 1;
@@ -171,8 +172,8 @@ export function applyDropsInventoryMixin(GameScene) {
         });
         if (!item) continue;
         this.spawnItemDrop(
-          x + Phaser.Math.Between(-48, 48),
-          y + Phaser.Math.Between(-18, 28),
+          x + Phaser.Math.Between(source === 'boss' ? -120 : -48, source === 'boss' ? 120 : 48),
+          y + Phaser.Math.Between(source === 'boss' ? -36 : -18, source === 'boss' ? 36 : 28),
           item
         );
         spawned += 1;
@@ -201,11 +202,21 @@ export function applyDropsInventoryMixin(GameScene) {
       const dropX = boss.x;
       const dropY = boss.y + 20;
 
-      const coinCount = Phaser.Math.Between(3, 6);
-      const coinValue = Phaser.Math.Between(20, 50);
-      for (let i = 0; i < coinCount; i++) {
-        this.spawnCoinDrop(dropX + Phaser.Math.Between(-40, 40), dropY + Phaser.Math.Between(-20, 20), coinValue);
-      }
+      const bossCoinDrops = rollBossCoinDrops({ stage: this.currentStage || 1, rng: Math.random });
+      bossCoinDrops.coins.forEach((amount, index) => {
+        this.spawnCoinDrop(
+          dropX + Phaser.Math.Between(-54, 54) + index * 4,
+          dropY + Phaser.Math.Between(-26, 26),
+          amount
+        );
+      });
+      bossCoinDrops.bags.forEach((amount, index) => {
+        this.spawnCoinBagDrop(
+          dropX + Phaser.Math.Between(-30, 30) + index * 22,
+          dropY + Phaser.Math.Between(-18, 18),
+          amount
+        );
+      });
 
       this.rollAndSpawnEquipmentDrops('boss', dropX, dropY, {
         count: Phaser.Math.Between(2, 3)
@@ -213,15 +224,26 @@ export function applyDropsInventoryMixin(GameScene) {
     },
 
     spawnCoinDrop(x, y, amount) {
-      const outer = this.add.circle(0, 0, 10, 0xffd700, 1);
-      outer.setStrokeStyle(2, 0xffffff, 0.65);
-      const inner = this.add.circle(-2, -2, 4, 0xffffff, 0.28);
+      const glow = this.add.circle(0, 0, 18, 0xffd766, 0.16);
+      const outer = this.add.circle(0, 0, 11, 0xffd54f, 1);
+      outer.setStrokeStyle(2, 0xfff8d6, 0.9);
+      const inner = this.add.circle(0, 0, 7, 0xfff2a8, 0.92);
+      const shine = this.add.circle(-3, -3, 3, 0xffffff, 0.35);
+      const mark = this.add.text(0, 0, 'G', {
+        fontSize: '12px',
+        color: '#7a4a00',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      const sparkA = this.add.circle(-10, -9, 2, 0xfff0a8, 0.80);
+      const sparkB = this.add.circle(12, -6, 1.6, 0xffffff, 0.75);
 
-      const coin = this.add.container(x, y, [outer, inner]);
+      const coin = this.add.container(x, y, [glow, sparkA, sparkB, outer, inner, shine, mark]);
 
       coin.setScale(0.6);
-      this.tweens.add({ targets: coin, scale: 1, duration: 180, ease: 'Back.Out' });
-      this.tweens.add({ targets: coin, alpha: { from: 0.85, to: 1 }, duration: 420, yoyo: true, repeat: -1 });
+      this.tweens.add({ targets: coin, scale: 1, duration: 220, ease: 'Back.Out' });
+      this.tweens.add({ targets: glow, alpha: { from: 0.10, to: 0.30 }, duration: 540, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      this.tweens.add({ targets: [sparkA, sparkB], alpha: { from: 0.25, to: 1 }, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      this.tweens.add({ targets: coin, angle: { from: -5, to: 5 }, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
 
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const sp = Phaser.Math.Between(70, 150);
@@ -242,13 +264,125 @@ export function applyDropsInventoryMixin(GameScene) {
       this.drops.push(spawnData);
     },
 
+    spawnCoinBagDrop(x, y, amount) {
+      const glow = this.add.circle(0, 8, 28, 0xffb84d, 0.14);
+      const body = this.add.ellipse(0, 2, 34, 38, 0x7a4a1b, 0.98);
+      body.setStrokeStyle(3, 0xf3cd7b, 0.95);
+      const tie = this.add.rectangle(0, -10, 18, 8, 0xf7df98, 0.96);
+      const tieKnot = this.add.circle(0, -12, 4, 0xfff6c8, 0.95);
+      const emblem = this.add.text(0, 6, '¥', {
+        fontSize: '16px',
+        color: '#fff2b3',
+        fontStyle: 'bold',
+        stroke: '#4a2a00',
+        strokeThickness: 3
+      }).setOrigin(0.5);
+      const sparkleA = this.add.circle(-16, -14, 2, 0xfff1a8, 0.85);
+      const sparkleB = this.add.circle(14, -12, 2, 0xffffff, 0.75);
+
+      const bag = this.add.container(x, y, [glow, sparkleA, sparkleB, body, tie, tieKnot, emblem]);
+      bag.setScale(0.72);
+      bag.setDepth(18);
+
+      this.tweens.add({ targets: bag, scale: 1, duration: 260, ease: 'Back.Out' });
+      this.tweens.add({ targets: bag, y: y - 7, duration: 920, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      this.tweens.add({ targets: glow, alpha: { from: 0.12, to: 0.30 }, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+
+      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const sp = Phaser.Math.Between(50, 90);
+      const spawnData = {
+        type: 'coin_bag',
+        amount,
+        sprite: bag,
+        velocity: { x: Math.cos(a) * sp, y: Math.sin(a) * sp },
+        spawnX: x,
+        spawnY: y,
+        bornAt: this.time?.now ?? 0,
+        maxDrift: 120
+      };
+
+      this.drops.push(spawnData);
+    },
+
+    showCoinCollectFx(x, y, amount, variant = 'coin') {
+      const color = variant === 'coin_bag' ? 0xffb84d : 0xffd766;
+      const ring = this.add.circle(x, y, variant === 'coin_bag' ? 18 : 12, color, 0.18).setDepth(22);
+      ring.setStrokeStyle(variant === 'coin_bag' ? 4 : 3, 0xfff2b3, 0.92);
+
+      const burst = this.add.text(x, y - 6, `+${Math.max(0, Math.round(Number(amount || 0)))}`, {
+        fontSize: variant === 'coin_bag' ? '22px' : '18px',
+        color: '#ffe7a8',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0.5).setDepth(23);
+
+      this.tweens.add({
+        targets: ring,
+        scale: variant === 'coin_bag' ? 3.2 : 2.3,
+        alpha: 0,
+        duration: variant === 'coin_bag' ? 420 : 260,
+        ease: 'Cubic.Out',
+        onComplete: () => ring.destroy()
+      });
+      this.tweens.add({
+        targets: burst,
+        y: y - (variant === 'coin_bag' ? 54 : 34),
+        alpha: 0,
+        duration: variant === 'coin_bag' ? 720 : 480,
+        ease: 'Cubic.Out',
+        onComplete: () => burst.destroy()
+      });
+    },
+
     spawnItemDrop(x, y, item) {
       const rarity = getLootRarity(item?.rarityId || 'common');
       let container = null;
 
       if (item?.kind === 'run_loot_equipment') {
+        const beamColor = rarity.id === 'legendary' ? 0xff9f2e : (rarity.id === 'epic' ? 0xb56cff : rarity.beamColor);
+        const beam = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.rectangle(0, -82, rarity.id === 'legendary' ? 26 : 18, rarity.id === 'legendary' ? 156 : 128, beamColor, rarity.id === 'legendary' ? 0.18 : 0.14)
+          : null;
+        const beamHalo = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.ellipse(0, -84, rarity.id === 'legendary' ? 62 : 44, rarity.id === 'legendary' ? 176 : 148, beamColor, rarity.id === 'legendary' ? 0.10 : 0.08)
+          : null;
+        const beamCap = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.circle(0, -148, rarity.id === 'legendary' ? 12 : 8, beamColor, rarity.id === 'legendary' ? 0.26 : 0.20)
+          : null;
+        const groundRing = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 54 : 44, rarity.id === 'legendary' ? 18 : 14, beamColor, rarity.id === 'legendary' ? 0.24 : 0.18)
+          : null;
+        const groundGlow = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 84 : 60, rarity.id === 'legendary' ? 28 : 20, beamColor, rarity.id === 'legendary' ? 0.10 : 0.08)
+          : null;
+        const runeOuter = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 68 : 52, rarity.id === 'legendary' ? 24 : 18, beamColor, 0)
+          : null;
+        const runeInner = (rarity.id === 'epic' || rarity.id === 'legendary')
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 40 : 30, rarity.id === 'legendary' ? 12 : 10, beamColor, 0)
+          : null;
+        const flareH = rarity.id === 'legendary'
+          ? this.add.rectangle(0, 18, 76, 3, 0xffe1a3, 0.20)
+          : null;
+        const flareV = rarity.id === 'legendary'
+          ? this.add.rectangle(0, 18, 3, 34, 0xffd26e, 0.18)
+          : null;
         const aura = this.add.circle(0, 0, 24, rarity.auraColor, rarity.id === 'legendary' ? 0.22 : 0.15);
         aura.setStrokeStyle(2, rarity.borderColor, 0.55);
+
+        if (runeOuter?.setStrokeStyle) runeOuter.setStrokeStyle(rarity.id === 'legendary' ? 2 : 1, rarity.borderColor, rarity.id === 'legendary' ? 0.55 : 0.42);
+        if (runeInner?.setStrokeStyle) runeInner.setStrokeStyle(1, rarity.borderColor, rarity.id === 'legendary' ? 0.42 : 0.34);
+
+        if (beam) beam.setBlendMode(Phaser.BlendModes.ADD);
+        if (beamHalo) beamHalo.setBlendMode(Phaser.BlendModes.ADD);
+        if (beamCap) beamCap.setBlendMode(Phaser.BlendModes.ADD);
+        if (groundRing) groundRing.setBlendMode(Phaser.BlendModes.ADD);
+        if (groundGlow) groundGlow.setBlendMode(Phaser.BlendModes.ADD);
+        if (runeOuter) runeOuter.setBlendMode(Phaser.BlendModes.ADD);
+        if (runeInner) runeInner.setBlendMode(Phaser.BlendModes.ADD);
+        if (flareH) flareH.setBlendMode(Phaser.BlendModes.ADD);
+        if (flareV) flareV.setBlendMode(Phaser.BlendModes.ADD);
 
         const base = this.add.rectangle(0, 6, 34, 22, rarity.bgColor, 0.96);
         base.setStrokeStyle(2, rarity.borderColor, 1);
@@ -274,7 +408,23 @@ export function applyDropsInventoryMixin(GameScene) {
         name.setAlpha(showGroundName ? 0.92 : 0);
         name.setVisible(showGroundName);
 
-        container = this.add.container(x, y, [aura, base, lid, clasp, icon, name]);
+        const shimmerA = rarity.id === 'legendary'
+          ? this.add.rectangle(-14, -42, 3, 92, 0xffd26e, 0.30).setAngle(-16)
+          : null;
+        const shimmerB = rarity.id === 'legendary'
+          ? this.add.rectangle(14, -38, 3, 84, 0xfff0a0, 0.24).setAngle(18)
+          : null;
+        const moteCount = rarity.id === 'legendary' ? 4 : (rarity.id === 'epic' ? 3 : 0);
+        const motes = new Array(moteCount).fill(null).map((_, index) => {
+          const radius = rarity.id === 'legendary' ? 2.4 : 2;
+          const px = -18 + index * 12;
+          const py = rarity.id === 'legendary' ? -12 - index * 10 : -6 - index * 8;
+          const mote = this.add.circle(px, py, radius, beamColor, rarity.id === 'legendary' ? 0.9 : 0.75);
+          mote.setBlendMode(Phaser.BlendModes.ADD);
+          return mote;
+        });
+
+        container = this.add.container(x, y, [groundGlow, flareH, flareV, runeOuter, runeInner, groundRing, beamHalo, beam, beamCap, aura, shimmerA, shimmerB, ...motes, base, lid, clasp, icon, name].filter(Boolean));
         aura.setBlendMode(Phaser.BlendModes.ADD);
 
         this.tweens.add({
@@ -294,6 +444,140 @@ export function applyDropsInventoryMixin(GameScene) {
             yoyo: true,
             repeat: -1,
             ease: 'Sine.InOut'
+          });
+        }
+
+        if (beam) {
+          this.tweens.add({
+            targets: beam,
+            alpha: { from: rarity.id === 'legendary' ? 0.16 : 0.12, to: rarity.id === 'legendary' ? 0.30 : 0.22 },
+            scaleY: { from: 0.92, to: 1.08 },
+            duration: rarity.id === 'legendary' ? 460 : 720,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (beamHalo) {
+          this.tweens.add({
+            targets: beamHalo,
+            alpha: { from: 0.06, to: rarity.id === 'legendary' ? 0.16 : 0.11 },
+            scaleX: { from: 0.94, to: 1.08 },
+            duration: rarity.id === 'legendary' ? 520 : 760,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (beamCap) {
+          this.tweens.add({
+            targets: beamCap,
+            alpha: { from: 0.12, to: rarity.id === 'legendary' ? 0.34 : 0.24 },
+            scale: { from: 0.88, to: 1.18 },
+            duration: rarity.id === 'legendary' ? 420 : 660,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (groundRing) {
+          this.tweens.add({
+            targets: groundRing,
+            alpha: { from: rarity.id === 'legendary' ? 0.14 : 0.10, to: rarity.id === 'legendary' ? 0.30 : 0.22 },
+            scaleX: { from: 0.94, to: 1.08 },
+            scaleY: { from: 0.94, to: 1.12 },
+            duration: rarity.id === 'legendary' ? 480 : 760,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (groundGlow) {
+          this.tweens.add({
+            targets: groundGlow,
+            alpha: { from: 0.05, to: rarity.id === 'legendary' ? 0.14 : 0.10 },
+            duration: rarity.id === 'legendary' ? 560 : 880,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (runeOuter) {
+          this.tweens.add({
+            targets: runeOuter,
+            angle: { from: 0, to: rarity.id === 'legendary' ? 360 : -360 },
+            duration: rarity.id === 'legendary' ? 8200 : 9800,
+            repeat: -1,
+            ease: 'Linear'
+          });
+          this.tweens.add({
+            targets: runeOuter,
+            alpha: { from: rarity.id === 'legendary' ? 0.18 : 0.12, to: rarity.id === 'legendary' ? 0.42 : 0.28 },
+            duration: rarity.id === 'legendary' ? 560 : 840,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (runeInner) {
+          this.tweens.add({
+            targets: runeInner,
+            angle: { from: 0, to: rarity.id === 'legendary' ? -360 : 360 },
+            duration: rarity.id === 'legendary' ? 6200 : 7600,
+            repeat: -1,
+            ease: 'Linear'
+          });
+          this.tweens.add({
+            targets: runeInner,
+            alpha: { from: 0.10, to: rarity.id === 'legendary' ? 0.28 : 0.20 },
+            duration: rarity.id === 'legendary' ? 480 : 760,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (flareH && flareV) {
+          this.tweens.add({
+            targets: [flareH, flareV],
+            alpha: { from: 0.12, to: 0.32 },
+            scaleX: { from: 0.92, to: 1.10 },
+            duration: 420,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (shimmerA && shimmerB) {
+          this.tweens.add({
+            targets: [shimmerA, shimmerB],
+            alpha: { from: 0.10, to: 0.42 },
+            y: '-=10',
+            duration: 480,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut'
+          });
+        }
+        if (motes.length > 0) {
+          motes.forEach((mote, index) => {
+            this.tweens.add({
+              targets: mote,
+              y: mote.y - (rarity.id === 'legendary' ? 18 : 12),
+              x: mote.x + (index % 2 === 0 ? -4 : 4),
+              alpha: { from: mote.alpha, to: 0.08 },
+              duration: rarity.id === 'legendary' ? 760 + index * 90 : 920 + index * 70,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.InOut'
+            });
+            this.tweens.add({
+              targets: mote,
+              scale: { from: 0.8, to: rarity.id === 'legendary' ? 1.35 : 1.18 },
+              duration: rarity.id === 'legendary' ? 520 + index * 60 : 700 + index * 40,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.InOut'
+            });
           });
         }
       } else {
@@ -322,8 +606,10 @@ export function applyDropsInventoryMixin(GameScene) {
         ease: 'Sine.InOut'
       });
 
+      const source = item?.source || 'minion';
+      const isBossDrop = source === 'boss';
       const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const sp = Phaser.Math.Between(60, 120);
+      const sp = isBossDrop ? Phaser.Math.Between(160, 240) : Phaser.Math.Between(60, 120);
       const vx = Math.cos(a) * sp;
       const vy = Math.sin(a) * sp;
 
@@ -336,7 +622,7 @@ export function applyDropsInventoryMixin(GameScene) {
         spawnX: x,
         spawnY: y,
         bornAt: this.time?.now ?? 0,
-        maxDrift: 95
+        maxDrift: isBossDrop ? 188 : 95
       };
       this.drops.push(spawnData);
     },
@@ -344,9 +630,10 @@ export function applyDropsInventoryMixin(GameScene) {
     updateDrops(delta) {
       if (!this.player || !this.drops || this.drops.length === 0) return;
 
-      const pickupRadius = this.player.getPickupRadius();
-      const pickupRadiusSq = pickupRadius * pickupRadius;
-      const basePickupRadiusSq = 28 * 28;
+      const magnetConfig = getCoinMagnetConfig(this.player.getPickupRadius());
+      const coinPickupRadiusSq = magnetConfig.attractRadius * magnetConfig.attractRadius;
+      const coinCollectRadiusSq = magnetConfig.collectRadius * magnetConfig.collectRadius;
+      const itemCollectRadiusSq = magnetConfig.itemCollectRadius * magnetConfig.itemCollectRadius;
 
       const worldBounds = this.worldBoundsRect || null;
 
@@ -394,14 +681,17 @@ export function applyDropsInventoryMixin(GameScene) {
         const dy = drop.sprite.y - this.player.y;
         const distSq = dx * dx + dy * dy;
 
-        if (drop.type === 'coin' && pickupRadius > 28 && distSq < pickupRadiusSq && distSq > basePickupRadiusSq) {
+        const isCurrency = drop.type === 'coin' || drop.type === 'coin_bag';
+        const collectRadiusSq = isCurrency ? coinCollectRadiusSq : itemCollectRadiusSq;
+
+        if (isCurrency && distSq < coinPickupRadiusSq && distSq > coinCollectRadiusSq) {
           const dist = Math.sqrt(distSq) || 1;
-          const speed = 320;
+          const speed = drop.type === 'coin_bag' ? magnetConfig.bagSpeed : magnetConfig.coinSpeed;
           drop.sprite.x -= (dx / dist) * speed * (delta / 1000);
           drop.sprite.y -= (dy / dist) * speed * (delta / 1000);
         }
 
-        if (distSq < basePickupRadiusSq) {
+        if (distSq < collectRadiusSq) {
           this.collectDrop(drop);
           this.drops.splice(i, 1);
         }
@@ -409,8 +699,9 @@ export function applyDropsInventoryMixin(GameScene) {
     },
 
     collectDrop(drop) {
-      if (drop.type === 'coin') {
+      if (drop.type === 'coin' || drop.type === 'coin_bag') {
         this.addSessionCoins(drop.amount);
+        this.showCoinCollectFx(drop.sprite.x, drop.sprite.y, drop.amount, drop.type);
       } else if (drop.type === 'item') {
         this.addItemToInventory(drop.item);
 
@@ -439,7 +730,9 @@ export function applyDropsInventoryMixin(GameScene) {
       const support = getEquippedSupportSummary(equippedIds);
       const resolvedAmount = Math.max(0, Math.round(Number(amount || 0) * Number(support.sessionCoinMult || 1)));
       this.sessionCoins += resolvedAmount;
+      this.showSessionCoinGain?.(resolvedAmount);
       this.updateInfoPanel();
+      this.emitUiSnapshot?.();
     },
 
     addItemToInventory(item) {
@@ -467,7 +760,11 @@ export function applyDropsInventoryMixin(GameScene) {
           title: gearItem.name,
           value: pickupLine,
           text: [gearItem.name, pickupLine].filter(Boolean).join(' · '),
-          variant: 'loot'
+          variant: 'loot',
+          accentColor: gearItem.rarityTextColor || '#ffffff',
+          accentFill: gearItem.rarityId === 'legendary'
+            ? '#2f1403'
+            : (gearItem.rarityId === 'epic' ? '#231035' : (gearItem.rarityId === 'rare' ? '#102238' : '#0b0b18'))
         }, { durationMs: 2600 });
 
         this.updateInventoryUI();

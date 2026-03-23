@@ -93,6 +93,13 @@ const LOOT_SOURCE_PROFILES = {
   }
 };
 
+const LOOT_QUALITY_ALIASES = {
+  common: { qualityId: 'white', qualityLabel: '白', qualityName: '普通' },
+  rare: { qualityId: 'blue', qualityLabel: '蓝', qualityName: '精良' },
+  epic: { qualityId: 'purple', qualityLabel: '紫', qualityName: '史诗' },
+  legendary: { qualityId: 'orange', qualityLabel: '橙', qualityName: '传说' }
+};
+
 const LOOT_EQUIPMENT_TEMPLATES = [
   { id: 'blade_mark', name: '刃之印', icon: '✦', category: 'damage', categoryLabel: '攻击', sortOrder: 1, effects: { damageMult: 1.08 } },
   { id: 'swift_feather', name: '疾风羽', icon: '≫', category: 'fire_rate', categoryLabel: '攻速', sortOrder: 2, effects: { fireRateMult: 0.94 } },
@@ -300,6 +307,7 @@ export function rollLootTemplate(rng = Math.random) {
 export function buildLootEquipment({ template, rarityId = 'common', instanceId = '', source = 'minion' } = {}) {
   if (!template) return null;
   const rarity = getLootRarity(rarityId);
+  const quality = LOOT_QUALITY_ALIASES[rarity.id] || LOOT_QUALITY_ALIASES.common;
   const effects = scaleEffects(template.effects || {}, rarity.scale);
   const statLines = formatLootEffectLines(effects);
   const desc = [
@@ -324,6 +332,9 @@ export function buildLootEquipment({ template, rarityId = 'common', instanceId =
     rarityColor: rarity.color,
     rarityTextColor: rarity.textColor,
     raritySort: rarity.sortOrder,
+    qualityId: quality.qualityId,
+    qualityLabel: quality.qualityLabel,
+    qualityName: quality.qualityName,
     chestTitle: rarity.chestTitle,
     desc,
     shortDesc: statLines.join(' · '),
@@ -354,6 +365,46 @@ export function rollVendorCurseEquipment({ rng = Math.random, instanceId = '', s
     vendorSummary: template.summary || '',
     desc: [template.summary || '', ...formatLootEffectLines(item.effects || {})].filter(Boolean).join('\n'),
     shortDesc: [template.summary || '', ...formatLootEffectLines(item.effects || {})].filter(Boolean).join(' · ')
+  };
+}
+
+export function rollVendorEquipment({ rng = Math.random, instanceId = '', source = 'vendor' } = {}) {
+  const rarityWeights = [
+    { id: 'common', weight: 52 },
+    { id: 'rare', weight: 31 },
+    { id: 'epic', weight: 13 },
+    { id: 'legendary', weight: 4 }
+  ];
+
+  const totalWeight = rarityWeights.reduce((sum, entry) => sum + Number(entry.weight || 0), 0);
+  let roll = rng() * totalWeight;
+  let rarityId = 'common';
+  for (let index = 0; index < rarityWeights.length; index += 1) {
+    roll -= Number(rarityWeights[index].weight || 0);
+    if (roll <= 0) {
+      rarityId = rarityWeights[index].id;
+      break;
+    }
+  }
+
+  const item = rollLootEquipment({ source: 'elite', rng, instanceId, rarityId });
+  if (!item) return null;
+
+  const basePrice = {
+    common: 58,
+    rare: 92,
+    epic: 148,
+    legendary: 238
+  };
+  const orderBonus = Math.max(0, Number(item.sortOrder || 0)) * (rarityId === 'legendary' ? 5 : (rarityId === 'epic' ? 4 : 3));
+  const price = Math.round((basePrice[rarityId] || 58) + orderBonus);
+
+  return {
+    ...item,
+    source,
+    price,
+    vendorSummary: `${item.qualityLabel}质${item.categoryLabel}装备`,
+    previewLines: Array.isArray(item.statLines) ? item.statLines : []
   };
 }
 

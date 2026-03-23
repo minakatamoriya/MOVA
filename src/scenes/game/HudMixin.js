@@ -150,14 +150,115 @@ export function applyHudMixin(GameScene) {
           ? (this.playerData.exp / this.playerData.maxExp)
           : 0;
         this.updateExpProgressBar(expPercent);
-        if (this.expBarText) {
-          this.expBarText.setText(`Lv.${this.playerData.level}  ${this.playerData.exp}/${this.playerData.maxExp}`);
-        }
       }
+
+      this.updateSessionCoinHud();
+      this.updateTopRightMenuButton();
 
       if (this.viewMenuOpen) {
         this.refreshViewMenuPanels();
       }
+    },
+
+    updateTopRightMenuButton() {
+      const bg = this.topRightMenuButtonBg;
+      const text = this.topRightMenuButtonText;
+      const button = this.topRightMenuButton;
+      if (!bg || !text || !button) return;
+
+      const active = !!this.viewMenuOpen;
+      if (bg.setFillStyle) {
+        bg.setFillStyle(active ? 0x24324a : 0x0f101a, active ? 0.98 : 0.96);
+      }
+      if (bg.setStrokeStyle) {
+        bg.setStrokeStyle(2, active ? 0x8ac5ff : 0x2a2a3a, 1);
+      }
+      text.setColor(active ? '#8ac5ff' : '#ffffff');
+      text.setText(active ? '×' : '☰');
+      button.setDepth(active ? 933 : 930);
+    },
+
+    updateSessionCoinHud() {
+      const iconBg = this.sessionCoinIconBg;
+      const iconText = this.sessionCoinIconText;
+      const valueText = this.sessionCoinValueText;
+      if (!iconBg || !iconText || !valueText) return;
+
+      const target = Math.max(0, Math.round(Number(this.sessionCoins || 0)));
+      const displayed = Math.max(0, Math.round(Number(this._displayedSessionCoins ?? target)));
+      valueText.setText(String(displayed));
+
+      if (this._sessionCoinHudTarget === target) return;
+      this._sessionCoinHudTarget = target;
+
+      if (this._sessionCoinValueTween) {
+        this._sessionCoinValueTween.stop();
+        this._sessionCoinValueTween = null;
+      }
+
+      const startValue = displayed;
+      if (startValue === target) {
+        this._displayedSessionCoins = target;
+        valueText.setText(String(target));
+        return;
+      }
+
+      this._sessionCoinValueTween = this.tweens.addCounter({
+        from: startValue,
+        to: target,
+        duration: Math.min(680, Math.max(180, Math.abs(target - startValue) * 18)),
+        ease: 'Cubic.Out',
+        onUpdate: (tween) => {
+          const nextValue = Math.round(tween.getValue());
+          this._displayedSessionCoins = nextValue;
+          valueText.setText(String(nextValue));
+        },
+        onComplete: () => {
+          this._displayedSessionCoins = target;
+          valueText.setText(String(target));
+          this._sessionCoinValueTween = null;
+        }
+      });
+    },
+
+    showSessionCoinGain(amount) {
+      const resolvedAmount = Math.max(0, Math.round(Number(amount || 0)));
+      if (resolvedAmount <= 0 || !this.sessionCoinIconBg || !this.sessionCoinValueText) return;
+
+      const iconBg = this.sessionCoinIconBg;
+      const iconText = this.sessionCoinIconText;
+      const valueText = this.sessionCoinValueText;
+      const startX = valueText.x + Math.max(36, valueText.width * 0.5 + 12);
+      const startY = valueText.y - 2;
+
+      this.tweens.add({
+        targets: [iconBg, iconText, valueText],
+        scaleX: 1.12,
+        scaleY: 1.12,
+        duration: 90,
+        yoyo: true,
+        ease: 'Back.Out'
+      });
+
+      const gainText = this.add.text(startX, startY, `+${resolvedAmount}`, {
+        fontSize: '18px',
+        color: '#fde68a',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0, 0.5);
+      gainText.setScrollFactor(0);
+      gainText.setDepth(928);
+
+      this.tweens.add({
+        targets: gainText,
+        y: startY - 22,
+        alpha: 0,
+        scale: { from: 0.78, to: 1.18 },
+        duration: 620,
+        ease: 'Cubic.Out',
+        onComplete: () => gainText.destroy()
+      });
     },
 
     updateHpProgressBar(hpPercent) {
@@ -386,19 +487,23 @@ export function applyHudMixin(GameScene) {
     createTopLeftHud() {
       const x = 14;
       const y = 10;
+      const iconCenterX = x + 10;
+      const iconFontSize = '20px';
 
-      const heart = this.add.text(x, y, '❤️', {
-        fontSize: '18px',
+      const heart = this.add.text(iconCenterX, 0, '❤️', {
+        fontSize: iconFontSize,
         color: '#ffffff'
-      }).setOrigin(0, 0);
+      }).setOrigin(0.5);
       heart.setScrollFactor(0);
       heart.setDepth(920);
       this.hpHeartText = heart;
 
-      const barX = x + 28;
-      const barY = y + 12;
+      const barX = x + 24;
+      const barY = y + 10;
       const barWidth = Math.min(360, Math.max(220, Math.floor(this.cameras.main.width * 0.28)));
       const barHeight = 12;
+
+      heart.setPosition(iconCenterX, barY);
 
       this.hpBarWidth = barWidth - 4;
       this.hpBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x0b0b18, 0.92).setOrigin(0, 0.5);
@@ -418,16 +523,16 @@ export function applyHudMixin(GameScene) {
       this.hpBarText.setScrollFactor(0);
       this.hpBarText.setDepth(922);
 
-      const expIconX = barX + barWidth + 10 + 44;
-      const expIcon = this.add.text(expIconX, y, '⭐', {
-        fontSize: '18px',
+      const expBarX = Math.max(barX + barWidth + 44, Math.floor(this.cameras.main.width * 0.5));
+      const expIconCenterX = expBarX - 20;
+      const expIcon = this.add.text(expIconCenterX, barY, '⭐', {
+        fontSize: iconFontSize,
         color: '#ffffff'
-      }).setOrigin(0, 0);
+      }).setOrigin(0.5);
       expIcon.setScrollFactor(0);
       expIcon.setDepth(920);
       this.expIconText = expIcon;
 
-      const expBarX = expIconX + 26;
       const expBarY = barY;
       const expBarWidth = barWidth;
       const expBarHeight = barHeight;
@@ -442,12 +547,86 @@ export function applyHudMixin(GameScene) {
       this.expBarFill.setScrollFactor(0);
       this.expBarFill.setDepth(921);
 
-      this.expBarText = this.add.text(expBarX + expBarWidth + 10, expBarY, 'Lv.1  0/100', {
+      this.expBarText = this.add.text(expBarX + expBarWidth + 10, expBarY, '', {
         fontSize: '14px',
         color: '#ffffff'
       }).setOrigin(0, 0.5);
       this.expBarText.setScrollFactor(0);
       this.expBarText.setDepth(922);
+      this.expBarText.setVisible(false);
+
+      const coinY = barY + 30;
+      this.sessionCoinIconBg = this.add.circle(iconCenterX, coinY, 10, 0xf59e0b, 0.96);
+      this.sessionCoinIconBg.setStrokeStyle(2, 0xfff0a6, 0.96);
+      this.sessionCoinIconBg.setScrollFactor(0);
+      this.sessionCoinIconBg.setDepth(924);
+
+      this.sessionCoinIconText = this.add.text(iconCenterX, coinY, 'G', {
+        fontSize: '12px',
+        color: '#4a2a00',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      this.sessionCoinIconText.setScrollFactor(0);
+      this.sessionCoinIconText.setDepth(925);
+
+      this.sessionCoinValueText = this.add.text(x + 24, coinY, '0', {
+        fontSize: '18px',
+        color: '#ffd76b',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 4
+      }).setOrigin(0, 0.5);
+      this.sessionCoinValueText.setScrollFactor(0);
+      this.sessionCoinValueText.setDepth(925);
+
+      this._displayedSessionCoins = Math.max(0, Math.round(Number(this.sessionCoins || 0)));
+      this._sessionCoinHudTarget = this._displayedSessionCoins;
+      this.updateSessionCoinHud();
+
+      const camWidth = this.cameras.main.width;
+      const menuButtonWidth = 52;
+      const menuButtonHeight = 40;
+      const menuButtonX = camWidth - 8 - menuButtonWidth * 0.5;
+      const menuButtonY = 8 + menuButtonHeight * 0.5;
+      const menuButtonBg = this.add.rectangle(menuButtonX, menuButtonY, menuButtonWidth, menuButtonHeight, 0x0f101a, 0.96);
+      menuButtonBg.setStrokeStyle(2, 0x2a2a3a, 1);
+      menuButtonBg.setScrollFactor(0);
+      menuButtonBg.setDepth(930);
+
+      const menuButtonText = this.add.text(menuButtonX, menuButtonY - 1, '☰', {
+        fontSize: '22px',
+        color: '#ffffff',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      menuButtonText.setScrollFactor(0);
+      menuButtonText.setDepth(931);
+
+      const menuButton = this.add.zone(menuButtonX, menuButtonY, 64, 52);
+      menuButton.setScrollFactor(0);
+      menuButton.setDepth(932);
+      menuButton.setData('ui', true);
+      menuButton.setData('isUI', true);
+      menuButton.setInteractive({ useHandCursor: true });
+      menuButton.on('pointerdown', (pointer, localX, localY, event) => {
+        event?.stopPropagation?.();
+        this.resetTouchJoystickInput?.();
+        if (this.viewMenuOpen) this.closeViewMenu();
+        else this.openViewMenu();
+      });
+      menuButton.on('pointerover', () => {
+        if (!this.viewMenuOpen) {
+          menuButtonBg.setFillStyle(0x182132, 0.98);
+          menuButtonBg.setStrokeStyle(2, 0x5f7ea9, 1);
+        }
+      });
+      menuButton.on('pointerout', () => {
+        this.updateTopRightMenuButton();
+      });
+
+      this.topRightMenuButtonBg = menuButtonBg;
+      this.topRightMenuButtonText = menuButtonText;
+      this.topRightMenuButton = menuButton;
+      this.updateTopRightMenuButton();
     },
 
     /**
@@ -458,9 +637,16 @@ export function applyHudMixin(GameScene) {
       // 销毁旧的 HUD 元素
       const oldElements = [
         this.hpHeartText, this.hpBarBg, this.hpBarFill, this.hpBarText,
-        this.expIconText, this.expBarBg, this.expBarFill, this.expBarText
+        this.expIconText, this.expBarBg, this.expBarFill, this.expBarText,
+        this.sessionCoinIconBg, this.sessionCoinIconText, this.sessionCoinValueText,
+        this.topRightMenuButtonBg, this.topRightMenuButtonText, this.topRightMenuButton
       ];
       oldElements.forEach(el => { if (el && el.destroy) el.destroy(); });
+
+      if (this._sessionCoinValueTween) {
+        this._sessionCoinValueTween.stop();
+        this._sessionCoinValueTween = null;
+      }
 
       // 重新创建
       this.createTopLeftHud();

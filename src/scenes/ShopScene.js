@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ensureGlobalShopState, getGlobalShopCatalog, purchaseGlobalShopItem } from '../managers/ShopManager';
 import { uiBus } from '../ui/bus';
 
 /**
@@ -35,12 +36,10 @@ export default class ShopScene extends Phaser.Scene {
       return this.getGameScene()?.getRoundVendorSnapshot?.() || [];
     }
 
-    return [
-      { id: 'potion_hp', name: '生命药水', price: 50, desc: '恢复50点生命', icon: '🧪' },
-      { id: 'buff_atk', name: '攻击强化', price: 100, desc: '永久+5攻击力', icon: '⚔️' },
-      { id: 'buff_shield', name: '护盾', price: 80, desc: '获得临时护盾', icon: '🛡️' },
-      { id: 'buff_luck', name: '幸运硬币', price: 120, desc: '提升掉落率', icon: '🪙' }
-    ];
+    return getGlobalShopCatalog({
+      ownedItems: this.ownedItems,
+      globalCoins: this.globalCoins
+    });
   }
 
   loadRegistryData() {
@@ -50,17 +49,10 @@ export default class ShopScene extends Phaser.Scene {
       return;
     }
 
-    if (!this.registry.has('globalCoins')) {
-      this.registry.set('globalCoins', 0);
-    }
-    if (!this.registry.has('mysteryShopPurchased')) {
-      this.registry.set('mysteryShopPurchased', []);
-    }
-
-    this.globalCoins = Number(this.registry.get('globalCoins') || 0);
-    this.purchased = Array.isArray(this.registry.get('mysteryShopPurchased'))
-      ? this.registry.get('mysteryShopPurchased')
-      : [];
+    const state = ensureGlobalShopState(this.registry);
+    this.globalCoins = state.globalCoins;
+    this.ownedItems = state.ownedItems;
+    this.purchased = [];
   }
 
   emitUiSnapshot() {
@@ -115,16 +107,10 @@ export default class ShopScene extends Phaser.Scene {
           return;
         }
 
-        const item = this.getShopItems().find((i) => i.id === itemId);
-        if (!item) return;
-        if (this.purchased.includes(item.id)) return;
-        if (this.globalCoins < item.price) return;
-
-        // 目前仅实现扣币+标记已购买（具体效果后续再接入玩法逻辑）
-        this.globalCoins -= item.price;
-        this.purchased = [...this.purchased, item.id];
-        this.registry.set('globalCoins', this.globalCoins);
-        this.registry.set('mysteryShopPurchased', this.purchased);
+        const result = purchaseGlobalShopItem(this.registry, itemId);
+        if (!result.ok) return;
+        this.globalCoins = result.globalCoins;
+        this.ownedItems = result.ownedItems;
 
         this.emitUiSnapshot();
       };

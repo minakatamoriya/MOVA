@@ -3,7 +3,27 @@ import { uiBus } from './bus';
 import { useUiStore } from './store';
 import { TREE_DEFS, buildThirdTalentTreePlaceholder, getMaxLevel } from '../classes/talentTrees';
 import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
+import { getGlobalShopCatalog } from '../managers/ShopManager';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
+
+const GAME_VIEW_WIDTH = 720;
+const GAME_VIEW_HEIGHT = 1280;
+
+function getGameViewportRect() {
+  if (typeof window === 'undefined') {
+    return { width: GAME_VIEW_WIDTH, height: GAME_VIEW_HEIGHT };
+  }
+
+  const vv = window.visualViewport;
+  const viewportWidth = Math.round(Number(vv?.width) || window.innerWidth || GAME_VIEW_WIDTH);
+  const viewportHeight = Math.round(Number(vv?.height) || window.innerHeight || GAME_VIEW_HEIGHT);
+  const scale = Math.max(0.1, Math.min(viewportWidth / GAME_VIEW_WIDTH, viewportHeight / GAME_VIEW_HEIGHT));
+
+  return {
+    width: Math.max(1, Math.round(GAME_VIEW_WIDTH * scale)),
+    height: Math.max(1, Math.round(GAME_VIEW_HEIGHT * scale))
+  };
+}
 
 export default function App() {
   const sceneKey = useUiStore((s) => s.sceneKey);
@@ -30,6 +50,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [floatingInfoText, setFloatingInfoText] = useState('');
+  const [gameViewportRect, setGameViewportRect] = useState(() => getGameViewportRect());
   const floatingInfoTimerRef = useRef(null);
 
   const showFloatingInfo = (text) => {
@@ -52,6 +73,27 @@ export default function App() {
         clearTimeout(floatingInfoTimerRef.current);
         floatingInfoTimerRef.current = null;
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateViewportRect = () => {
+      setGameViewportRect((prev) => {
+        const next = getGameViewportRect();
+        if (prev.width === next.width && prev.height === next.height) return prev;
+        return next;
+      });
+    };
+
+    updateViewportRect();
+    window.addEventListener('resize', updateViewportRect);
+    window.addEventListener('orientationchange', updateViewportRect);
+    window.visualViewport?.addEventListener?.('resize', updateViewportRect);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportRect);
+      window.removeEventListener('orientationchange', updateViewportRect);
+      window.visualViewport?.removeEventListener?.('resize', updateViewportRect);
     };
   }, []);
 
@@ -150,6 +192,15 @@ export default function App() {
     0,
     Number(levelUp?.rerollDiceCount ?? runConsumables?.reroll_dice?.count ?? 0)
   );
+  const levelUpOptions = Array.isArray(levelUp?.options) ? levelUp.options : [];
+  const rerollItemDef = ITEM_DEFS.find((it) => it.id === 'reroll_dice') || null;
+  const levelUpGridRows = 4;
+  const denseLevelUpCards = levelUpOptions.length >= 4;
+  const levelUpViewportWidth = Math.max(320, gameViewportRect.width);
+  const levelUpViewportHeight = Math.max(568, gameViewportRect.height);
+  const itemShopItems = Array.isArray(viewData?.itemShop?.items)
+    ? viewData.itemShop.items
+    : getGlobalShopCatalog({ ownedItems, globalCoins: viewData?.globalCoins || 0 });
   const isRoundVendorShop = shop?.mode === 'round_vendor';
   const levelUpPanelOpen = !!levelUp?.open && levelUpPendingPoints > 0;
   const levelUpAttentionBaseMs = Math.max(
@@ -302,7 +353,12 @@ export default function App() {
   };
 
   const attemptRoundVendorPurchase = (item) => {
-    if (!item?.id || item?.canBuy === false) return;
+    if (!item?.id || item?.canBuy === false) {
+      if (item?.disabledReason === 'carry_limit') showFloatingInfo('当前已达携带上限');
+      if (item?.disabledReason === 'not_enough_session_coins') showFloatingInfo('局内金币不足');
+      if (item?.disabledReason === 'sold_out') showFloatingInfo('该商品已售出');
+      return;
+    }
     uiBus.emit('ui:shop:buy', item.id);
   };
 
@@ -1244,36 +1300,14 @@ export default function App() {
           width: 0;
           height: 0;
         }
+
+        @keyframes coin-gain-float {
+          0% { transform: translateY(10px) scale(0.72); opacity: 0; }
+          18% { transform: translateY(-2px) scale(1.18); opacity: 1; }
+          40% { transform: translateY(-6px) scale(1.06); opacity: 1; }
+          100% { transform: translateY(-28px) scale(0.92); opacity: 0; }
+        }
       `}</style>
-      {/* 游戏内：右上角“查看”图标（圆形） */}
-      {inGame ? (
-        <button
-          type="button"
-          className="ui-panel"
-          onClick={() => uiBus.emit('ui:setViewOpen', !viewOpen)}
-          title="查看"
-          aria-label="查看"
-          style={{
-            position: 'absolute',
-            top: 14,
-            right: 14,
-            width: 44,
-            height: 44,
-            borderRadius: 999,
-            border: '2px solid rgba(42,42,58,1)',
-            background: 'rgba(15, 16, 26, 0.92)',
-            color: '#fff',
-            cursor: 'pointer',
-            fontSize: 22,
-            fontWeight: 900,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          ☰
-        </button>
-      ) : null}
       {/* 主菜单（React 版）：只在 MenuScene 显示 */}
       {sceneKey === 'MenuScene' ? (
         <div
@@ -1496,7 +1530,7 @@ export default function App() {
               }}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
             >
-              {ITEM_DEFS.map((item) => {
+              {itemShopItems.map((item) => {
                 const ownedCount = getOwnedCount(item.id);
                 const purchaseState = getPurchaseState(item, ownedItems, viewData?.globalCoins || 0);
                 const selected = shopDetailItem?.id === item.id;
@@ -1522,8 +1556,8 @@ export default function App() {
                         width: '100%',
                         aspectRatio: '1 / 1',
                         borderRadius: 16,
-                        border: selected ? '2px solid rgba(125,211,252,0.95)' : '2px solid rgba(42,42,58,1)',
-                        background: selected ? 'rgba(29, 78, 216, 0.22)' : 'rgba(11, 11, 24, 0.62)',
+                        border: selected ? `2px solid ${item.qualityColor || 'rgba(125,211,252,0.95)'}` : '2px solid rgba(42,42,58,1)',
+                        background: selected ? `${item.qualityGlow || 'rgba(29, 78, 216, 0.22)'}` : 'rgba(11, 11, 24, 0.62)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1533,6 +1567,26 @@ export default function App() {
                       }}
                     >
                       {item.icon}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 6,
+                            top: 6,
+                            minWidth: 20,
+                            height: 20,
+                            borderRadius: 999,
+                            padding: '0 6px',
+                            fontSize: 10,
+                            fontWeight: 900,
+                            background: 'rgba(0,0,0,0.44)',
+                            color: item.qualityColor || '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          {item.qualityLabel}
+                        </div>
                       {ownedCount > 0 ? (
                         <div
                           style={{
@@ -1628,6 +1682,7 @@ export default function App() {
                           {shopDetailItem.name}
                         </div>
                         <div style={{ opacity: 0.82, fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>{shopDetailItem.desc}</div>
+                        <div style={{ opacity: 0.64, fontSize: 12, marginTop: 6 }}>{`${shopDetailItem.qualityLabel}质 · ${shopDetailItem.categoryLabel || '商品'}`}</div>
                       </div>
                     </div>
 
@@ -2011,59 +2066,39 @@ export default function App() {
         >
           <div
             style={{
-              width: 720,
-              maxWidth: '96%',
-              maxHeight: '92%',
-              borderRadius: 12,
+              width: levelUpViewportWidth,
+              height: levelUpViewportHeight,
+              maxWidth: '100%',
+              maxHeight: '100%',
+              borderRadius: 0,
               background: 'rgba(15, 16, 26, 0.92)',
               border: '2px solid rgba(42,42,58,1)',
-              padding: 18,
+              padding: denseLevelUpCards ? '8px 8px 10px' : '10px 10px 12px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
+              gap: denseLevelUpCards ? 6 : 8,
               overflow: 'hidden'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 34, fontWeight: 900, color: '#ffff00' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: denseLevelUpCards ? 'clamp(24px, 5.2vw, 32px)' : 'clamp(28px, 6vw, 36px)', fontWeight: 900, color: '#ffff00', lineHeight: 1.05 }}>
                   剩余点数：{levelUpPendingPoints}
-                </div>
-                <div style={{ marginTop: 6, fontSize: 15, fontWeight: 800, color: 'rgba(255,255,255,0.82)' }}>
-                  {`骰子：${rerollDiceCount}/5`}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                 <button
                   type="button"
-                  disabled={rerollDiceCount <= 0}
-                  onClick={() => uiBus.emit('ui:levelUp:reroll')}
-                  style={{
-                    cursor: rerollDiceCount > 0 ? 'pointer' : 'not-allowed',
-                    height: 36,
-                    padding: '0 14px',
-                    borderRadius: 999,
-                    border: '1px solid rgba(255,255,255,0.22)',
-                    background: rerollDiceCount > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
-                    color: rerollDiceCount > 0 ? '#fff' : 'rgba(255,255,255,0.45)',
-                    fontSize: 12,
-                    fontWeight: 800
-                  }}
-                >
-                  {`🎲 重刷一次 (${rerollDiceCount})`}
-                </button>
-                <button
-                  type="button"
                   onClick={() => uiBus.emit('ui:levelUp:close')}
                   style={{
                     cursor: 'pointer',
-                    height: 36,
-                    padding: '0 14px',
+                    height: denseLevelUpCards ? 34 : 36,
+                    padding: denseLevelUpCards ? '0 10px' : '0 12px',
                     borderRadius: 999,
                     border: '1px solid rgba(255,255,255,0.22)',
                     background: 'rgba(255,255,255,0.08)',
                     color: '#fff',
-                    fontSize: 12,
+                    fontSize: denseLevelUpCards ? 11 : 12,
                     fontWeight: 800,
                     flexShrink: 0
                   }}
@@ -2072,7 +2107,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div style={{ opacity: 0.92, fontSize: 18, fontWeight: 800 }}>
+            <div style={{ opacity: 0.92, fontSize: denseLevelUpCards ? 14 : 16, fontWeight: 800, lineHeight: 1.1 }}>
               {`请选择一个升级选项`}
             </div>
 
@@ -2080,14 +2115,15 @@ export default function App() {
               style={{
                 flex: 1,
                 minHeight: 0,
-                overflow: 'auto',
+                overflow: 'hidden',
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: 12,
-                alignContent: 'flex-start'
+                gridTemplateColumns: 'minmax(0, 1fr)',
+                gridTemplateRows: `repeat(${levelUpGridRows}, minmax(0, 1fr))`,
+                gap: denseLevelUpCards ? 6 : 8,
+                alignContent: 'stretch'
               }}
             >
-              {(levelUp?.options || []).map((opt) => {
+              {levelUpOptions.map((opt) => {
                 const theme = getUpgradeCardTheme(opt);
                 const isSpecial = theme.kind !== 'normal';
                 const iconText = theme.iconText || opt.icon;
@@ -2103,18 +2139,22 @@ export default function App() {
                     style={{
                       cursor: 'pointer',
                       textAlign: 'left',
-                      padding: isSpecial ? 18 : 16,
+                      padding: denseLevelUpCards ? '10px 14px' : '12px 16px',
                       borderRadius: 16,
                       border: `2px solid ${toRgba(theme.border, isSpecial ? 0.92 : 0.55)}`,
                       background: theme.gradient,
                       color: '#fff',
                       width: '100%',
-                      minHeight: 156,
+                      minHeight: 0,
+                      height: '100%',
                       position: 'relative',
                       overflow: 'hidden',
                       boxShadow: theme.shadow,
                       animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none',
-                      touchAction: 'manipulation'
+                      touchAction: 'manipulation',
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'flex-start'
                     }}
                   >
                     <div
@@ -2159,10 +2199,10 @@ export default function App() {
                         style={{
                           position: 'absolute',
                           right: 12,
-                          top: 10,
-                          padding: '4px 10px',
+                          top: denseLevelUpCards ? 8 : 10,
+                          padding: denseLevelUpCards ? '2px 7px' : '4px 10px',
                           borderRadius: 999,
-                          fontSize: 11,
+                          fontSize: denseLevelUpCards ? 9 : 11,
                           fontWeight: 900,
                           letterSpacing: '0.08em',
                           color: theme.badgeColor,
@@ -2179,8 +2219,8 @@ export default function App() {
                         style={{
                           position: 'absolute',
                           right: 14,
-                          top: 38,
-                          fontSize: 11,
+                          top: denseLevelUpCards ? 26 : 34,
+                          fontSize: denseLevelUpCards ? 9 : 11,
                           fontWeight: 800,
                           letterSpacing: '0.08em',
                           color: 'rgba(255,255,255,0.86)',
@@ -2194,11 +2234,11 @@ export default function App() {
                       <div
                         style={{
                           position: 'absolute',
-                          left: 18,
-                          top: 10,
-                          padding: '6px 12px',
+                          left: denseLevelUpCards ? 12 : 16,
+                          top: denseLevelUpCards ? 8 : 10,
+                          padding: denseLevelUpCards ? '4px 8px' : '5px 10px',
                           borderRadius: 999,
-                          fontSize: 16,
+                          fontSize: denseLevelUpCards ? 11 : 14,
                           fontWeight: 900,
                           letterSpacing: '0.05em',
                           color: '#fffdf5',
@@ -2211,20 +2251,20 @@ export default function App() {
                     ) : null}
                     {isSpecial ? (
                       <>
-                        <div style={{ position: 'absolute', left: 14, top: 14, width: 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.34), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
-                        <div style={{ position: 'absolute', right: 14, bottom: 14, width: 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.26), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                        <div style={{ position: 'absolute', left: denseLevelUpCards ? 10 : 14, top: denseLevelUpCards ? 10 : 14, width: denseLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.34), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                        <div style={{ position: 'absolute', right: denseLevelUpCards ? 10 : 14, bottom: denseLevelUpCards ? 10 : 14, width: denseLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.26), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
                       </>
                     ) : null}
-                    <div style={{ position: 'relative', display: 'flex', gap: 12, alignItems: 'flex-start', paddingTop: hasTopMeta ? 24 : 0 }}>
+                    <div style={{ position: 'relative', display: 'flex', gap: denseLevelUpCards ? 10 : 12, alignItems: 'flex-start', paddingTop: hasTopMeta ? (denseLevelUpCards ? 16 : 22) : 0, minHeight: 0, flex: 1 }}>
                       <div
                         style={{
-                          minWidth: isSpecial ? 58 : 44,
-                          height: isSpecial ? 58 : 44,
-                          borderRadius: isSpecial ? 14 : 10,
+                          minWidth: denseLevelUpCards ? 38 : 42,
+                          height: denseLevelUpCards ? 38 : 42,
+                          borderRadius: 12,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: isSpecial ? 15 : 22,
+                          fontSize: denseLevelUpCards ? 15 : 17,
                           fontWeight: 900,
                           color: '#fff',
                           background: isSpecial ? toRgba(theme.accent, 0.22) : 'rgba(255,255,255,0.06)',
@@ -2234,11 +2274,11 @@ export default function App() {
                       >
                         {iconText}
                       </div>
-                      <div style={{ minWidth: 0, flex: 1, paddingRight: theme.badge ? 88 : 0 }}>
-                        <div style={{ fontWeight: 900, fontSize: isSpecial ? 21 : 20, color: theme.titleColor, lineHeight: 1.2 }}>
+                      <div style={{ minWidth: 0, flex: 1, paddingRight: theme.badge ? (denseLevelUpCards ? 72 : 86) : 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: denseLevelUpCards ? 1 : 2 }}>
+                        <div style={{ fontWeight: 900, fontSize: denseLevelUpCards ? 16 : 18, color: theme.titleColor, lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {opt.name}
                         </div>
-                        <div style={{ color: theme.descColor, opacity: 0.9, fontSize: 14, marginTop: 8, lineHeight: 1.45 }}>
+                        <div style={{ color: theme.descColor, opacity: 0.9, fontSize: denseLevelUpCards ? 11 : 12, marginTop: 5, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {displayDesc}
                         </div>
                       </div>
@@ -2246,6 +2286,33 @@ export default function App() {
                   </button>
                 );
               })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 2 }}>
+              <button
+                type="button"
+                disabled={rerollDiceCount <= 0}
+                onClick={() => uiBus.emit('ui:levelUp:reroll')}
+                style={{
+                  cursor: rerollDiceCount > 0 ? 'pointer' : 'not-allowed',
+                  minWidth: denseLevelUpCards ? 108 : 124,
+                  height: denseLevelUpCards ? 40 : 44,
+                  padding: denseLevelUpCards ? '0 12px' : '0 14px',
+                  borderRadius: 14,
+                  border: `1px solid ${rerollDiceCount > 0 ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)'}`,
+                  background: rerollDiceCount > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                  color: rerollDiceCount > 0 ? '#fff' : 'rgba(255,255,255,0.45)',
+                  fontSize: denseLevelUpCards ? 13 : 14,
+                  fontWeight: 900,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: denseLevelUpCards ? 8 : 10
+                }}
+              >
+                <span style={{ fontSize: denseLevelUpCards ? 18 : 20, lineHeight: 1 }}>{rerollItemDef?.icon || '🎲'}</span>
+                <span style={{ fontSize: denseLevelUpCards ? 14 : 15, lineHeight: 1 }}>{rerollDiceCount}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -2367,97 +2434,102 @@ export default function App() {
             <div style={{ fontSize: 18, fontWeight: 900, color: '#ffff00' }}>金币: {shop?.coins ?? 0}</div>
             {isRoundVendorShop ? (
               <div style={{ fontSize: 14, opacity: 0.82 }}>
-                {shop?.note || '本轮只会出现一次，关闭后直接进入下一轮。'}
+                轻触购买，长按查看详情，松手后说明卡片自动隐藏。
               </div>
             ) : null}
 
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 12, alignContent: 'start' }}>
               {(shop?.items || []).map((item) => {
                 const purchased = (shop?.purchased || []).includes(item.id);
                 const canBuy = isRoundVendorShop
                   ? !!item.canBuy
                   : (!purchased && (shop?.coins ?? 0) >= Number(item.price || 0));
-                const stockText = isRoundVendorShop
-                  ? `${Math.max(0, Number(item.currentCount || 0))}/${Math.max(0, Number(item.carryLimit || 0))}`
-                  : null;
                 const disabledText = isRoundVendorShop
                   ? (item.disabledReason === 'carry_limit' ? '已满' : (item.disabledReason === 'not_enough_session_coins' ? '金币不足' : (item.disabledReason === 'sold_out' ? '已售' : '')))
                   : '';
                 return (
-                  <div
+                  <button
                     key={item.id}
-                    onClick={() => showShopDetail(item)}
+                    type="button"
+                    onPointerDown={(e) => {
+                      startLongPress(`vendor:${item.id}`, () => showShopDetail(item), e);
+                    }}
+                    onPointerUp={(e) => {
+                      endLongPress(`vendor:${item.id}`, () => {
+                        if (isRoundVendorShop) {
+                          attemptRoundVendorPurchase(item);
+                          return;
+                        }
+                        uiBus.emit('ui:shop:buy', item.id);
+                      }, e);
+                      setShopDetailItem(null);
+                    }}
+                    onPointerCancel={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      clearPressState();
+                      setShopDetailItem(null);
+                    }}
+                    onPointerLeave={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      clearPressState();
+                      setShopDetailItem(null);
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
                     style={{
                       display: 'flex',
-                      justifyContent: 'space-between',
+                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 14,
+                      justifyContent: 'center',
+                      gap: 8,
+                      minHeight: 136,
                       padding: 12,
-                      borderRadius: 12,
-                      border: shopDetailItem?.id === item.id
-                        ? `2px solid ${item.rarityTextColor || '#ffe082'}`
-                        : '2px solid rgba(42,42,58,1)',
-                      background: canBuy ? 'rgba(11, 11, 24, 0.62)' : 'rgba(11, 11, 24, 0.40)',
-                      opacity: canBuy ? 1 : 0.72,
-                      cursor: 'pointer'
+                      borderRadius: 16,
+                      border: `2px solid ${shopDetailItem?.id === item.id ? (item.rarityTextColor || '#ffe082') : 'rgba(42,42,58,1)'}`,
+                      background: canBuy ? 'rgba(11, 11, 24, 0.72)' : 'rgba(11, 11, 24, 0.42)',
+                      opacity: canBuy ? 1 : 0.74,
+                      cursor: 'pointer',
+                      color: '#fff',
+                      position: 'relative',
+                      textAlign: 'center'
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 900, fontSize: 18, color: item.rarityTextColor || '#ffffff' }}>
-                        {item.icon} {item.name}
-                        {item.rarityLabel ? (
-                          <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.82 }}>{item.rarityLabel}</span>
-                        ) : null}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: 10,
+                        top: 10,
+                        minWidth: 22,
+                        height: 22,
+                        padding: '0 6px',
+                        borderRadius: 999,
+                        background: 'rgba(0,0,0,0.44)',
+                        color: item.rarityTextColor || '#ffffff',
+                        fontSize: 11,
+                        fontWeight: 900,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {item.qualityLabel || item.rarityLabel || '货'}
+                    </div>
+                    <div style={{ fontSize: 36, lineHeight: 1 }}>{item.icon}</div>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: '#ffd700' }}>{item.price} G</div>
+                    {isRoundVendorShop && item.kind === 'consumable' ? (
+                      <div style={{ fontSize: 11, opacity: 0.72 }}>
+                        {`${Math.max(0, Number(item.currentCount || 0))}/${Math.max(0, Number(item.carryLimit || 0))}`}
                       </div>
-                      <div style={{ opacity: 0.82, fontSize: 13, marginTop: 4 }}>{item.desc}</div>
-                      {stockText ? (
-                        <div style={{ opacity: 0.68, fontSize: 12, marginTop: 6 }}>
-                          当前携带：{stockText}
-                        </div>
-                      ) : null}
-                      {isRoundVendorShop && item.vendorSummary ? (
-                        <div style={{ opacity: 0.68, fontSize: 12, marginTop: 6, color: item.rarityTextColor || '#ffe082' }}>
-                          {item.vendorSummary}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      <div style={{ fontWeight: 900, color: '#ffff00' }}>{item.price} 💰</div>
-                      {isRoundVendorShop && disabledText ? (
-                        <div style={{ fontWeight: 900, color: 'rgba(255,255,255,0.52)' }}>{disabledText}</div>
-                      ) : null}
-                      {!isRoundVendorShop && purchased ? (
-                        <div style={{ fontWeight: 900, color: '#88ff88' }}>已购买</div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isRoundVendorShop) {
-                              attemptRoundVendorPurchase(item);
-                              return;
-                            }
-                            uiBus.emit('ui:shop:buy', item.id);
-                          }}
-                          disabled={!canBuy}
-                          style={{
-                            cursor: canBuy ? 'pointer' : 'not-allowed',
-                            height: 34,
-                            padding: '0 14px',
-                            borderRadius: 12,
-                            border: '1px solid rgba(255,255,255,0.25)',
-                            background: canBuy ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.05)',
-                            color: canBuy ? '#fff' : 'rgba(255,255,255,0.55)',
-                            fontSize: 14,
-                            fontWeight: 800
-                          }}
-                        >
-                          购买
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    ) : null}
+                    {!canBuy ? (
+                      <div style={{ fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,0.54)' }}>
+                        {disabledText || (purchased ? '已购' : '不可购')}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, opacity: 0.62 }}>轻触购买</div>
+                    )}
+                  </button>
                 );
               })}
             </div>
@@ -2498,7 +2570,7 @@ export default function App() {
                     <div style={{ opacity: 0.82, fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>{shopDetailItem.desc}</div>
                     {shopDetailItem.categoryLabel || shopDetailItem.rarityLabel ? (
                       <div style={{ marginTop: 6, fontSize: 12, opacity: 0.72 }}>
-                        {[shopDetailItem.rarityLabel, shopDetailItem.categoryLabel].filter(Boolean).join(' · ')}
+                        {[shopDetailItem.qualityLabel ? `${shopDetailItem.qualityLabel}质` : '', shopDetailItem.rarityLabel, shopDetailItem.categoryLabel].filter(Boolean).join(' · ')}
                       </div>
                     ) : null}
                   </div>
@@ -2526,50 +2598,7 @@ export default function App() {
                     ) : null}
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button
-                      type="button"
-                      disabled={!shopDetailItem.canBuy && isRoundVendorShop}
-                      onClick={() => {
-                        if (isRoundVendorShop) {
-                          attemptRoundVendorPurchase(shopDetailItem);
-                        } else {
-                          uiBus.emit('ui:shop:buy', shopDetailItem.id);
-                        }
-                      }}
-                      style={{
-                        cursor: (!shopDetailItem.canBuy && isRoundVendorShop) ? 'default' : 'pointer',
-                        height: 42,
-                        padding: '0 18px',
-                        borderRadius: 999,
-                        border: '1px solid rgba(255,255,255,0.18)',
-                        background: (!shopDetailItem.canBuy && isRoundVendorShop) ? 'rgba(255,255,255,0.06)' : 'rgba(59,130,246,0.26)',
-                        color: '#fff',
-                        fontSize: 14,
-                        fontWeight: 900,
-                        opacity: (!shopDetailItem.canBuy && isRoundVendorShop) ? 0.55 : 1
-                      }}
-                    >
-                      购买
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShopDetailItem(null)}
-                      style={{
-                        cursor: 'pointer',
-                        height: 42,
-                        padding: '0 16px',
-                        borderRadius: 999,
-                        border: '1px solid rgba(255,255,255,0.14)',
-                        background: 'rgba(255,255,255,0.06)',
-                        color: '#fff',
-                        fontSize: 14,
-                        fontWeight: 900
-                      }}
-                    >
-                      收起
-                    </button>
-                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.68 }}>松手即隐藏说明，轻触商品直接购买</div>
                 </div>
               </div>
             ) : null}

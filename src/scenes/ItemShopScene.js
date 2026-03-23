@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { getOwnedItemCount, getOwnedItemIds, getPurchaseState, ITEM_DEFS } from '../data/items';
+import { getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
+import { ensureGlobalShopState, getGlobalShopCatalog, purchaseGlobalShopItem } from '../managers/ShopManager';
 import { uiBus } from '../ui/bus';
 
 /**
@@ -17,7 +18,13 @@ export default class ItemShopScene extends Phaser.Scene {
   getUiSnapshot() {
     return {
       globalCoins: this.globalCoins || 0,
-      ownedItems: Array.isArray(this.ownedItems) ? this.ownedItems : []
+      ownedItems: Array.isArray(this.ownedItems) ? this.ownedItems : [],
+      itemShop: {
+        items: getGlobalShopCatalog({
+          ownedItems: this.ownedItems,
+          globalCoins: this.globalCoins
+        })
+      }
     };
   }
 
@@ -95,17 +102,9 @@ export default class ItemShopScene extends Phaser.Scene {
   }
 
   loadRegistryData() {
-    if (!this.registry.has('globalCoins')) {
-      this.registry.set('globalCoins', 0);
-    }
-
-    if (!this.registry.has('ownedItems')) {
-      this.registry.set('ownedItems', []);
-    }
-
-    this.globalCoins = this.registry.get('globalCoins') || 0;
-    this.ownedItems = getOwnedItemIds(this.registry.get('ownedItems'));
-    this.registry.set('ownedItems', this.ownedItems);
+    const state = ensureGlobalShopState(this.registry);
+    this.globalCoins = state.globalCoins;
+    this.ownedItems = state.ownedItems;
   }
 
   createShopGrid() {
@@ -451,15 +450,11 @@ export default class ItemShopScene extends Phaser.Scene {
   purchaseItem(item) {
     if (!item) return;
 
-    const purchaseState = getPurchaseState(item, this.ownedItems, this.globalCoins);
-    if (!purchaseState.ok) return;
+    const result = purchaseGlobalShopItem(this.registry, item.id);
+    if (!result.ok) return;
 
-    this.globalCoins -= item.price;
-    this.ownedItems.push(item.id);
-    this.ownedItems = getOwnedItemIds(this.ownedItems);
-
-    this.registry.set('globalCoins', this.globalCoins);
-    this.registry.set('ownedItems', this.ownedItems);
+    this.globalCoins = result.globalCoins;
+    this.ownedItems = result.ownedItems;
 
     if (!this.isReactUiMode()) {
       this.updateSelection();

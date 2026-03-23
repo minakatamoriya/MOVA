@@ -12,6 +12,7 @@ import SystemMessageOverlay from '../ui/SystemMessageOverlay';
 import ToastOverlay from '../ui/ToastOverlay';
 import CooldownHud from '../ui/CooldownHud';
 import { START_ROOM } from '../data/mapPool';
+import { rollMinionCoinDrops } from '../data/currencyConfig';
 import { BulletCore, PatternSystem, VfxSystem, AttackTimeline, DebugOverlay } from '../systems/bullets';
 import { normalizeCoreKey } from '../classes/classDefs';
 import { normalizeSkillId } from '../classes/talentTrees';
@@ -2858,18 +2859,18 @@ class GameScene extends Phaser.Scene {
       const exp = Math.max(0, payload?.expReward || 0);
       if (exp > 0) this.addExp(exp, { source: 'minion' });
 
-      // 小怪也能掉金币（更明显 + 体积更大）
-      const chance = payload?.isElite ? 0.55 : 0.30;
-      if (Math.random() < chance) {
-        const amount = payload?.isElite
-          ? Phaser.Math.Between(14, 26)
-          : Phaser.Math.Between(6, 14);
+      const coinDrops = rollMinionCoinDrops({
+        isElite: !!payload?.isElite,
+        stage: this.currentStage || 1,
+        rng: Math.random
+      });
+      coinDrops.forEach((drop, index) => {
         this.spawnCoinDrop(
-          (payload?.x ?? 0) + Phaser.Math.Between(-18, 18),
-          (payload?.y ?? 0) + Phaser.Math.Between(-12, 12),
-          amount
+          (payload?.x ?? 0) + Phaser.Math.Between(-20, 20) + index * 6,
+          (payload?.y ?? 0) + Phaser.Math.Between(-16, 16),
+          drop.amount
         );
-      }
+      });
 
       // 小怪/精英：掉落局内装备
       {

@@ -6,7 +6,7 @@ import { rollEliteAffixes } from '../../data/eliteAffixes';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
-import { rollVendorCurseEquipment } from '../../data/lootItems';
+import { rollVendorCurseEquipment, rollVendorEquipment } from '../../data/lootItems';
 import TestMinion from '../../enemies/minions/TestMinion';
 
 function distributeExpRewards(totalExp, count) {
@@ -80,7 +80,25 @@ export function applyLevelProgressionMixin(GameScene) {
         { id: 'reroll_dice', kind: 'consumable', itemId: 'reroll_dice' }
       ];
 
-      if (Math.random() < 0.18) {
+      const vendorGearCount = this.currentStage >= 3 ? 2 : 1;
+      const seenBaseIds = new Set();
+      for (let index = 0; index < vendorGearCount; index += 1) {
+        const gear = rollVendorEquipment({
+          rng: Math.random,
+          instanceId: this.nextRunLootItemInstanceId?.('vendor') || `vendor_${Date.now()}_${index}`,
+          source: 'vendor'
+        });
+        if (!gear || seenBaseIds.has(gear.baseId)) continue;
+        seenBaseIds.add(gear.baseId);
+        stock.push({
+          id: `vendor:${gear.instanceId}`,
+          kind: 'run_loot_equipment',
+          item: gear,
+          purchased: false
+        });
+      }
+
+      if (Math.random() < 0.24) {
         const cursed = rollVendorCurseEquipment({
           rng: Math.random,
           instanceId: this.nextRunLootItemInstanceId?.('vendor_curse') || `vendor_curse_${Date.now()}`,
@@ -137,8 +155,9 @@ export function applyLevelProgressionMixin(GameScene) {
             carryLimit: Math.max(0, Math.floor(Number(def.carryLimit || def.maxOwned || 0))),
             canBuy: !!state.ok,
             disabledReason: state.reason || '',
-            rarityLabel: '补给',
-            rarityTextColor: '#fef08a',
+            rarityLabel: `${def.qualityLabel || '白'}质`,
+            rarityTextColor: def.qualityColor || '#fef08a',
+            qualityLabel: def.qualityLabel || '白',
             previewLines: [def.desc]
           } : null;
         }
@@ -157,6 +176,7 @@ export function applyLevelProgressionMixin(GameScene) {
           disabledReason: state.reason || '',
           rarityLabel: item.rarityLabel,
           rarityTextColor: item.rarityTextColor,
+          qualityLabel: item.qualityLabel,
           categoryLabel: item.categoryLabel,
           vendorSummary: item.vendorSummary,
           previewLines: Array.isArray(item.statLines) ? item.statLines : [],

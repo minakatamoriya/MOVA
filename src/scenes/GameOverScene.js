@@ -28,12 +28,17 @@ export default class GameOverScene extends Phaser.Scene {
     if (this._coinsApplied) return;
     const globalCoins = Number(this.registry.get('globalCoins') || 0);
     const newGlobalCoins = globalCoins + Number(this.sessionCoins || 0);
+    this._resolvedGlobalCoins = newGlobalCoins;
     this.registry.set('globalCoins', newGlobalCoins);
     this._coinsApplied = true;
   }
 
+  clearRunCoinState() {
+    this.sessionCoins = 0;
+  }
+
   emitUiSnapshot() {
-    const globalCoins = Number(this.registry.get('globalCoins') || 0);
+    const globalCoins = Number((this._resolvedGlobalCoins ?? this.registry.get('globalCoins')) || 0);
     uiBus.emit('phaser:uiSnapshot', {
       sessionCoins: Number(this.sessionCoins || 0),
       globalCoins,
@@ -65,11 +70,13 @@ export default class GameOverScene extends Phaser.Scene {
 
       this._uiRestartHandler = () => {
         resetSkillTreeProgress(this.registry);
+        this.clearRunCoinState();
         this.scene.start('GameScene');
       };
       uiBus.on('ui:gameOver:restart', this._uiRestartHandler);
 
       this._uiMenuHandler = () => {
+        this.clearRunCoinState();
         this.scene.start('MenuScene');
       };
       uiBus.on('ui:gameOver:menu', this._uiMenuHandler);
@@ -83,6 +90,7 @@ export default class GameOverScene extends Phaser.Scene {
 
     // 背景
     this.cameras.main.setBackgroundColor(this.isVictory ? '#001100' : '#110000');
+    this.applyCoinsOnce();
 
     // 标题
     const titleText = this.isVictory ? '🎉 胜利！' : '☠️ 游戏结束';
@@ -129,9 +137,7 @@ export default class GameOverScene extends Phaser.Scene {
       color: '#ffd700'
     }).setOrigin(0.5);
 
-    const globalCoins = this.registry.get('globalCoins') || 0;
-    const newGlobalCoins = globalCoins + this.sessionCoins;
-    this.registry.set('globalCoins', newGlobalCoins);
+    const newGlobalCoins = Number((this._resolvedGlobalCoins ?? this.registry.get('globalCoins')) || 0);
 
     const globalCoinsText = this.add.text(0, 110, `全局金币: ${newGlobalCoins}`, {
       fontSize: '22px',
@@ -154,10 +160,12 @@ export default class GameOverScene extends Phaser.Scene {
       this.createButton(centerX - 110, centerY + 200, '重新开始', () => {
         console.log('重新开始游戏');
         resetSkillTreeProgress(this.registry);
+        this.clearRunCoinState();
         this.scene.start('GameScene');
       }),
       this.createButton(centerX + 110, centerY + 200, '返回菜单', () => {
         console.log('返回主菜单');
+        this.clearRunCoinState();
         this.scene.start('MenuScene');
       })
     ];
