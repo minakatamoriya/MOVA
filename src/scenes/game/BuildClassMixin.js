@@ -13,7 +13,7 @@ import {
 } from '../../classes/upgradePools';
 import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
-import { getAccentCoreKeyForOffFaction, getMaxLevel, getTreeIdForSkill, normalizeSkillId } from '../../classes/talentTrees';
+import { getAccentCoreKeyForOffFaction, getFrontierSkillIds, getMaxLevel, getTreeIdForSkill, getTreeSpentPoints, normalizeSkillId } from '../../classes/talentTrees';
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
@@ -217,6 +217,12 @@ export function applyBuildClassMixin(GameScene) {
         case 'archer_bounce':
           this.player.archerArrowBounce = Math.min(3, (this.player.archerArrowBounce || 0) + 1);
           break;
+        case 'archer_rapidfire':
+          this.player.archerRapidfire = true;
+          break;
+        case 'archer_arrowrain':
+          this.player.archerArrowRain = true;
+          break;
         case 'paladin_core':
           applyCoreUpgrade(this, upgrade.id);
           break;
@@ -234,6 +240,10 @@ export function applyBuildClassMixin(GameScene) {
           this.player.paladinStunChance = Math.min(0.95, this.player.paladinStunLevel * 0.10);
           break;
         }
+        case 'paladin_pulse':
+          this.player.paladinPulseLevel = Math.min(2, (this.player.paladinPulseLevel || 0) + 1);
+          this.upgradePaladinPulse();
+          break;
         case 'warlock_core':
           applyCoreUpgrade(this, upgrade.id);
           {
@@ -257,7 +267,7 @@ export function applyBuildClassMixin(GameScene) {
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_malady':
-          this.player.warlockPoisonDiseaseStacks = Math.min(3, (this.player.warlockPoisonDiseaseStacks || 0) + 1);
+          this.player.warlockPoisonDiseaseStacks = Math.max(2, Math.min(3, this.player.warlockPoisonDiseaseStacks || 0));
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_autoseek':
@@ -305,13 +315,13 @@ export function applyBuildClassMixin(GameScene) {
           this.player.rangerHuntmarkLevel = 3;
           break;
         case 'ranger_spiketrap':
-          this.player.rangerSpikeTrapLevel = Math.min(3, (this.player.rangerSpikeTrapLevel || 0) + 1);
+          this.player.rangerSpikeTrapLevel = Math.min(2, (this.player.rangerSpikeTrapLevel || 0) + 1);
           break;
         case 'ranger_blasttrap':
           this.player.rangerBlastTrapLevel = 3;
           break;
         case 'ranger_trapcraft':
-          this.player.rangerTrapcraftLevel = Math.min(3, (this.player.rangerTrapcraftLevel || 0) + 1);
+          this.player.rangerTrapcraftLevel = Math.min(2, (this.player.rangerTrapcraftLevel || 0) + 1);
           break;
         case 'ranger_pack_hunter':
           this.player.rangerPackHunterLevel = 3;
@@ -348,11 +358,11 @@ export function applyBuildClassMixin(GameScene) {
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_skeleton_guard':
-          this.player.curseSkeletonGuardLevel = Math.min(3, (this.player.curseSkeletonGuardLevel || 0) + 1);
+          this.player.curseSkeletonGuardLevel = Math.min(2, (this.player.curseSkeletonGuardLevel || 0) + 1);
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
         case 'summon_skeleton_mage':
-          this.player.curseSkeletonMageLevel = Math.min(3, (this.player.curseSkeletonMageLevel || 0) + 1);
+          this.player.curseSkeletonMageLevel = Math.min(2, (this.player.curseSkeletonMageLevel || 0) + 1);
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
         case 'summon_mage_empower':
@@ -364,7 +374,35 @@ export function applyBuildClassMixin(GameScene) {
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_ember_echo':
-          this.player.curseEmberEchoLevel = Math.min(3, (this.player.curseEmberEchoLevel || 0) + 1);
+          this.player.curseEmberEchoLevel = Math.min(2, (this.player.curseEmberEchoLevel || 0) + 1);
+          break;
+
+        case 'druid_pet_bear':
+          this.player.druidPetBearLevel = 1;
+          this.petManager?.unlockPetByUpgradeId?.('druid_pet_bear');
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'druid_pet_hawk':
+          this.player.druidPetHawkLevel = 1;
+          this.petManager?.unlockPetByUpgradeId?.('druid_pet_hawk');
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'druid_pet_treant':
+          this.player.druidPetTreantLevel = 1;
+          this.petManager?.unlockPetByUpgradeId?.('druid_pet_treant');
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'nature_bear_guard':
+          this.player.natureBearGuardLevel = Math.min(3, Math.max(2, (this.player.natureBearGuardLevel || 0) + 2));
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'nature_hawk_huntmark':
+          this.player.natureHawkHuntmarkLevel = Math.min(3, Math.max(2, (this.player.natureHawkHuntmarkLevel || 0) + 2));
+          this.petManager?.refreshPetStats?.();
+          break;
+        case 'nature_treant_bloom':
+          this.player.natureTreantBloomLevel = Math.min(3, Math.max(2, (this.player.natureTreantBloomLevel || 0) + 2));
+          this.petManager?.refreshPetStats?.();
           break;
 
         case 'guardian_block':
@@ -1219,6 +1257,8 @@ export function applyBuildClassMixin(GameScene) {
 
       const mainCore = normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core);
       const offFaction = this.registry.get('offFaction') || null;
+      const mainTreeSpentPoints = mainCore ? getTreeSpentPoints(mainCore, skillTreeLevels) : 0;
+      const depthUnlocked = !!mainCore && mainTreeSpentPoints >= 5;
 
       let combinedPool = [];
 
@@ -1230,17 +1270,29 @@ export function applyBuildClassMixin(GameScene) {
         combinedPool = combinedPool.concat(universalPools[offFaction] || []);
       }
 
-      if (stage === 'all' && mainCore) {
+      if (stage === 'all' && depthUnlocked && mainCore) {
         combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
       }
 
       combinedPool = combinedPool.filter((opt) => {
         if (!opt?.requiredSkillId) return true;
-        return getSkillLevelValue(opt.requiredSkillId) >= getMaxLevel(opt.requiredSkillId);
+        const requiredLevel = Number(opt.requiredSkillLevel) || getMaxLevel(opt.requiredSkillId);
+        return getSkillLevelValue(opt.requiredSkillId) >= requiredLevel;
       });
 
       combinedPool = combinedPool.filter(opt => !isMaxed(opt.id));
       combinedPool = combinedPool.filter((opt, index, arr) => arr.findIndex((item) => item?.id === opt?.id) === index);
+
+      const frontierIds = new Set();
+      if (mainCore) {
+        getFrontierSkillIds(mainCore, skillTreeLevels).forEach((id) => frontierIds.add(id));
+      }
+      if (offFaction) {
+        getFrontierSkillIds(offFaction, skillTreeLevels).forEach((id) => frontierIds.add(id));
+      }
+
+      const frontierPool = combinedPool.filter((opt) => frontierIds.has(normalizeSkillId(opt.id)));
+      const expansionPool = combinedPool.filter((opt) => !frontierIds.has(normalizeSkillId(opt.id)));
 
       const weightContext = {
         stage,
@@ -1248,9 +1300,18 @@ export function applyBuildClassMixin(GameScene) {
         offFaction,
         skillTreeLevels,
         offFactionEntryIds,
+        frontierIds,
       };
 
-      let options = this.pickWeightedUpgrades(combinedPool, choiceCount, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
+      let options = this.pickWeightedUpgrades(frontierPool, Math.min(2, choiceCount), (opt) => this.getUpgradeOfferWeight(opt, weightContext));
+
+      if (options.length < choiceCount) {
+        options = this.appendWeightedUniqueUpgrades(options, expansionPool, choiceCount - options.length, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
+      }
+
+      if (options.length < choiceCount) {
+        options = this.appendWeightedUniqueUpgrades(options, frontierPool, choiceCount - options.length, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
+      }
 
       options = options.map((option) => {
         const currentLevel = getSkillLevelValue(option.id);

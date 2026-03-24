@@ -13,7 +13,9 @@ export const TREE_DEFS = [
     nodes: [
       { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 2, desc: '生命低于30%时自动触发：1级闪避率 +60%，持续8秒；2级闪避率 +80%，持续10秒；冷却30秒。' },
       { id: 'archer_range', name: '射程', maxLevel: 1, desc: '基础射击射程直接提升到 +36%。' },
-      { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列，中心列始终锁定目标。' }
+      { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列，中心列始终锁定目标。' },
+      { id: 'archer_rapidfire', name: '疾风连射', maxLevel: 1, desc: '基础射击有概率立刻追加一轮追射。' },
+      { id: 'archer_arrowrain', name: '箭雨蓄势', maxLevel: 1, desc: '每 5 秒蓄满一次坠落箭雨，额外压制目标区域。' }
     ]
   },
   {
@@ -64,7 +66,8 @@ export const TREE_DEFS = [
       { id: 'paladin_repulse', name: '震荡锤击', maxLevel: 1, desc: '锤击命中附带明显击退。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
       { id: 'paladin_stun', name: '制裁', maxLevel: 1, desc: '锤击有 30% 概率使敌人眩晕。' },
-      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 2, desc: '生命低于30%时自动触发：1级获得 60% 减伤并持续 8 秒；2级获得 80% 减伤并持续 12 秒；冷却30秒。' }
+      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 2, desc: '生命低于30%时自动触发：1级获得 60% 减伤并持续 8 秒；2级获得 80% 减伤并持续 12 秒；冷却30秒。' },
+      { id: 'paladin_pulse', name: '圣能脉冲', maxLevel: 2, desc: '围绕自身展开定时神圣脉冲，并在后续升级中继续扩大范围与伤害。' }
     ]
   },
   {
@@ -76,7 +79,8 @@ export const TREE_DEFS = [
       { id: 'warlock_toxicity', name: '毒性浓度', maxLevel: 3, desc: '剧毒 debuff 最大层数 +1（可叠加）。' },
       { id: 'warlock_corrode', name: '腐蚀', maxLevel: 1, desc: '毒圈持续时间额外 +3 秒。' },
       { id: 'warlock_spread', name: '扩散', maxLevel: 1, desc: '毒圈范围 +60%。' },
-      { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 2, desc: '生命首次跌破30%时自动触发：1级持续5秒，50%伤害吸血，并可转化20%最大生命护盾；2级持续10秒，100%吸血，并可转化30%最大生命护盾；冷却30秒。' }
+      { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 2, desc: '生命首次跌破30%时自动触发：1级持续5秒，50%伤害吸血，并可转化20%最大生命护盾；2级持续10秒，100%吸血，并可转化30%最大生命护盾；冷却30秒。' },
+      { id: 'warlock_malady', name: '疫病恶化', maxLevel: 1, desc: '显著提高毒圈与中毒目标的持续伤害强度。' }
     ]
   },
 
@@ -103,9 +107,9 @@ export const TREE_DEFS = [
     nodes: [
       { id: 'ranger_snaretrap', name: '诱饵假人', maxLevel: 2, desc: '把基础诱饵假人强化到稳定控场档位。' },
       { id: 'ranger_huntmark', name: '猎手印记', maxLevel: 1, desc: '被假人牵制的敌人会被标记，承受你更多伤害。' },
-      { id: 'ranger_spiketrap', name: '缚行力场', maxLevel: 3, desc: '假人周围形成束缚力场，持续减速并附带轻度持续伤害。' },
+      { id: 'ranger_spiketrap', name: '缚行力场', maxLevel: 2, desc: '假人周围形成束缚力场，持续减速并附带持续压制。' },
       { id: 'ranger_blasttrap', name: '诱爆装置', maxLevel: 1, desc: '显著强化假人结束时的范围爆炸伤害。' },
-      { id: 'ranger_trapcraft', name: '拟饵工学', maxLevel: 3, desc: '强化假人持续时间、冷却与同时存在数量。' },
+      { id: 'ranger_trapcraft', name: '拟饵工学', maxLevel: 2, desc: '强化假人持续时间、冷却与同时存在数量。' },
       { id: 'ranger_pack_hunter', name: '围猎本能', maxLevel: 1, desc: '强化你对被标记或被牵制目标的暴击收益。' }
     ]
   },
@@ -130,11 +134,11 @@ export const TREE_DEFS = [
     core: { id: 'off_summon', name: '选择：召唤', maxLevel: 1, desc: '作为副职业，立即获得 1 名骷髅卫士与 1 名骷髅法师，并解锁召唤系天赋池。' },
     nodes: [
       { id: 'summon_necrotic_vitality', name: '死灵共鸣', maxLevel: 1, desc: '大幅提高召唤物生命。' },
-      { id: 'summon_skeleton_guard', name: '骷髅卫士', maxLevel: 3, desc: '扩充骷髅卫士军势。等级 1/2/3 时总上限为 3/5/7。' },
-      { id: 'summon_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '扩充骷髅法师军势。等级 1/2/3 时总上限为 3/5/7。' },
+      { id: 'summon_skeleton_guard', name: '骷髅卫士', maxLevel: 2, desc: '扩充骷髅卫士军势，分两段提高前排规模。' },
+      { id: 'summon_skeleton_mage', name: '骷髅法师', maxLevel: 2, desc: '扩充骷髅法师军势，分两段提高后排规模。' },
       { id: 'summon_mage_empower', name: '白骨灌能', maxLevel: 2, desc: '分两段强化骷髅法师输出与节奏。' },
       { id: 'summon_guard_bulwark', name: '骸骨壁垒', maxLevel: 1, desc: '大幅强化骷髅卫士生存与拦截能力。' },
-      { id: 'summon_ember_echo', name: '魂火余烬', maxLevel: 3, desc: '召唤物死亡后为你提供短时间增伤或减伤。' }
+      { id: 'summon_ember_echo', name: '魂火余烬', maxLevel: 2, desc: '召唤物死亡后为你提供短时间增伤，并在后续升级中进入滚雪球阈值。' }
     ]
   },
   {
@@ -157,12 +161,12 @@ export const TREE_DEFS = [
     color: resolveClassColor('druid'),
     core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，立即获得 1 只熊灵，并解锁自然伙伴天赋池。' },
     nodes: [
-      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 3, desc: '召唤熊灵协同作战，负责前排拦截。' },
-      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 3, desc: '召唤战鹰协同作战，负责高频输出。' },
-      { id: 'druid_pet_treant', name: '树精', maxLevel: 3, desc: '召唤树精协同作战，负责治疗与护盾。' },
-      { id: 'nature_bear_guard', name: '熊灵守护', maxLevel: 3, desc: '强化熊灵承担伤害与拦截能力。' },
-      { id: 'nature_hawk_huntmark', name: '战鹰猎印', maxLevel: 3, desc: '强化战鹰标记与增伤。' },
-      { id: 'nature_treant_bloom', name: '树精繁茂', maxLevel: 3, desc: '强化树精治疗与护盾。' }
+      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 1, desc: '把基础熊灵提升到稳定前排档位。' },
+      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 1, desc: '解锁战鹰，并让其直接进入稳定补伤档位。' },
+      { id: 'druid_pet_treant', name: '树精', maxLevel: 1, desc: '解锁树精，并让其直接进入稳定治疗档位。' },
+      { id: 'nature_bear_guard', name: '熊灵守护', maxLevel: 2, desc: '强化熊灵承担伤害与拦截能力。' },
+      { id: 'nature_hawk_huntmark', name: '战鹰猎印', maxLevel: 2, desc: '强化战鹰标记与对 Boss 增伤。' },
+      { id: 'nature_treant_bloom', name: '树精繁茂', maxLevel: 2, desc: '强化树精治疗与护盾。' }
     ]
   }
 ];
@@ -193,6 +197,8 @@ export const SKILL_TO_TREE = {
   archer_rate: 'archer',
   archer_damage: 'archer',
   archer_volley: 'archer',
+  archer_rapidfire: 'archer',
+  archer_arrowrain: 'archer',
 
   // 德鲁伊（星落）
   druid_core: 'druid',
@@ -222,12 +228,14 @@ export const SKILL_TO_TREE = {
   paladin_triple: 'paladin',
   paladin_stun: 'paladin',
   paladin_divine_shelter: 'paladin',
+  paladin_pulse: 'paladin',
 
   warlock_core: 'warlock',
   warlock_toxicity: 'warlock',
   warlock_spread: 'warlock',
   warlock_corrode: 'warlock',
   warlock_infernal: 'warlock',
+  warlock_malady: 'warlock',
   warlock_autoseek: 'warlock',
   warlock_malady: 'warlock',
   warlock_contagion: 'warlock',
@@ -367,4 +375,103 @@ export function getTreeIdForSkill(skillId) {
 export function getMaxLevel(skillId) {
   const normalizedSkillId = normalizeSkillId(skillId);
   return MAX_LEVELS[normalizedSkillId] || 1;
+}
+
+export const TREE_FRONTIER_GROUPS = {
+  archer: [
+    ['archer_range', 'archer_volley', 'archer_nimble_evade'],
+    ['archer_rapidfire', 'archer_arrowrain'],
+    ['archer_bounce', 'archer_windfury', 'archer_eagleeye']
+  ],
+  druid: [
+    ['druid_meteor_shower', 'druid_meteor', 'druid_starfire', 'druid_nourish'],
+    ['druid_kingofbeasts', 'druid_naturefusion', 'druid_astralstorm']
+  ],
+  warrior: [
+    ['warrior_range', 'warrior_swordqi', 'warrior_damage', 'warrior_blood_conversion'],
+    ['warrior_spin', 'warrior_berserkgod', 'warrior_unyielding']
+  ],
+  mage: [
+    ['mage_frostbite', 'mage_cold_focus', 'mage_ice_veins', 'mage_deep_freeze', 'mage_shatter', 'mage_frost_nova'],
+    ['mage_dualcaster', 'mage_trilaser', 'mage_arcanomorph']
+  ],
+  paladin: [
+    ['paladin_pierce', 'paladin_repulse', 'paladin_triple', 'paladin_stun', 'paladin_divine_shelter'],
+    ['paladin_pulse'],
+    ['paladin_avenger', 'paladin_sacredshield', 'paladin_divine']
+  ],
+  warlock: [
+    ['warlock_toxicity', 'warlock_corrode', 'warlock_spread', 'warlock_infernal'],
+    ['warlock_malady'],
+    ['warlock_autoseek', 'warlock_souleater', 'warlock_netherlord']
+  ],
+  arcane: [
+    ['arcane_circle', 'arcane_circle_range', 'arcane_fire_circle', 'arcane_frost_circle', 'arcane_resonance_mark'],
+    ['arcane_flowcasting']
+  ],
+  ranger: [
+    ['ranger_snaretrap', 'ranger_huntmark', 'ranger_blasttrap'],
+    ['ranger_spiketrap', 'ranger_trapcraft', 'ranger_pack_hunter']
+  ],
+  unyielding: [
+    ['unyielding_bloodrage', 'unyielding_battlecry', 'unyielding_hamstring', 'unyielding_sunder', 'unyielding_standfast', 'unyielding_executioner']
+  ],
+  summon: [
+    ['summon_necrotic_vitality', 'summon_skeleton_guard', 'summon_skeleton_mage'],
+    ['summon_mage_empower', 'summon_guard_bulwark', 'summon_ember_echo']
+  ],
+  guardian: [
+    ['guardian_block', 'guardian_armor', 'guardian_counter'],
+    ['guardian_sacred_seal', 'guardian_holy_rebuke', 'guardian_light_fortress']
+  ],
+  nature: [
+    ['druid_pet_bear', 'druid_pet_hawk', 'druid_pet_treant'],
+    ['nature_bear_guard', 'nature_hawk_huntmark', 'nature_treant_bloom']
+  ]
+};
+
+export const TREE_FRONTIER_THRESHOLDS = {
+  archer: [0, 3, 6],
+  druid: [0, 6],
+  warrior: [0, 6],
+  mage: [0, 6],
+  paladin: [0, 3, 6],
+  warlock: [0, 3, 6],
+  arcane: [0, 3],
+  ranger: [0, 3],
+  unyielding: [0],
+  summon: [0, 3],
+  guardian: [0, 3],
+  nature: [0, 3]
+};
+
+export function getTreeSpentPoints(treeId, skillTreeLevels = {}) {
+  if (!treeId || !skillTreeLevels) return 0;
+
+  return Object.entries(skillTreeLevels).reduce((total, [skillId, level]) => {
+    if (getTreeIdForSkill(skillId) !== treeId) return total;
+    return total + Math.max(0, Number(level) || 0);
+  }, 0);
+}
+
+export function getFrontierSkillIds(treeId, skillTreeLevels = {}) {
+  const groups = TREE_FRONTIER_GROUPS[treeId] || [];
+  if (groups.length === 0) return new Set();
+
+  const thresholds = TREE_FRONTIER_THRESHOLDS[treeId] || [];
+  const spentPoints = getTreeSpentPoints(treeId, skillTreeLevels);
+  const frontierIds = new Set();
+
+  groups.forEach((group, index) => {
+    const unlockAt = thresholds[index] ?? (index * 3);
+    if (spentPoints >= unlockAt) {
+      group.forEach((skillId) => frontierIds.add(skillId));
+    }
+  });
+
+  if (frontierIds.size === 0 && groups[0]) {
+    groups[0].forEach((skillId) => frontierIds.add(skillId));
+  }
+
+  return frontierIds;
 }

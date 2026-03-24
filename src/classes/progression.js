@@ -132,6 +132,14 @@ export function migrateLegacyProgressionRegistry(registry) {
     levelMapChanged = true;
   }
 
+  Object.keys(migratedSkillTreeLevels).forEach((skillId) => {
+    const clampedLevel = Math.min(getMaxLevel(skillId), Number(migratedSkillTreeLevels[skillId]) || 0);
+    if (clampedLevel !== migratedSkillTreeLevels[skillId]) {
+      migratedSkillTreeLevels[skillId] = clampedLevel;
+      levelMapChanged = true;
+    }
+  });
+
   if (levelMapChanged) {
     registry.set('skillTreeLevels', migratedSkillTreeLevels);
     changed = true;

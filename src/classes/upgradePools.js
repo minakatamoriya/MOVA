@@ -37,6 +37,8 @@ export const UPGRADE_POOLS = {
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程直接提升到 +36%。', icon: '猎主', maxLevel: 1 },
     { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '箭列数：3 -> 5 -> 5 -> 7；第 2 级额外收束散射角并强化锁定。', icon: '猎主', maxLevel: 3 },
     { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: 'Lv1 低血自动闪避 60%，持续 8 秒；Lv2 提升至 80%，持续 10 秒。冷却 30 秒。', icon: '猎主', maxLevel: 2 },
+    { id: 'archer_rapidfire', category: 'build', name: '疾风连射', desc: '解锁连射追击：基础射击有概率立刻追加一轮追射。', icon: '猎主', maxLevel: 1, requiredSkillId: 'archer_volley', requiredSkillLevel: 1 },
+    { id: 'archer_arrowrain', category: 'build', name: '箭雨蓄势', desc: '每 5 秒蓄满一次坠落箭雨，对目标区域进行额外压制。', icon: '猎主', maxLevel: 1, requiredSkillId: 'archer_volley', requiredSkillLevel: 1 },
   ],
 
   // 🌿 德鲁伊·星落（主职业输出）
@@ -71,7 +73,8 @@ export const UPGRADE_POOLS = {
     { id: 'paladin_repulse', category: 'build', name: '震荡锤击', desc: '锤击命中附带明显击退，更难让敌人贴身', icon: '骑主' },
     { id: 'paladin_triple', category: 'build', name: '连锤', desc: '每 5 秒，下一次锤击额外追加 2 次余震落点', icon: '3X' },
     { id: 'paladin_stun', category: 'build', name: '制裁', desc: '锤击眩晕率提升至 30%。', icon: '骑主', maxLevel: 1 },
-    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: 'Lv1 获得 60% 减伤，持续 8 秒；Lv2 获得 80% 减伤，持续 12 秒。冷却 30 秒。', icon: '骑主', maxLevel: 2 }
+    { id: 'paladin_divine_shelter', category: 'build', name: '神圣庇护', desc: 'Lv1 获得 60% 减伤，持续 8 秒；Lv2 获得 80% 减伤，持续 12 秒。冷却 30 秒。', icon: '骑主', maxLevel: 2 },
+    { id: 'paladin_pulse', category: 'build', name: '圣能脉冲', desc: '围绕自身展开定时神圣脉冲，并在后续升级中继续扩大范围与伤害。', icon: '骑主', maxLevel: 2 }
   ],
 
   // 🟣 术士·暗影箭
@@ -79,7 +82,8 @@ export const UPGRADE_POOLS = {
     { id: 'warlock_toxicity', category: 'build', name: '毒性浓度', desc: '剧毒最大层数：0 -> 1 -> 2 -> 3。', icon: '术主', maxLevel: 3 },
     { id: 'warlock_corrode', category: 'build', name: '腐蚀', desc: '毒圈持续时间额外 +3 秒。', icon: '术主', maxLevel: 1 },
     { id: 'warlock_spread', category: 'build', name: '扩散', desc: '毒圈范围加成提升至 60%。', icon: '术主', maxLevel: 1 },
-    { id: 'warlock_infernal', category: 'build', name: '灵魂虹吸', desc: 'Lv1 持续 5 秒，50% 伤害吸血，并可转化 20% 最大生命护盾；Lv2 持续 10 秒，100% 吸血，并可转化 30% 最大生命护盾。冷却 30 秒。', icon: '术主', maxLevel: 2 }
+    { id: 'warlock_infernal', category: 'build', name: '灵魂虹吸', desc: 'Lv1 持续 5 秒，50% 伤害吸血，并可转化 20% 最大生命护盾；Lv2 持续 10 秒，100% 吸血，并可转化 30% 最大生命护盾。冷却 30 秒。', icon: '术主', maxLevel: 2 },
+    { id: 'warlock_malady', category: 'build', name: '疫病恶化', desc: '显著提高毒圈与中毒目标的持续伤害强度。', icon: '术主', maxLevel: 1, requiredSkillId: 'warlock_toxicity', requiredSkillLevel: 1 }
   ]
 };
 
@@ -99,9 +103,9 @@ export const UNIVERSAL_POOLS = {
   ranger: [
     { id: 'ranger_snaretrap', category: 'build', name: '诱饵假人', desc: '基础假人已在解锁副职业时获得；Lv1 牵引半径直接提升到 216、箭矢伤害系数直接提升到 32%、定身直接提升到 380 毫秒；Lv2 进一步提升到 238 / 42% / 520 毫秒。', icon: '猎副', maxLevel: 2 },
     { id: 'ranger_huntmark', category: 'build', name: '猎手印记', desc: '被假人牵制的敌人会被标记，承伤直接提升到 22%，持续 4.7 秒。', icon: '猎副', maxLevel: 1, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_spiketrap', category: 'build', name: '缚行力场', desc: '爆炸追加伤害系数：0% -> 18% -> 26% -> 36%；持续伤害系数：0% -> 8% -> 12% -> 18%；持续时间：0秒 -> 2.2秒 -> 3.0秒 -> 3.8秒。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_spiketrap', category: 'build', name: '缚行力场', desc: 'Lv1 建立持续减速力场并附带持续伤害；Lv2 进一步提高爆炸与持续压制。', icon: '猎副', maxLevel: 2, requiredSkillId: 'ranger_snaretrap' },
     { id: 'ranger_blasttrap', category: 'build', name: '诱爆装置', desc: '假人结束爆炸伤害系数直接提升到 135%。', icon: '猎副', maxLevel: 1, requiredSkillId: 'ranger_snaretrap' },
-    { id: 'ranger_trapcraft', category: 'build', name: '拟饵工学', desc: '部署间隔：10.0秒 -> 8.8秒 -> 7.6秒 -> 6.4秒；并存假人上限：1 -> 1 -> 2 -> 2。', icon: '猎副', maxLevel: 3, requiredSkillId: 'ranger_snaretrap' },
+    { id: 'ranger_trapcraft', category: 'build', name: '拟饵工学', desc: 'Lv1 明显缩短假人布置间隔；Lv2 解锁双假人并继续缩短循环。', icon: '猎副', maxLevel: 2, requiredSkillId: 'ranger_snaretrap' },
     { id: 'ranger_pack_hunter', category: 'build', name: '围猎本能', desc: '对猎印目标的暴击率直接提升到 14%，暴击伤害直接提升到 30%。', icon: '猎副', maxLevel: 1, requiredSkillId: 'ranger_huntmark' }
   ],
 
@@ -118,11 +122,11 @@ export const UNIVERSAL_POOLS = {
   // 🟣 术士·召唤
   summon: [
     { id: 'summon_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '召唤物生命加成直接提升到 36%。', icon: '术副', maxLevel: 1 },
-    { id: 'summon_skeleton_guard', category: 'build', name: '骷髅卫士', desc: '骷髅卫士总上限：1 -> 3 -> 5 -> 7。', icon: '术副', maxLevel: 3 },
-    { id: 'summon_skeleton_mage', category: 'build', name: '骷髅法师', desc: '骷髅法师总上限：1 -> 3 -> 5 -> 7。', icon: '术副', maxLevel: 3 },
+    { id: 'summon_skeleton_guard', category: 'build', name: '骷髅卫士', desc: 'Lv1 把卫士军势扩到稳定前排数量；Lv2 再提高到中期成型规模。', icon: '术副', maxLevel: 2 },
+    { id: 'summon_skeleton_mage', category: 'build', name: '骷髅法师', desc: 'Lv1 把法师军势扩到稳定补伤数量；Lv2 再提高到中期成型规模。', icon: '术副', maxLevel: 2 },
     { id: 'summon_mage_empower', category: 'build', name: '白骨灌能', desc: 'Lv1 骷髅法师伤害加成直接提升到 30%；Lv2 进一步提升到 45%，并额外获得 15% 攻击间隔缩短。', icon: '术副', maxLevel: 2, requiredSkillId: 'summon_skeleton_mage' },
     { id: 'summon_guard_bulwark', category: 'build', name: '骸骨壁垒', desc: '卫士生命加成直接提升到 60%，承伤减免直接提升到 20%。', icon: '术副', maxLevel: 1, requiredSkillId: 'summon_skeleton_guard' },
-    { id: 'summon_ember_echo', category: 'build', name: '魂火余烬', desc: '亡灵死亡获得魂火层数：0 -> 1 -> 1 -> 2；层数上限：0 -> 3 -> 5 -> 6；每层伤害固定 +4%，持续 6 秒。', icon: '术副', maxLevel: 3 }
+    { id: 'summon_ember_echo', category: 'build', name: '魂火余烬', desc: 'Lv1 建立亡灵死亡后的魂火增伤；Lv2 把层数上限推进到滚雪球阈值。', icon: '术副', maxLevel: 2 }
   ],
 
   // 🛡️ 圣骑士·守护
@@ -137,12 +141,12 @@ export const UNIVERSAL_POOLS = {
 
   // 🌿 德鲁伊·自然伙伴
   nature: [
-    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '熊灵生命系数：72% -> 90% -> 108% -> 126%；伤害系数：92% -> 112% -> 132% -> 152%。', icon: '德副', maxLevel: 3 },
-    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '战鹰攻击间隔：520毫秒 -> 458毫秒 -> 395毫秒 -> 333毫秒；伤害系数：18% -> 23% -> 28% -> 33%。', icon: '德副', maxLevel: 3 },
-    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '树精治疗量：4 -> 6 -> 8 -> 10；治疗间隔：3.00秒 -> 2.74秒 -> 2.48秒 -> 2.22秒。', icon: '德副', maxLevel: 3 },
-    { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: '熊灵分担伤害：0% -> 8% -> 16% -> 24%；3 级额外解锁震地减速。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_bear' },
-    { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: '战鹰猎印增伤：0% -> 8% -> 16% -> 24%；对 Boss 生效率：0% -> 45% -> 70% -> 100%。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_hawk' },
-    { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: '树精治疗加成：0% -> 15% -> 30% -> 45%；附盾概率：0% -> 15% -> 30% -> 45%；护盾值固定为 2% 最大生命。', icon: '德副', maxLevel: 3, requiredSkillId: 'druid_pet_treant' }
+    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '把基础熊灵提升到稳定前排档位。', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '解锁战鹰，并把其直接提升到稳定补伤档位。', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '解锁树精，并把其直接提升到稳定治疗档位。', icon: '德副', maxLevel: 1 },
+    { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: 'Lv1 显著提高熊灵分担伤害；Lv2 进入完整守护形态并解锁震地减速。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_bear' },
+    { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: 'Lv1 建立稳定猎印增伤；Lv2 把对 Boss 的覆盖率推进到完全体。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_hawk' },
+    { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: 'Lv1 建立治疗与护盾辅助；Lv2 把树精推进到完整护持形态。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_treant' }
   ]
 };
 
