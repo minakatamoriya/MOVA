@@ -23,17 +23,14 @@ import { calculateResolvedDamage } from '../combat/damageModel';
 const EMERGENCY_COOLDOWN_DEFS = {
   paladin: {
     talentId: 'paladin_divine_shelter',
-    enhancementTalentId: 'paladin_shelter_extension',
     skillId: 'paladin_divine_shelter',
     label: '神圣庇护',
     iconText: '护',
-    enhancedLabel: '圣佑绵延',
-    enhancedIconText: '佑',
     accentColor: 0xfbbf24,
     durationMs: 5000,
-    durationByEnhancementLevel: [5000, 8000, 10000, 12000],
+    durationByEnhancementLevel: [5000, 8000, 12000],
     cooldownMs: 30000,
-    values: [0, 0.4, 0.6, 0.8],
+    values: [0, 0.6, 0.8],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
       return `生命低于30%时自动触发：获得${Math.round((state.value || 0) * 100)}%减伤，持续${seconds}秒。冷却30秒。`;
@@ -41,17 +38,14 @@ const EMERGENCY_COOLDOWN_DEFS = {
   },
   archer: {
     talentId: 'archer_nimble_evade',
-    enhancementTalentId: 'archer_evade_mastery',
     skillId: 'archer_nimble_evade',
     label: '灵巧回避',
     iconText: '避',
-    enhancedLabel: '残影步调',
-    enhancedIconText: '影',
     accentColor: 0x34d399,
     durationMs: 3000,
-    durationByEnhancementLevel: [3000, 5000, 8000, 10000],
+    durationByEnhancementLevel: [3000, 8000, 10000],
     cooldownMs: 30000,
-    values: [0, 0.4, 0.6, 0.8],
+    values: [0, 0.6, 0.8],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
       return `生命低于30%时自动触发：闪避率 +${Math.round((state.value || 0) * 100)}%，持续${seconds}秒。冷却30秒。`;
@@ -59,17 +53,14 @@ const EMERGENCY_COOLDOWN_DEFS = {
   },
   warrior: {
     talentId: 'warrior_blood_conversion',
-    enhancementTalentId: 'warrior_bloodlust_mastery',
     skillId: 'warrior_blood_conversion',
     label: '猩红嗜血',
     iconText: '血',
-    enhancedLabel: '狂血渴饮',
-    enhancedIconText: '狂',
     accentColor: 0xf87171,
     cooldownMs: 30000,
-    values: [0, 1.0, 1.0, 1.0],
-    lifestealMultiplierByEnhancementLevel: [1.0, 1.2, 1.5, 2.0],
-    durationByLevel: [0, 5000, 10000, 15000],
+    values: [0, 1.5, 2.0],
+    lifestealMultiplierByEnhancementLevel: [1.0, 1.0, 1.0],
+    durationByLevel: [0, 10000, 15000],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
       return `生命低于30%时自动触发：攻击伤害转化为${Math.round((state.value || 0) * 100)}%吸血，持续${seconds}秒。冷却30秒。`;
@@ -77,17 +68,14 @@ const EMERGENCY_COOLDOWN_DEFS = {
   },
   mage: {
     talentId: 'mage_frost_nova',
-    enhancementTalentId: 'mage_frost_domain',
     skillId: 'mage_frost_nova',
     label: '冰霜新星',
     iconText: '冰',
-    enhancedLabel: '极寒疆域',
-    enhancedIconText: '霜',
     accentColor: 0x7dd3fc,
     cooldownMs: 30000,
     radiusPx: 220,
-    radiusByEnhancementLevel: [220, 300, 380, 480],
-    values: [0, 3000, 5000, 10000],
+    radiusByEnhancementLevel: [220, 380, 480],
+    values: [0, 5000, 10000],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.value) || 0) / 1000));
       return `生命低于30%时自动触发：释放冰霜新星，冻结周围敌人${seconds}秒，范围${Math.round(state.radiusPx || 0)}。冷却30秒。`;
@@ -95,17 +83,14 @@ const EMERGENCY_COOLDOWN_DEFS = {
   },
   warlock: {
     talentId: 'warlock_infernal',
-    enhancementTalentId: 'warlock_infernal_contract',
     skillId: 'warlock_infernal',
     label: '灵魂虹吸',
     iconText: '魂',
-    enhancedLabel: '白骨护甲',
-    enhancedIconText: '骨',
     accentColor: 0x22c55e,
     cooldownMs: 30000,
-    values: [0, 0.30, 0.50, 1.0],
-    durationByLevel: [0, 3000, 5000, 10000],
-    overhealBarrierCapRatioByEnhancementLevel: [0, 0.10, 0.20, 0.30],
+    values: [0, 0.50, 1.0],
+    durationByLevel: [0, 5000, 10000],
+    overhealBarrierCapRatioByEnhancementLevel: [0, 0.20, 0.30],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
       const barrierCap = Math.round((Number(state.overhealBarrierCapRatio || 0)) * 100);
@@ -115,17 +100,14 @@ const EMERGENCY_COOLDOWN_DEFS = {
   },
   druid: {
     talentId: 'druid_nourish',
-    enhancementTalentId: 'druid_nourish_growth',
     skillId: 'druid_nourish',
     label: '自然滋养',
     iconText: '养',
-    enhancedLabel: '丰饶脉动',
-    enhancedIconText: '丰',
     accentColor: 0x22c55e,
     cooldownMs: 30000,
-    values: [0, 0.3, 0.3, 0.3],
-    healMultiplierByEnhancementLevel: [1.0, 1.5, 1.8, 2.0],
-    durationByLevel: [0, 15000, 10000, 5000],
+    values: [0, 0.54, 0.60],
+    healMultiplierByEnhancementLevel: [1.0, 1.0, 1.0],
+    durationByLevel: [0, 10000, 5000],
     describe(state) {
       const seconds = Math.max(0, Math.round((Number(state.durationMs) || 0) / 1000));
       return `生命低于30%时自动触发：在${seconds}秒内缓慢回复${Math.round((state.value || 0) * 100)}%生命。冷却30秒。`;
@@ -369,7 +351,6 @@ class GameScene extends Phaser.Scene {
       this.registry.remove('mainCore');
       this.registry.remove('offCore');
       this.registry.remove('offFaction');
-      this.registry.remove('thirdSpecType');
       this.registry.remove('naturePetType');
       this.registry.remove('selectedTrees');
       this.registry.remove('skillTreeLevels');
@@ -2451,7 +2432,7 @@ class GameScene extends Phaser.Scene {
     const def = coreKey ? EMERGENCY_COOLDOWN_DEFS[normalizeCoreKey(coreKey)] : null;
     if (!def) return null;
     const level = this.getSkillLevel(def.talentId);
-    const enhancementLevel = this.getSkillLevel(def.enhancementTalentId);
+    const enhancementLevel = def.enhancementTalentId ? this.getSkillLevel(def.enhancementTalentId) : level;
     let value = def.values[clampTalentLevel(level)] || 0;
     let durationMs = Array.isArray(def.durationByLevel)
       ? Number(def.durationByLevel[clampTalentLevel(level)] || 0)
@@ -2488,7 +2469,7 @@ class GameScene extends Phaser.Scene {
       hpCostPct,
       overhealBarrierCapRatio
     };
-    if (enhancementLevel > 0) {
+    if (def.enhancementTalentId && enhancementLevel > 0) {
       state.label = String(def.enhancedLabel || def.label || def.skillId || '');
       state.iconText = String(def.enhancedIconText || def.iconText || '✦');
     } else {

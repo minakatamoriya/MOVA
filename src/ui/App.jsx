@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { uiBus } from './bus';
 import { useUiStore } from './store';
-import { TREE_DEFS, buildThirdTalentTreePlaceholder, getMaxLevel } from '../classes/talentTrees';
+import { TREE_DEFS, getMaxLevel } from '../classes/talentTrees';
 import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { getGlobalShopCatalog } from '../managers/ShopManager';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
@@ -590,17 +590,9 @@ export default function App() {
 
     const mainDef = mainTreeId ? TREE_DEFS.find((t) => t.id === mainTreeId) : null;
     const offDef = offTreeId ? TREE_DEFS.find((t) => t.id === offTreeId) : null;
-    const thirdDef = buildThirdTalentTreePlaceholder({
-      mainCoreKey: mainCore,
-      offFaction,
-      mainTreeDef: mainDef,
-      offTreeDef: offDef
-    });
-
     const panels = [
       { key: 'left', title: mainDef ? mainDef.name : '主职业（未选择）', def: mainDef },
-      { key: 'mid', title: offDef ? offDef.name : '副职业（未选择）', def: offDef },
-      { key: 'right', title: thirdDef ? thirdDef.name : '第三天赋（未解锁）', def: thirdDef }
+      { key: 'right', title: offDef ? offDef.name : '副职业（未选择）', def: offDef }
     ];
 
     const toCssHex = (n) => {

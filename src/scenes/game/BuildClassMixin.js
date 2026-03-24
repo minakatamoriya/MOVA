@@ -8,37 +8,18 @@ import {
   UPGRADE_POOLS,
   OFF_FACTION_ENTRY_OPTIONS,
   UNIVERSAL_POOLS,
-  THIRD_SPEC_PREP_OPTIONS,
   DEPTH_SPEC_POOLS,
-  DUAL_SPEC_POOLS,
-  DUAL_SPEC_GENERIC_BONUS_BY_ID,
-  getThirdDepthPrepBonus,
-  getThirdDualPrepBonus,
-  getThirdSpecPrepOption,
   TALENT_OFFER_WEIGHT_CONFIG
 } from '../../classes/upgradePools';
 import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
-import { getAccentCoreKeyForOffFaction, getThirdSpecTypeForMainOff, getMaxLevel, getTreeIdForSkill, normalizeSkillId } from '../../classes/talentTrees';
+import { getAccentCoreKeyForOffFaction, getMaxLevel, getTreeIdForSkill, normalizeSkillId } from '../../classes/talentTrees';
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 import { spawnWarriorMeleeHit as _spawnWarriorMeleeHit, spawnWarriorCrescentProjectile as _spawnWarriorCrescentProjectile } from '../../classes/attacks/weapons/warriorSlash';
 
-function applyThirdSpecBonusPackage(player, bonuses = {}) {
-  if (!player || !bonuses || typeof bonuses !== 'object') return;
-
-  player.thirdSpecDamageBonus = Math.max(0, Number(player.thirdSpecDamageBonus || 0) + Number(bonuses.damageBonus || 0));
-  player.thirdSpecFireRateBonus = Math.max(0, Number(player.thirdSpecFireRateBonus || 0) + Number(bonuses.fireRateBonus || 0));
-  player.thirdSpecCritChanceBonus = Math.max(0, Number(player.thirdSpecCritChanceBonus || 0) + Number(bonuses.critChanceBonus || 0));
-  player.thirdSpecDamageReductionBonus = Math.max(0, Number(player.thirdSpecDamageReductionBonus || 0) + Number(bonuses.damageReductionBonus || 0));
-  player.thirdSpecDodgeChanceBonus = Math.max(0, Number(player.thirdSpecDodgeChanceBonus || 0) + Number(bonuses.dodgeChanceBonus || 0));
-  player.thirdSpecBlockChanceBonus = Math.max(0, Number(player.thirdSpecBlockChanceBonus || 0) + Number(bonuses.blockChanceBonus || 0));
-  player.thirdSpecRegenRatioPerSec = Math.max(0, Number(player.thirdSpecRegenRatioPerSec || 0) + Number(bonuses.regenRatioPerSec || 0));
-
-  player.applyStatMultipliers?.(player.equipmentMods || {});
-  player.applyEquipmentEffects?.(player.equipmentMods || {});
-}
+const OFFCLASS_UNLOCK_AFTER_LEVELUPS = 3;
 
 /**
  * 职业构建 / 升级 / 近战 / 法师 / 圣骑 / 术士 / 德鲁伊宠物 相关方法
@@ -117,10 +98,6 @@ export function applyBuildClassMixin(GameScene) {
 
           const accentCore = getAccentCoreKeyForOffFaction(inferredFaction);
           if (accentCore && this.player?.setOffCore) this.player.setOffCore(accentCore);
-
-          const mainCoreKey = this.registry.get('mainCore') || this.buildState.core;
-          const thirdSpecType = getThirdSpecTypeForMainOff({ mainCoreKey, offFaction: inferredFaction });
-          if (thirdSpecType) this.registry.set('thirdSpecType', thirdSpecType);
         }
       }
 
@@ -148,48 +125,46 @@ export function applyBuildClassMixin(GameScene) {
 
             if (normalizedUpgradeId === 'off_arcane') {
               this.player.arcaneCircleEnabled = true;
-              this.player.universalFireRateMult = Math.max(0.6, (this.player.universalFireRateMult || 1) * 0.92);
-              this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
             }
 
             if (normalizedUpgradeId === 'off_ranger') {
               this.player.rangerBeaconEnabled = true;
-              this.player.offEntryDodgeChance = Math.max(this.player.offEntryDodgeChance || 0, 0.10);
-              this.player.dodgeChance = Math.min(0.95, (this.player.dodgeChance || 0) + 0.10);
             }
 
             if (normalizedUpgradeId === 'off_unyielding') {
-              this.player.bloodrageEnabled = true;
-              this.player.bloodragePerStack = Math.max(this.player.bloodragePerStack || 0, 0.02);
-              this.player.offEntryCritChance = Math.max(this.player.offEntryCritChance || 0, 0.10);
-              this.player.critChance = Math.min(0.95, (this.player.critChance || this.player.baseCritChance || 0.05) + 0.10);
+              if ((this.player.unyieldingBloodrageLevel || 0) <= 0) {
+                this.player.bloodrageEnabled = true;
+                this.player.bloodragePerStack = 0.02;
+                this.player.unyieldingBloodrageLevel = 1;
+                this.recordSkillTreeProgress({ id: 'unyielding_bloodrage', category: 'build' });
+              }
             }
 
             if (normalizedUpgradeId === 'off_summon') {
-              this.player.offEntryDamageMult = Math.max(this.player.offEntryDamageMult || 1, 1.08);
               this.player.summonStarterGuardCount = Math.max(1, this.player.summonStarterGuardCount || 0);
               this.player.summonStarterMageCount = Math.max(1, this.player.summonStarterMageCount || 0);
               this.undeadSummonManager?.refreshFromPlayer?.();
               this.undeadSummonManager?.refreshSummonStats?.();
-              this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
             }
 
             if (normalizedUpgradeId === 'off_guardian') {
-              this.player.offEntryDamageReduction = Math.max(this.player.offEntryDamageReduction || 0, 0.10);
-              this.player.guardianBlockLevel = Math.max(this.player.guardianBlockLevel || 0, 1);
-              this.player.guardianBlockBonus = Math.max(this.player.guardianBlockBonus || 0, 0.05);
-              this.player.guardianSacredSealLevel = Math.max(this.player.guardianSacredSealLevel || 0, 1);
-              this.player.guardianSealMaxStacks = Math.max(this.player.guardianSealMaxStacks || 0, 3);
+              if ((this.player.guardianBlockLevel || 0) <= 0) {
+                this.player.guardianBlockLevel = 1;
+                this.player.guardianBlockBonus = 0.05;
+                this.recordSkillTreeProgress({ id: 'guardian_block', category: 'build' });
+              }
+
+              if ((this.player.guardianSacredSealLevel || 0) <= 0) {
+                this.player.guardianSacredSealLevel = 1;
+                this.player.guardianSealMaxStacks = 3;
+                this.recordSkillTreeProgress({ id: 'guardian_sacred_seal', category: 'build' });
+              }
             }
 
             if (normalizedUpgradeId === 'off_nature') {
               this.petManager?.unlockPetByUpgradeId?.('druid_pet_bear');
               this.petManager?.refreshPetStats?.();
             }
-
-            const mainCoreKey = this.registry.get('mainCore') || this.buildState.core;
-            const thirdSpecType = getThirdSpecTypeForMainOff({ mainCoreKey, offFaction: picked.faction });
-            if (thirdSpecType) this.registry.set('thirdSpecType', thirdSpecType);
           }
           break;
         }
@@ -201,10 +176,10 @@ export function applyBuildClassMixin(GameScene) {
           this.player.warriorSwordQiLevel = Math.min(3, (this.player.warriorSwordQiLevel || 0) + 1);
           break;
         case 'warrior_endure':
-          this.player.warriorEndureLevel = Math.min(3, (this.player.warriorEndureLevel || 0) + 1);
+          this.player.warriorEndureLevel = 3;
           break;
         case 'warrior_range':
-          this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
+          this.player.warriorArcLevel = 3;
           break;
         case 'warrior_lifesteal':
           this.upgradeWarriorLifesteal();
@@ -214,11 +189,11 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'mage_refract':
         case 'mage_frostbite':
-          this.player.mageFrostbiteLevel = Math.min(3, (this.player.mageFrostbiteLevel || 0) + 1);
+          this.player.mageFrostbiteLevel = 3;
           break;
         case 'mage_arcane_perception':
         case 'mage_cold_focus': {
-          this.player.mageColdFocusLevel = Math.min(3, (this.player.mageColdFocusLevel || 0) + 1);
+          this.player.mageColdFocusLevel = 3;
           const base = this.player.mageMissileRangeBase || this.player.mageMissileRange || 280;
           this.player.mageMissileRangeBase = base;
           this.player.mageMissileRange = Math.round(base + this.player.mageColdFocusLevel * 45);
@@ -226,13 +201,17 @@ export function applyBuildClassMixin(GameScene) {
         }
         case 'mage_energy_focus':
         case 'mage_ice_veins':
-          this.player.mageIceVeinsLevel = Math.min(3, (this.player.mageIceVeinsLevel || 0) + 1);
+          this.player.mageIceVeinsLevel = 3;
           break;
         case 'mage_deep_freeze':
-          this.player.mageDeepFreezeLevel = Math.min(3, (this.player.mageDeepFreezeLevel || 0) + 1);
+          this.player.mageDeepFreezeLevel = 3;
           break;
         case 'mage_frost_nova':
-          this.player.mageFrostNovaLevel = Math.min(3, (this.player.mageFrostNovaLevel || 0) + 1);
+          this.player.mageFrostNovaLevel = Math.min(2, (this.player.mageFrostNovaLevel || 0) + 1);
+          break;
+        case 'mage_frost_domain':
+          this.player.mageFrostNovaLevel = Math.min(2, (this.player.mageFrostNovaLevel || 0) + 1);
+          this.player.mageFrostDomainLevel = this.player.mageFrostNovaLevel;
           break;
 
         case 'archer_bounce':
@@ -251,7 +230,7 @@ export function applyBuildClassMixin(GameScene) {
           this.player.paladinTriple = true;
           break;
         case 'paladin_stun': {
-          this.player.paladinStunLevel = Math.min(3, (this.player.paladinStunLevel || 0) + 1);
+          this.player.paladinStunLevel = 3;
           this.player.paladinStunChance = Math.min(0.95, this.player.paladinStunLevel * 0.10);
           break;
         }
@@ -266,11 +245,11 @@ export function applyBuildClassMixin(GameScene) {
           }
           break;
         case 'warlock_spread':
-          this.player.warlockPoisonSpreadStacks = Math.min(3, (this.player.warlockPoisonSpreadStacks || 0) + 1);
+          this.player.warlockPoisonSpreadStacks = 3;
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_corrode':
-          this.player.warlockPoisonCorrodeStacks = Math.min(3, (this.player.warlockPoisonCorrodeStacks || 0) + 1);
+          this.player.warlockPoisonCorrodeStacks = 3;
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_toxicity':
@@ -301,71 +280,71 @@ export function applyBuildClassMixin(GameScene) {
 
         case 'arcane_circle':
           this.player.arcaneCircleEnabled = true;
-          this.player.arcaneCircleLevel = Math.min(3, (this.player.arcaneCircleLevel || 0) + 1);
+          this.player.arcaneCircleLevel = (this.player.arcaneCircleLevel || 0) >= 2 ? 3 : 2;
           break;
         case 'arcane_circle_range':
-          this.player.arcaneCircleRangeLevel = Math.min(3, (this.player.arcaneCircleRangeLevel || 0) + 1);
+          this.player.arcaneCircleRangeLevel = 3;
           break;
         case 'arcane_fire_circle':
-          this.player.arcaneFireCircleLevel = Math.min(3, (this.player.arcaneFireCircleLevel || 0) + 1);
+          this.player.arcaneFireCircleLevel = 3;
           break;
         case 'arcane_frost_circle':
-          this.player.arcaneFrostCircleLevel = Math.min(3, (this.player.arcaneFrostCircleLevel || 0) + 1);
+          this.player.arcaneFrostCircleLevel = 3;
           break;
         case 'arcane_resonance_mark':
-          this.player.arcaneResonanceMarkLevel = Math.min(3, (this.player.arcaneResonanceMarkLevel || 0) + 1);
+          this.player.arcaneResonanceMarkLevel = 3;
           break;
         case 'arcane_flowcasting':
           this.player.arcaneFlowcastingLevel = Math.min(3, (this.player.arcaneFlowcastingLevel || 0) + 1);
           break;
 
         case 'ranger_snaretrap':
-          this.player.rangerSnareTrapLevel = Math.min(3, (this.player.rangerSnareTrapLevel || 0) + 1);
+          this.player.rangerSnareTrapLevel = (this.player.rangerSnareTrapLevel || 0) >= 2 ? 3 : 2;
           break;
         case 'ranger_huntmark':
-          this.player.rangerHuntmarkLevel = Math.min(3, (this.player.rangerHuntmarkLevel || 0) + 1);
+          this.player.rangerHuntmarkLevel = 3;
           break;
         case 'ranger_spiketrap':
           this.player.rangerSpikeTrapLevel = Math.min(3, (this.player.rangerSpikeTrapLevel || 0) + 1);
           break;
         case 'ranger_blasttrap':
-          this.player.rangerBlastTrapLevel = Math.min(3, (this.player.rangerBlastTrapLevel || 0) + 1);
+          this.player.rangerBlastTrapLevel = 3;
           break;
         case 'ranger_trapcraft':
           this.player.rangerTrapcraftLevel = Math.min(3, (this.player.rangerTrapcraftLevel || 0) + 1);
           break;
         case 'ranger_pack_hunter':
-          this.player.rangerPackHunterLevel = Math.min(3, (this.player.rangerPackHunterLevel || 0) + 1);
+          this.player.rangerPackHunterLevel = 3;
           break;
 
         case 'unyielding_bloodrage':
           this.player.bloodrageEnabled = true;
-          this.player.bloodragePerStack = [0, 0.02, 0.03, 0.04][Math.min(3, ((this.player.unyieldingBloodrageLevel || 0) + 1))] || 0.03;
-          this.player.unyieldingBloodrageLevel = Math.min(3, (this.player.unyieldingBloodrageLevel || 0) + 1);
+          this.player.bloodragePerStack = 0.04;
+          this.player.unyieldingBloodrageLevel = 2;
           break;
         case 'unyielding_battlecry':
           this.player.battlecryEnabled = true;
-          this.player.battlecryBonus = [0, 0.10, 0.20, 0.30][Math.min(3, ((this.player.unyieldingBattlecryLevel || 0) + 1))] || 0.15;
-          this.player.unyieldingBattlecryLevel = Math.min(3, (this.player.unyieldingBattlecryLevel || 0) + 1);
+          this.player.battlecryBonus = 0.30;
+          this.player.unyieldingBattlecryLevel = 3;
           break;
         case 'unyielding_hamstring':
-          this.player.unyieldingHamstringLevel = Math.min(3, (this.player.unyieldingHamstringLevel || 0) + 1);
+          this.player.unyieldingHamstringLevel = 3;
           break;
         case 'unyielding_sunder':
-          this.player.unyieldingSunderLevel = Math.min(3, (this.player.unyieldingSunderLevel || 0) + 1);
+          this.player.unyieldingSunderLevel = 3;
           break;
         case 'unyielding_standfast':
-          this.player.unyieldingStandfastLevel = Math.min(3, (this.player.unyieldingStandfastLevel || 0) + 1);
+          this.player.unyieldingStandfastLevel = (this.player.unyieldingStandfastLevel || 0) >= 2 ? 3 : 2;
           break;
         case 'unyielding_executioner':
-          this.player.unyieldingExecutionerLevel = Math.min(3, (this.player.unyieldingExecutionerLevel || 0) + 1);
+          this.player.unyieldingExecutionerLevel = 3;
           break;
         case 'unyielding_duel':
           this.player.deathDuelEnabled = true;
           break;
 
         case 'summon_necrotic_vitality':
-          this.player.curseNecroticVitalityLevel = Math.min(3, (this.player.curseNecroticVitalityLevel || 0) + 1);
+          this.player.curseNecroticVitalityLevel = 3;
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_skeleton_guard':
@@ -377,11 +356,11 @@ export function applyBuildClassMixin(GameScene) {
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
         case 'summon_mage_empower':
-          this.player.curseMageEmpowerLevel = Math.min(3, (this.player.curseMageEmpowerLevel || 0) + 1);
+          this.player.curseMageEmpowerLevel = (this.player.curseMageEmpowerLevel || 0) >= 2 ? 3 : 2;
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_guard_bulwark':
-          this.player.curseGuardBulwarkLevel = Math.min(3, (this.player.curseGuardBulwarkLevel || 0) + 1);
+          this.player.curseGuardBulwarkLevel = 3;
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_ember_echo':
@@ -389,54 +368,54 @@ export function applyBuildClassMixin(GameScene) {
           break;
 
         case 'guardian_block':
-          this.player.guardianBlockLevel = Math.min(3, (this.player.guardianBlockLevel || 0) + 1);
-          this.player.guardianBlockBonus = [0, 0.05, 0.10, 0.15][this.player.guardianBlockLevel] || 0;
+          this.player.guardianBlockLevel = 3;
+          this.player.guardianBlockBonus = 0.15;
           break;
         case 'guardian_armor':
-          this.player.flatDamageReduction = Math.min(25, (this.player.flatDamageReduction || 0) + 2);
+          this.player.flatDamageReduction = Math.min(25, (this.player.flatDamageReduction || 0) + 6);
           break;
         case 'guardian_counter':
-          this.player.guardianCounterLevel = Math.min(3, (this.player.guardianCounterLevel || 0) + 1);
+          this.player.guardianCounterLevel = 3;
           this.player.counterOnBlock = true;
           break;
         case 'guardian_sacred_seal':
-          this.player.guardianSacredSealLevel = Math.min(3, (this.player.guardianSacredSealLevel || 0) + 1);
-          this.player.guardianSealMaxStacks = 2 + this.player.guardianSacredSealLevel;
+          this.player.guardianSacredSealLevel = 3;
+          this.player.guardianSealMaxStacks = 5;
           break;
         case 'guardian_holy_rebuke':
-          this.player.guardianHolyRebukeLevel = Math.min(3, (this.player.guardianHolyRebukeLevel || 0) + 1);
+          this.player.guardianHolyRebukeLevel = (this.player.guardianHolyRebukeLevel || 0) >= 2 ? 3 : 2;
           break;
         case 'guardian_light_fortress':
-          this.player.guardianLightFortressLevel = Math.min(3, (this.player.guardianLightFortressLevel || 0) + 1);
+          this.player.guardianLightFortressLevel = 3;
           break;
 
         // === 紧急冷却天赋（记录 player 属性，实际触发由 installPassiveCooldownSkills 管理） ===
         case 'paladin_divine_shelter':
-          this.player.paladinDivineShelterLevel = Math.min(3, (this.player.paladinDivineShelterLevel || 0) + 1);
+          this.player.paladinDivineShelterLevel = Math.min(2, (this.player.paladinDivineShelterLevel || 0) + 1);
           break;
         case 'paladin_shelter_extension':
-          this.player.paladinShelterExtensionLevel = Math.min(3, (this.player.paladinShelterExtensionLevel || 0) + 1);
+          this.player.paladinDivineShelterLevel = Math.min(2, (this.player.paladinDivineShelterLevel || 0) + 1);
+          this.player.paladinShelterExtensionLevel = this.player.paladinDivineShelterLevel;
           break;
         case 'archer_nimble_evade':
-          this.player.archerNimbleEvadeLevel = Math.min(3, (this.player.archerNimbleEvadeLevel || 0) + 1);
+          this.player.archerNimbleEvadeLevel = Math.min(2, (this.player.archerNimbleEvadeLevel || 0) + 1);
           break;
         case 'archer_evade_mastery':
-          this.player.archerEvadeMasteryLevel = Math.min(3, (this.player.archerEvadeMasteryLevel || 0) + 1);
+          this.player.archerNimbleEvadeLevel = Math.min(2, (this.player.archerNimbleEvadeLevel || 0) + 1);
+          this.player.archerEvadeMasteryLevel = this.player.archerNimbleEvadeLevel;
           break;
         case 'warrior_blood_conversion':
-          this.player.warriorBloodConversionLevel = Math.min(3, (this.player.warriorBloodConversionLevel || 0) + 1);
+          this.player.warriorBloodConversionLevel = Math.min(2, (this.player.warriorBloodConversionLevel || 0) + 1);
           break;
         case 'warrior_bloodlust_mastery':
-          this.player.warriorBloodlustMasteryLevel = Math.min(3, (this.player.warriorBloodlustMasteryLevel || 0) + 1);
+          this.player.warriorBloodConversionLevel = Math.min(2, (this.player.warriorBloodConversionLevel || 0) + 1);
+          this.player.warriorBloodlustMasteryLevel = this.player.warriorBloodConversionLevel;
           break;
         case 'mage_shatter':
           this.player.mageShatterLevel = Math.min(3, (this.player.mageShatterLevel || 0) + 1);
           break;
-        case 'mage_frost_domain':
-          this.player.mageFrostDomainLevel = Math.min(3, (this.player.mageFrostDomainLevel || 0) + 1);
-          break;
         case 'druid_nourish':
-          this.player.druidNourishLevel = Math.min(3, (this.player.druidNourishLevel || 0) + 1);
+          this.player.druidNourishLevel = Math.min(2, (this.player.druidNourishLevel || 0) + 1);
           break;
         case 'druid_meteor_shower': {
           this.player.druidMeteorShowerLevel = Math.min(3, (this.player.druidMeteorShowerLevel || 0) + 1);
@@ -452,33 +431,17 @@ export function applyBuildClassMixin(GameScene) {
           this.player.druidStarfireLevel = Math.min(3, (this.player.druidStarfireLevel || 0) + 1);
           break;
         case 'druid_nourish_growth':
-          this.player.druidNourishGrowthLevel = Math.min(3, (this.player.druidNourishGrowthLevel || 0) + 1);
+          this.player.druidNourishLevel = Math.min(2, (this.player.druidNourishLevel || 0) + 1);
+          this.player.druidNourishGrowthLevel = this.player.druidNourishLevel;
           break;
         case 'warlock_infernal':
-          this.player.warlockInfernalLevel = Math.min(3, (this.player.warlockInfernalLevel || 0) + 1);
+          this.player.warlockInfernalLevel = Math.min(2, (this.player.warlockInfernalLevel || 0) + 1);
           break;
         case 'warlock_infernal_contract':
-          this.player.warlockInfernalContractLevel = Math.min(3, (this.player.warlockInfernalContractLevel || 0) + 1);
+          this.player.warlockInfernalLevel = Math.min(2, (this.player.warlockInfernalLevel || 0) + 1);
+          this.player.warlockInfernalContractLevel = this.player.warlockInfernalLevel;
           break;
 
-        // === 第三天赋：准备节点 ===
-        case 'third_depth_prep':
-          this.player.thirdDepthPrepUnlocked = true;
-          applyThirdSpecBonusPackage(this.player, getThirdDepthPrepBonus(normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core))?.bonuses);
-          if (normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core) === 'warlock') {
-            this.player.warlockDepthInfernalUnlocked = true;
-            this.undeadSummonManager?.summonInfernal?.({ persistent: true, level: 3 });
-          }
-          break;
-        case 'third_dual_prep':
-          this.player.thirdDualPrepUnlocked = true;
-          applyThirdSpecBonusPackage(this.player, getThirdDualPrepBonus({
-            mainCoreKey: normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core),
-            offFaction: this.registry.get('offFaction') || null
-          })?.bonuses);
-          break;
-
-        // === 第三天赋：深度专精 ===
         case 'mage_dualcaster':
           this.player.mageDualcaster = Math.min(3, (this.player.mageDualcaster || 0) + 1);
           break;
@@ -508,6 +471,10 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'warlock_netherlord':
           this.player.warlockNetherlord = Math.min(3, (this.player.warlockNetherlord || 0) + 1);
+          if (!this.player.warlockDepthInfernalUnlocked) {
+            this.player.warlockDepthInfernalUnlocked = true;
+            this.undeadSummonManager?.summonInfernal?.({ persistent: true, level: 3 });
+          }
           break;
         case 'paladin_avenger':
           this.player.paladinAvengerLevel = Math.min(3, (this.player.paladinAvengerLevel || 0) + 1);
@@ -529,74 +496,7 @@ export function applyBuildClassMixin(GameScene) {
           this.player.druidAstralstormLevel = Math.min(3, (this.player.druidAstralstormLevel || 0) + 1);
           break;
 
-        // === 第三天赋：双职业专精 ===
-        case 'dual_mage_druid_arcanebear':
-          this.player.dualArcanebear = true;
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_mage_druid_starwisdom':
-          this.player.dualStarwisdomLevel = Math.min(3, (this.player.dualStarwisdomLevel || 0) + 1);
-          break;
-        case 'dual_mage_druid_natureoverflow':
-          this.player.dualNatureoverflow = true;
-          break;
-        case 'dual_scatter_mage_enchantedarrow':
-          this.player.dualEnchantedarrow = true;
-          break;
-        case 'dual_scatter_mage_hastefocus':
-          this.player.dualHastefocusLevel = Math.min(3, (this.player.dualHastefocusLevel || 0) + 1);
-          break;
-        case 'dual_scatter_mage_archercircle':
-          this.player.dualArchercircle = true;
-          break;
-        case 'dual_warrior_paladin_crusade':
-          this.player.dualCrusade = true;
-          break;
-        case 'dual_warrior_paladin_righteousrage':
-          this.player.dualRighteousrageLevel = Math.min(3, (this.player.dualRighteousrageLevel || 0) + 1);
-          break;
-        case 'dual_warrior_paladin_sacredspin':
-          this.player.dualSacredspin = true;
-          break;
-        case 'dual_warlock_druid_decay':
-          this.player.dualDecay = true;
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_warlock_druid_witheringroar':
-          this.player.dualWitheringroar = true;
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_warlock_druid_soulbloom':
-          this.player.dualSoulbloomLevel = Math.min(3, (this.player.dualSoulbloomLevel || 0) + 1);
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_paladin_scatter_holyrain':
-          this.player.dualHolyrain = true;
-          break;
-        case 'dual_paladin_scatter_blessedquiver':
-          this.player.dualBlessedquiverLevel = Math.min(3, (this.player.dualBlessedquiverLevel || 0) + 1);
-          break;
-        case 'dual_paladin_scatter_retribution':
-          this.player.dualRetribution = true;
-          break;
-        case 'dual_druid_warrior_ironbark':
-          this.player.dualIronbark = true;
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_druid_warrior_predator':
-          this.player.dualPredatorLevel = Math.min(3, (this.player.dualPredatorLevel || 0) + 1);
-          this.petManager?.refreshPetStats?.();
-          break;
-        case 'dual_druid_warrior_ancestral':
-          this.player.dualAncestral = true;
-          this.petManager?.refreshPetStats?.();
-          break;
-
         default: {
-          const genericDualBonus = DUAL_SPEC_GENERIC_BONUS_BY_ID[normalizedUpgradeId] || null;
-          if (genericDualBonus) {
-            applyThirdSpecBonusPackage(this.player, genericDualBonus);
-          }
           break;
         }
       }
@@ -775,10 +675,16 @@ export function applyBuildClassMixin(GameScene) {
         return null;
       }
 
-      const options = this.getLevelUpOptions();
+      const shouldOfferOffClassChoice = !this.registry.get('offFaction')
+        && !!this.buildState.core
+        && Number(this.buildState.levelUps || 0) >= OFFCLASS_UNLOCK_AFTER_LEVELUPS;
+      const options = shouldOfferOffClassChoice
+        ? OFF_FACTION_ENTRY_OPTIONS.map((option) => getUpgradeOfferPresentation(option, 0, getMaxLevel(option.id)))
+        : this.getLevelUpOptions();
       const offer = {
         id: Math.max(1, Math.floor(Number(this._levelUpOfferSequence || 0)) + 1),
         level: Math.max(1, Math.floor(Number(levelOverride || this.playerData?.level || 1))),
+        type: shouldOfferOffClassChoice ? 'offclass-choice' : 'standard',
         options: Array.isArray(options) ? options : []
       };
 
@@ -793,6 +699,7 @@ export function applyBuildClassMixin(GameScene) {
       if ((this.getRunConsumableCount?.('reroll_dice') || 0) <= 0) return null;
 
       const currentOffer = this.getCurrentLevelUpOffer?.() || null;
+      if (currentOffer?.type === 'offclass-choice') return currentOffer;
       const level = Math.max(1, Math.floor(Number(currentOffer?.level || this.playerData?.level || 1)));
       const previousSignature = (currentOffer?.options || []).map((opt) => opt?.id || '').join('|');
 
@@ -881,7 +788,11 @@ export function applyBuildClassMixin(GameScene) {
 
       try {
         this.markLevelUpInteraction();
-        this.buildState.levelUps += 1;
+        const isOffClassChoice = offer?.type === 'offclass-choice';
+
+        if (!isOffClassChoice) {
+          this.buildState.levelUps += 1;
+        }
 
         const shownEntryIds = (offer?.options || [])
           .map((opt) => normalizeSkillId(opt?.id))
@@ -901,7 +812,9 @@ export function applyBuildClassMixin(GameScene) {
 
         this.applyUpgrade(chosen);
 
-        this._pendingLevelUpPoints = Math.max(0, this.getPendingLevelUpPoints() - 1);
+        if (!isOffClassChoice) {
+          this._pendingLevelUpPoints = Math.max(0, this.getPendingLevelUpPoints() - 1);
+        }
         this._currentLevelUpOffer = null;
         this._levelUpActive = false;
 
@@ -1290,8 +1203,7 @@ export function applyBuildClassMixin(GameScene) {
       const universalPools = UNIVERSAL_POOLS;
 
       const choiceCount = this.levelUpChoiceCount || 3;
-      const offFactionEntryIds = new Set(OFF_FACTION_ENTRY_OPTIONS.map((opt) => opt.id));
-      const rejectedOffFactionEntries = new Set(this.registry.get('rejectedOffFactionEntries') || []);
+      const offFactionEntryIds = new Set();
 
       const skillTreeLevels = this.registry.get('skillTreeLevels') || {};
       const getSkillLevelValue = (id) => {
@@ -1305,15 +1217,6 @@ export function applyBuildClassMixin(GameScene) {
       const mainCore = normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core);
       const offFaction = this.registry.get('offFaction') || null;
 
-      let thirdSpecType = this.registry.get('thirdSpecType') || null;
-      if (!thirdSpecType && mainCore && offFaction) {
-        thirdSpecType = getThirdSpecTypeForMainOff({ mainCoreKey: mainCore, offFaction });
-        if (thirdSpecType) this.registry.set('thirdSpecType', thirdSpecType);
-      }
-
-      let pendingThirdPrepOption = null;
-      let hasThirdPrep = false;
-
       let combinedPool = [];
 
       if (mainCore) {
@@ -1324,22 +1227,8 @@ export function applyBuildClassMixin(GameScene) {
         combinedPool = combinedPool.concat(universalPools[offFaction] || []);
       }
 
-      if (stage === 'all' && mainCore && offFaction && thirdSpecType) {
-        const accentCoreKey = getAccentCoreKeyForOffFaction(offFaction);
-
-        pendingThirdPrepOption = getThirdSpecPrepOption({ specType: thirdSpecType, mainCoreKey: mainCore, offFaction })
-          || (thirdSpecType === 'depth' ? THIRD_SPEC_PREP_OPTIONS.depth : THIRD_SPEC_PREP_OPTIONS.dual);
-        hasThirdPrep = !!pendingThirdPrepOption && getSkillLevelValue(pendingThirdPrepOption.id) >= getMaxLevel(pendingThirdPrepOption.id);
-
-        if (thirdSpecType === 'depth') {
-          if (hasThirdPrep) {
-            combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
-          }
-        } else if (thirdSpecType === 'dual') {
-          if (hasThirdPrep && accentCoreKey && DUAL_SPEC_POOLS[mainCore] && DUAL_SPEC_POOLS[mainCore][accentCoreKey]) {
-            combinedPool = combinedPool.concat(DUAL_SPEC_POOLS[mainCore][accentCoreKey] || []);
-          }
-        }
+      if (stage === 'all' && mainCore) {
+        combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
       }
 
       combinedPool = combinedPool.filter((opt) => {
@@ -1359,31 +1248,6 @@ export function applyBuildClassMixin(GameScene) {
       };
 
       let options = this.pickWeightedUpgrades(combinedPool, choiceCount, (opt) => this.getUpgradeOfferWeight(opt, weightContext));
-
-      if (!offFaction && stage !== 'main_only') {
-        let entryOptions = OFF_FACTION_ENTRY_OPTIONS.filter((opt) => !rejectedOffFactionEntries.has(opt.id));
-        if (entryOptions.length <= 0) {
-          this.registry.set('rejectedOffFactionEntries', []);
-          entryOptions = [...OFF_FACTION_ENTRY_OPTIONS];
-        }
-        const desiredCount = choiceCount + 1;
-        options = this.appendWeightedUniqueUpgrades(
-          options,
-          entryOptions,
-          Math.max(0, desiredCount - options.length),
-          (opt) => this.getUpgradeOfferWeight(opt, weightContext)
-        );
-      }
-
-      if (offFaction && stage === 'all' && pendingThirdPrepOption && !hasThirdPrep) {
-        const desiredCount = choiceCount + 1;
-        options = this.appendWeightedUniqueUpgrades(
-          options,
-          [pendingThirdPrepOption],
-          Math.max(0, desiredCount - options.length),
-          (opt) => this.getUpgradeOfferWeight(opt, weightContext)
-        );
-      }
 
       options = options.map((option) => {
         const currentLevel = getSkillLevelValue(option.id);
@@ -1420,10 +1284,6 @@ export function applyBuildClassMixin(GameScene) {
 
       if (offFaction && treeId === offFaction) {
         weight *= Number(cfg.ownedOffFactionWeight) || 1;
-      }
-
-      if (treeId === 'third') {
-        weight *= Number(cfg.thirdSpecWeight) || 1;
       }
 
       if (currentLevel > 0) {
@@ -1751,7 +1611,7 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradeWarriorRange() {
-      this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
+      this.player.warriorArcLevel = 3;
     },
 
     getWarriorArcSpanDeg() {

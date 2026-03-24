@@ -1,6 +1,6 @@
 // 天赋树/技能树：仅用于 UI 展示与进度记录
 
-import { DEPTH_SPEC_POOLS, DUAL_SPEC_POOLS, THIRD_SPEC_PREP_OPTIONS } from './upgradePools';
+import { DEPTH_SPEC_POOLS } from './upgradePools';
 import { resolveClassColor } from './visual/classColors';
 import { normalizeCoreKey } from './classDefs';
 
@@ -11,9 +11,8 @@ export const TREE_DEFS = [
     color: resolveClassColor('archer'),
     core: { id: 'archer_core', name: '初始：猎人', maxLevel: 1, desc: '解锁箭矢连射。' },
     nodes: [
-      { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 3, desc: '生命低于30%时自动触发：闪避率 +40%/+60%/+80%，持续3秒，冷却30秒。' },
-      { id: 'archer_evade_mastery', name: '残影步调', maxLevel: 3, desc: '强化灵巧回避：持续时间提高至5/8/10秒。' },
-      { id: 'archer_range', name: '射程', maxLevel: 3, desc: '基础射击射程提升（+12%/+24%/+36%）。' },
+      { id: 'archer_nimble_evade', name: '灵巧回避', maxLevel: 2, desc: '生命低于30%时自动触发：1级闪避率 +60%，持续8秒；2级闪避率 +80%，持续10秒；冷却30秒。' },
+      { id: 'archer_range', name: '射程', maxLevel: 1, desc: '基础射击射程直接提升到 +36%。' },
       { id: 'archer_volley', name: '箭矢齐射', maxLevel: 3, desc: '基础射击初始为3列；1级变为5列，2级收束弹道并强化锁定，3级变为7列，中心列始终锁定目标。' }
     ]
   },
@@ -26,8 +25,7 @@ export const TREE_DEFS = [
       { id: 'druid_meteor_shower', name: '星域牵引', maxLevel: 3, desc: '强化星落的锁定与落点覆盖。1/2/3级分别将索敌范围提高到 350/395/440，爆炸半径提高到 80/92/106。' },
       { id: 'druid_meteor', name: '坠星', maxLevel: 3, desc: '强化单次星落质量。1/2/3级分别使星落伤害提高 15%/30%/45%，下坠时间压缩到 235/210/185 毫秒。' },
       { id: 'druid_starfire', name: '星火', maxLevel: 3, desc: '星落命中后有概率在原地引发一次追击星火。1/2/3级概率与伤害分别为 20%/45%、30%/60%、40%/75%（不连锁）。' },
-      { id: 'druid_nourish', name: '自然滋养', maxLevel: 3, desc: '生命低于30%时自动触发：在15/10/5秒内缓慢回复30%生命，冷却30秒。' },
-      { id: 'druid_nourish_growth', name: '丰饶脉动', maxLevel: 3, desc: '强化自然滋养：总回复量额外提高50%/80%/100%。' }
+      { id: 'druid_nourish', name: '自然滋养', maxLevel: 2, desc: '生命低于30%时自动触发：1级在10秒内回复54%生命；2级在5秒内回复60%生命；冷却30秒。' }
     ]
   },
   {
@@ -36,11 +34,10 @@ export const TREE_DEFS = [
     color: resolveClassColor('warrior'),
     core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为近战挥砍并外放真空刃。' },
     nodes: [
-      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '次元斩组合的展开角度提升：基础 90°；1/2/3级分别提升到 120°/180°/270°。' },
+      { id: 'warrior_range', name: '斩域展开', maxLevel: 1, desc: '次元斩组合的展开角度直接提升到 270°。' },
       { id: 'warrior_swordqi', name: '真空刃强化', maxLevel: 3, desc: '基础真空刃持续强化。1级提升飞行质量，2级进一步强化速度/伤害并获得轻度追踪，3级每次挥砍连续放出两道真空刃。' },
-      { id: 'warrior_endure', name: '斩势护体', maxLevel: 3, desc: '次元斩命中后获得短暂减伤。1/2/3级分别获得 8%/12%/16% 减伤，持续 1.4/1.6/1.8 秒，可刷新。' },
-      { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 3, desc: '生命低于30%时自动触发：攻击伤害转化为100%吸血，持续5/10/15秒，冷却30秒。' },
-      { id: 'warrior_bloodlust_mastery', name: '狂血渴饮', maxLevel: 3, desc: '强化猩红嗜血：攻击伤害转化提高至120%/150%/200%。' }
+      { id: 'warrior_endure', name: '斩势护体', maxLevel: 1, desc: '次元斩命中后获得 16% 减伤，持续 1.8 秒，可刷新。' },
+      { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 2, desc: '生命低于30%时自动触发：1级攻击伤害转化为150%吸血，持续10秒；2级转化为200%吸血，持续15秒；冷却30秒。' }
     ]
   },
   {
@@ -49,13 +46,12 @@ export const TREE_DEFS = [
     color: resolveClassColor('mage'),
     core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为单发冰弹，命中叠加寒霜，叠满五层爆炸并传染。' },
     nodes: [
-      { id: 'mage_frostbite', name: '霜蚀', maxLevel: 3, desc: '冰弹自带减速；1/2/3级强化到 30%/38%/48%，持续 1.9/2.3/2.7 秒。' },
-      { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 3, desc: '冰弹索敌范围提升。1/2/3级额外 +45/+90/+135。' },
-      { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 3, desc: '强化冰弹本体。1/2/3级伤害 +10%/+20%/+30%，弹道更利落。' },
-      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 3, desc: '5 层碎冰后额外冻结主目标。1/2/3级分别冻结 0.8/1.2/1.7 秒。' },
+      { id: 'mage_frostbite', name: '霜蚀', maxLevel: 1, desc: '冰弹自带强减速，提升到 48%，持续 2.7 秒。' },
+      { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 1, desc: '冰弹索敌范围额外 +135。' },
+      { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 1, desc: '强化冰弹本体，伤害 +30%。' },
+      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 1, desc: '5 层碎冰后额外冻结主目标 1.7 秒。' },
       { id: 'mage_shatter', name: '碎冰传染', maxLevel: 3, desc: '强化基础碎冰爆裂。1/2级提升半径与伤害；3级额外把传染提升到 2 层。1/2/3级分别为半径 120/150/185，伤害 70%/100%/135%，传染 1/1/2 层寒霜。' },
-      { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 3, desc: '生命低于30%时自动触发冰霜新星。1/2/3级冻结周围敌人 3/5/10 秒，冷却30秒。' },
-      { id: 'mage_frost_domain', name: '极寒疆域', maxLevel: 3, desc: '强化冰霜新星范围。1/2/3级范围提升至 300/380/480。' }
+      { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 2, desc: '生命低于30%时自动触发冰霜新星。1级冻结 5 秒、范围 380；2级冻结 10 秒、范围 480；冷却30秒。' }
     ]
   },
   {
@@ -67,9 +63,8 @@ export const TREE_DEFS = [
       { id: 'paladin_pierce', name: '重锤', maxLevel: 1, desc: '锤击范围与伤害提高。' },
       { id: 'paladin_repulse', name: '震荡锤击', maxLevel: 1, desc: '锤击命中附带明显击退。' },
       { id: 'paladin_triple', name: '连锤', maxLevel: 1, desc: '每 5 秒，下一次锤击额外追加 2 次余震落点。' },
-      { id: 'paladin_stun', name: '制裁', maxLevel: 3, desc: '锤击有 10%/20%/30% 概率使敌人眩晕。' },
-      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 3, desc: '生命低于30%时自动触发：获得40%/60%/80%减伤，持续5秒，冷却30秒。' },
-      { id: 'paladin_shelter_extension', name: '圣佑绵延', maxLevel: 3, desc: '强化神圣庇护：持续时间提高至8/10/12秒。' }
+      { id: 'paladin_stun', name: '制裁', maxLevel: 1, desc: '锤击有 30% 概率使敌人眩晕。' },
+      { id: 'paladin_divine_shelter', name: '神圣庇护', maxLevel: 2, desc: '生命低于30%时自动触发：1级获得 60% 减伤并持续 8 秒；2级获得 80% 减伤并持续 12 秒；冷却30秒。' }
     ]
   },
   {
@@ -79,10 +74,9 @@ export const TREE_DEFS = [
     core: { id: 'warlock_core', name: '初始：术士', maxLevel: 1, desc: '解锁基础技能：剧毒新星（每 2 秒在脚下留下毒圈并逐渐扩大）。' },
     nodes: [
       { id: 'warlock_toxicity', name: '毒性浓度', maxLevel: 3, desc: '剧毒 debuff 最大层数 +1（可叠加）。' },
-      { id: 'warlock_corrode', name: '腐蚀', maxLevel: 3, desc: '毒圈持续时间 +1 秒（可叠加）。' },
-      { id: 'warlock_spread', name: '扩散', maxLevel: 3, desc: '毒圈范围 +20%（可叠加）。' },
-      { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 3, desc: '生命首次跌破30%时自动触发：持续 3/5/10 秒，期间将造成伤害的 30%/50%/100% 转化为生命，冷却30秒。' },
-      { id: 'warlock_infernal_contract', name: '白骨护甲', maxLevel: 3, desc: '强化灵魂虹吸：效果期间过量治疗转化为白骨护盾，护盾上限为最大生命的 10%/20%/30%。' }
+      { id: 'warlock_corrode', name: '腐蚀', maxLevel: 1, desc: '毒圈持续时间额外 +3 秒。' },
+      { id: 'warlock_spread', name: '扩散', maxLevel: 1, desc: '毒圈范围 +60%。' },
+      { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 2, desc: '生命首次跌破30%时自动触发：1级持续5秒，50%伤害吸血，并可转化20%最大生命护盾；2级持续10秒，100%吸血，并可转化30%最大生命护盾；冷却30秒。' }
     ]
   },
 
@@ -91,13 +85,13 @@ export const TREE_DEFS = [
     id: 'arcane',
     name: '法师-副',
     color: resolveClassColor('mage'),
-    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，获得奥术炮台：基础每10秒自动部署漂浮水晶炮台，基准驻场15秒，每3秒向射程内目标发射粗直线贯穿激光。' },
+    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，立即获得基础奥术炮台，并解锁奥术系天赋池。' },
     nodes: [
-      { id: 'arcane_circle', name: '奥术炮台', maxLevel: 3, desc: '自动布置漂浮水晶炮台，周期发射粗直线贯穿激光。' },
-      { id: 'arcane_circle_range', name: '棱镜扩容', maxLevel: 3, desc: '提升炮台索敌范围。' },
-      { id: 'arcane_fire_circle', name: '奥能灌注', maxLevel: 3, desc: '提高炮台单次激光伤害。' },
-      { id: 'arcane_frost_circle', name: '晶体固化', maxLevel: 3, desc: '提高炮台持续时间与驻场能力。' },
-      { id: 'arcane_resonance_mark', name: '共鸣裂变', maxLevel: 3, desc: '炮台激光命中会附加短暂易伤。' },
+      { id: 'arcane_circle', name: '奥术炮台', maxLevel: 2, desc: '把基础奥术炮台强化到中后期压场档位。' },
+      { id: 'arcane_circle_range', name: '棱镜扩容', maxLevel: 1, desc: '大幅提升炮台索敌范围。' },
+      { id: 'arcane_fire_circle', name: '奥能灌注', maxLevel: 1, desc: '大幅提高炮台单次激光伤害。' },
+      { id: 'arcane_frost_circle', name: '晶体固化', maxLevel: 1, desc: '大幅提高炮台持续时间与驻场能力。' },
+      { id: 'arcane_resonance_mark', name: '共鸣裂变', maxLevel: 1, desc: '炮台激光命中会附加强力易伤。' },
       { id: 'arcane_flowcasting', name: '多重布阵', maxLevel: 3, desc: '缩短布置循环，并提升同时存在的炮台数量。' }
     ]
   },
@@ -105,41 +99,41 @@ export const TREE_DEFS = [
     id: 'ranger',
     name: '猎人-副',
     color: resolveClassColor('archer'),
-    core: { id: 'off_ranger', name: '选择：猎人', maxLevel: 1, desc: '作为副职业，获得诱饵假人：基础每10秒自动布置假人，持续15秒，只吸引范围内敌人并射出单发箭矢，在被击破或结束时爆炸。' },
+    core: { id: 'off_ranger', name: '选择：猎人', maxLevel: 1, desc: '作为副职业，立即获得基础诱饵假人，并解锁猎人系天赋池。' },
     nodes: [
-      { id: 'ranger_snaretrap', name: '诱饵假人', maxLevel: 3, desc: '基础每10秒自动布置诱饵假人，持续15秒，划定吸引范围并向圈内敌人射出单发箭矢。' },
-      { id: 'ranger_huntmark', name: '猎手印记', maxLevel: 3, desc: '被假人牵制的敌人会被标记，承受你更多伤害。' },
+      { id: 'ranger_snaretrap', name: '诱饵假人', maxLevel: 2, desc: '把基础诱饵假人强化到稳定控场档位。' },
+      { id: 'ranger_huntmark', name: '猎手印记', maxLevel: 1, desc: '被假人牵制的敌人会被标记，承受你更多伤害。' },
       { id: 'ranger_spiketrap', name: '缚行力场', maxLevel: 3, desc: '假人周围形成束缚力场，持续减速并附带轻度持续伤害。' },
-      { id: 'ranger_blasttrap', name: '诱爆装置', maxLevel: 3, desc: '强化假人结束时的范围爆炸伤害。' },
+      { id: 'ranger_blasttrap', name: '诱爆装置', maxLevel: 1, desc: '显著强化假人结束时的范围爆炸伤害。' },
       { id: 'ranger_trapcraft', name: '拟饵工学', maxLevel: 3, desc: '强化假人持续时间、冷却与同时存在数量。' },
-      { id: 'ranger_pack_hunter', name: '围猎本能', maxLevel: 3, desc: '强化你对被标记或被牵制目标的暴击收益。' }
+      { id: 'ranger_pack_hunter', name: '围猎本能', maxLevel: 1, desc: '强化你对被标记或被牵制目标的暴击收益。' }
     ]
   },
   {
     id: 'unyielding',
     name: '战士-副',
     color: resolveClassColor('warrior'),
-    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，获得血怒：生命每损失10%，伤害 +2%，并使暴击率 +10%。' },
+    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，立即获得基础血怒，并解锁不屈系天赋池。' },
     nodes: [
-      { id: 'unyielding_bloodrage', name: '血怒', maxLevel: 3, desc: '生命越低伤害越高。' },
-      { id: 'unyielding_battlecry', name: '战吼', maxLevel: 3, desc: '受伤后短时间提高伤害。' },
-      { id: 'unyielding_hamstring', name: '断筋', maxLevel: 3, desc: '近距离命中使敌人减速。' },
-      { id: 'unyielding_sunder', name: '破甲', maxLevel: 3, desc: '持续命中同一目标时提高对其伤害。' },
-      { id: 'unyielding_standfast', name: '不退', maxLevel: 3, desc: '近距离时获得减伤与抗击退。' },
-      { id: 'unyielding_executioner', name: '处决本能', maxLevel: 3, desc: '对低血敌人造成额外伤害。' }
+      { id: 'unyielding_bloodrage', name: '血怒', maxLevel: 2, desc: '把基础血怒强化到终局档位。' },
+      { id: 'unyielding_battlecry', name: '战吼', maxLevel: 1, desc: '受伤后短时间大幅提高伤害。' },
+      { id: 'unyielding_hamstring', name: '断筋', maxLevel: 1, desc: '近距离命中使敌人显著减速。' },
+      { id: 'unyielding_sunder', name: '破甲', maxLevel: 1, desc: '持续命中同一目标时显著提高对其伤害。' },
+      { id: 'unyielding_standfast', name: '不退', maxLevel: 2, desc: '近距离时获得更高贴身减伤。' },
+      { id: 'unyielding_executioner', name: '处决本能', maxLevel: 1, desc: '对低血敌人造成高额额外伤害。' }
     ]
   },
   {
     id: 'summon',
     name: '术士-副',
     color: resolveClassColor('warlock'),
-    core: { id: 'off_summon', name: '选择：召唤', maxLevel: 1, desc: '作为副职业，立即获得1名骷髅卫士与1名骷髅法师，并使造成的伤害 +8%。' },
+    core: { id: 'off_summon', name: '选择：召唤', maxLevel: 1, desc: '作为副职业，立即获得 1 名骷髅卫士与 1 名骷髅法师，并解锁召唤系天赋池。' },
     nodes: [
-      { id: 'summon_necrotic_vitality', name: '死灵共鸣', maxLevel: 3, desc: '提高召唤物生命。' },
+      { id: 'summon_necrotic_vitality', name: '死灵共鸣', maxLevel: 1, desc: '大幅提高召唤物生命。' },
       { id: 'summon_skeleton_guard', name: '骷髅卫士', maxLevel: 3, desc: '扩充骷髅卫士军势。等级 1/2/3 时总上限为 3/5/7。' },
       { id: 'summon_skeleton_mage', name: '骷髅法师', maxLevel: 3, desc: '扩充骷髅法师军势。等级 1/2/3 时总上限为 3/5/7。' },
-      { id: 'summon_mage_empower', name: '白骨灌能', maxLevel: 3, desc: '强化骷髅法师输出。' },
-      { id: 'summon_guard_bulwark', name: '骸骨壁垒', maxLevel: 3, desc: '强化骷髅卫士生存与拦截能力。' },
+      { id: 'summon_mage_empower', name: '白骨灌能', maxLevel: 2, desc: '分两段强化骷髅法师输出与节奏。' },
+      { id: 'summon_guard_bulwark', name: '骸骨壁垒', maxLevel: 1, desc: '大幅强化骷髅卫士生存与拦截能力。' },
       { id: 'summon_ember_echo', name: '魂火余烬', maxLevel: 3, desc: '召唤物死亡后为你提供短时间增伤或减伤。' }
     ]
   },
@@ -147,21 +141,21 @@ export const TREE_DEFS = [
     id: 'guardian',
     name: '圣骑士-副',
     color: resolveClassColor('paladin'),
-    core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，获得格挡与圣印，并使受到的伤害 -10%。' },
+    core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，立即获得基础格挡与圣印，并解锁守护系天赋池。' },
     nodes: [
-      { id: 'guardian_block', name: '坚盾', maxLevel: 3, desc: '概率格挡，格挡时减伤。' },
-      { id: 'guardian_armor', name: '护甲', maxLevel: 3, desc: '固定减伤。' },
-      { id: 'guardian_counter', name: '反制', maxLevel: 3, desc: '格挡成功后触发反击。' },
-      { id: 'guardian_sacred_seal', name: '庇护圣印', maxLevel: 3, desc: '受击或格挡时积累圣印。' },
-      { id: 'guardian_holy_rebuke', name: '神圣回击', maxLevel: 3, desc: '消耗圣印触发范围冲击。' },
-      { id: 'guardian_light_fortress', name: '光铸壁垒', maxLevel: 3, desc: '低血时把圣印转为护盾。' }
+      { id: 'guardian_block', name: '坚盾', maxLevel: 2, desc: '把基础格挡强化到终局档位。' },
+      { id: 'guardian_armor', name: '护甲', maxLevel: 1, desc: '大幅提高固定减伤。' },
+      { id: 'guardian_counter', name: '反制', maxLevel: 1, desc: '格挡成功后触发强力反击。' },
+      { id: 'guardian_sacred_seal', name: '庇护圣印', maxLevel: 2, desc: '把基础圣印强化到终局档位。' },
+      { id: 'guardian_holy_rebuke', name: '神圣回击', maxLevel: 2, desc: '消耗圣印触发更强的范围冲击。' },
+      { id: 'guardian_light_fortress', name: '光铸壁垒', maxLevel: 1, desc: '低血时高效把圣印转为护盾。' }
     ]
   },
   {
     id: 'nature',
     name: '德鲁伊-副',
     color: resolveClassColor('druid'),
-    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，立即获得1只熊灵，作为前排肉盾协同作战。' },
+    core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，立即获得 1 只熊灵，并解锁自然伙伴天赋池。' },
     nodes: [
       { id: 'druid_pet_bear', name: '熊灵', maxLevel: 3, desc: '召唤熊灵协同作战，负责前排拦截。' },
       { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 3, desc: '召唤战鹰协同作战，负责高频输出。' },
@@ -173,6 +167,21 @@ export const TREE_DEFS = [
   }
 ];
 
+const MAIN_TREE_IDS = new Set(['archer', 'druid', 'warrior', 'mage', 'paladin', 'warlock']);
+
+TREE_DEFS.forEach((treeDef) => {
+  if (!MAIN_TREE_IDS.has(treeDef.id)) return;
+
+  const depthNodes = (DEPTH_SPEC_POOLS[treeDef.id] || []).map((opt) => ({
+    id: opt.id,
+    name: opt.name,
+    maxLevel: opt.maxLevel || 1,
+    desc: opt.desc || ''
+  }));
+
+  treeDef.nodes = [...(treeDef.nodes || []), ...depthNodes];
+});
+
 export const SKILL_TO_TREE = {
   // 猎人（散射流）
   archer_core: 'archer',
@@ -180,7 +189,6 @@ export const SKILL_TO_TREE = {
   archer_pierce: 'archer',
   archer_arrowrain: 'archer',
   archer_nimble_evade: 'archer',
-  archer_evade_mastery: 'archer',
   archer_range: 'archer',
   archer_rate: 'archer',
   archer_damage: 'archer',
@@ -192,7 +200,6 @@ export const SKILL_TO_TREE = {
   druid_meteor: 'druid',
   druid_starfire: 'druid',
   druid_nourish: 'druid',
-  druid_nourish_growth: 'druid',
 
   // 其余职业
   warrior_core: 'warrior',
@@ -201,7 +208,6 @@ export const SKILL_TO_TREE = {
   warrior_endure: 'warrior',
   warrior_range: 'warrior',
   warrior_blood_conversion: 'warrior',
-  warrior_bloodlust_mastery: 'warrior',
 
   mage_core: 'mage',
   mage_frostbite: 'mage',
@@ -210,7 +216,6 @@ export const SKILL_TO_TREE = {
   mage_deep_freeze: 'mage',
   mage_shatter: 'mage',
   mage_frost_nova: 'mage',
-  mage_frost_domain: 'mage',
 
   paladin_core: 'paladin',
   paladin_pierce: 'paladin',
@@ -218,15 +223,13 @@ export const SKILL_TO_TREE = {
   paladin_triple: 'paladin',
   paladin_stun: 'paladin',
   paladin_divine_shelter: 'paladin',
-  paladin_shelter_extension: 'paladin',
 
   warlock_core: 'warlock',
   warlock_toxicity: 'warlock',
   warlock_spread: 'warlock',
   warlock_corrode: 'warlock',
   warlock_infernal: 'warlock',
-  warlock_infernal_contract: 'warlock',
-  warlock_autoseek: 'third',
+  warlock_autoseek: 'warlock',
   warlock_malady: 'warlock',
   warlock_contagion: 'warlock',
   warlock_smoke: 'warlock',
@@ -291,59 +294,29 @@ export const SKILL_TO_TREE = {
   nature_hawk_huntmark: 'nature',
   nature_treant_bloom: 'nature',
 
-  // 第三天赋（占位）
-  third_depth_prep: 'third',
-  third_dual_prep: 'third',
+  // 深度专精并入主职业树
+  mage_dualcaster: 'mage',
+  mage_trilaser: 'mage',
+  mage_arcanomorph: 'mage',
 
-  // 第三天赋：深度专精（主=副）
-  mage_dualcaster: 'third',
-  mage_trilaser: 'third',
-  mage_arcanomorph: 'third',
+  archer_bounce: 'archer',
+  archer_windfury: 'archer',
+  archer_eagleeye: 'archer',
 
-  archer_bounce: 'third',
-  archer_windfury: 'third',
-  archer_eagleeye: 'third',
+  warrior_bladestorm: 'warrior',
+  warrior_berserkgod: 'warrior',
+  warrior_unyielding: 'warrior',
 
-  warrior_bladestorm: 'third',
-  warrior_berserkgod: 'third',
-  warrior_unyielding: 'third',
+  warlock_souleater: 'warlock',
+  warlock_netherlord: 'warlock',
 
-  warlock_autoseek: 'third',
-  warlock_souleater: 'third',
-  warlock_netherlord: 'third',
+  paladin_avenger: 'paladin',
+  paladin_sacredshield: 'paladin',
+  paladin_divine: 'paladin',
 
-  paladin_avenger: 'third',
-  paladin_sacredshield: 'third',
-  paladin_divine: 'third',
-
-  druid_kingofbeasts: 'third',
-  druid_naturefusion: 'third',
-  druid_astralstorm: 'third',
-
-  // 第三天赋：双职业专精（主≠副）
-  dual_mage_druid_arcanebear: 'third',
-  dual_mage_druid_starwisdom: 'third',
-  dual_mage_druid_natureoverflow: 'third',
-
-  dual_scatter_mage_enchantedarrow: 'third',
-  dual_scatter_mage_hastefocus: 'third',
-  dual_scatter_mage_archercircle: 'third',
-
-  dual_warrior_paladin_crusade: 'third',
-  dual_warrior_paladin_righteousrage: 'third',
-  dual_warrior_paladin_sacredspin: 'third',
-
-  dual_warlock_druid_decay: 'third',
-  dual_warlock_druid_witheringroar: 'third',
-  dual_warlock_druid_soulbloom: 'third',
-
-  dual_paladin_scatter_holyrain: 'third',
-  dual_paladin_scatter_blessedquiver: 'third',
-  dual_paladin_scatter_retribution: 'third',
-
-  dual_druid_warrior_ironbark: 'third',
-  dual_druid_warrior_predator: 'third',
-  dual_druid_warrior_ancestral: 'third'
+  druid_kingofbeasts: 'druid',
+  druid_naturefusion: 'druid',
+  druid_astralstorm: 'druid'
 };
 
 export const SKILL_ID_ALIASES = {
@@ -351,21 +324,6 @@ export const SKILL_ID_ALIASES = {
   mage_refract: 'mage_frostbite',
   mage_arcane_perception: 'mage_cold_focus',
   mage_energy_focus: 'mage_ice_veins',
-  dual_mage_drone_arcanebear: 'dual_mage_druid_arcanebear',
-  dual_mage_drone_starwisdom: 'dual_mage_druid_starwisdom',
-  dual_mage_drone_natureoverflow: 'dual_mage_druid_natureoverflow',
-  dual_warlock_drone_decay: 'dual_warlock_druid_decay',
-  dual_warlock_drone_witheringroar: 'dual_warlock_druid_witheringroar',
-  dual_warlock_drone_soulbloom: 'dual_warlock_druid_soulbloom',
-  dual_drone_warrior_ironbark: 'dual_druid_warrior_ironbark',
-  dual_drone_warrior_predator: 'dual_druid_warrior_predator',
-  dual_drone_warrior_ancestral: 'dual_druid_warrior_ancestral',
-  dual_archer_drone_onslaught: 'dual_archer_druid_onslaught',
-  dual_archer_drone_style: 'dual_archer_druid_style',
-  dual_archer_drone_fusion: 'dual_archer_druid_fusion',
-  dual_drone_paladin_onslaught: 'dual_druid_paladin_onslaught',
-  dual_drone_paladin_style: 'dual_druid_paladin_style',
-  dual_drone_paladin_fusion: 'dual_druid_paladin_fusion',
   off_curse: 'off_summon',
   curse_necrotic_vitality: 'summon_necrotic_vitality',
   curse_skeleton_guard: 'summon_skeleton_guard',
@@ -396,124 +354,19 @@ export function getAccentCoreKeyForOffFaction(offFaction) {
   return OFF_FACTION_TO_ACCENT_CORE_KEY[offFaction] || null;
 }
 
-export function getThirdSpecTypeForMainOff({ mainCoreKey, offFaction }) {
-  if (!mainCoreKey || !offFaction) return null;
-  const normalizedMainCoreKey = normalizeCoreKey(mainCoreKey);
-  const accentCoreKey = normalizeCoreKey(getAccentCoreKeyForOffFaction(offFaction));
-  const sameTheme = !!accentCoreKey && accentCoreKey === normalizedMainCoreKey;
-  return sameTheme ? 'depth' : 'dual';
-}
-
-// 第三天赋树（占位）：
-// - 主/副“同职业主题” => 深度专精
-// - 不同 => 双职业天赋
-// 具体节点稍后由策划提供；这里仅提供 UI 所需的 def 结构。
-export function buildThirdTalentTreePlaceholder({ mainCoreKey, offFaction, mainTreeDef, offTreeDef }) {
-  if (!mainCoreKey || !offFaction) return null;
-
-  const normalizedMainCoreKey = normalizeCoreKey(mainCoreKey);
-
-  const specType = getThirdSpecTypeForMainOff({ mainCoreKey: normalizedMainCoreKey, offFaction });
-  const sameTheme = specType === 'depth';
-
-  const mainName = mainTreeDef?.name || '本职业';
-  const offName = offTreeDef?.name || '副职业';
-  const color = Number.isFinite(mainTreeDef?.color) ? mainTreeDef.color : 0x2a2a3a;
-
-  // 进度记录/展示使用固定 id，标题/配色由主副决定
-  const id = 'third';
-
-  const name = sameTheme
-    ? `${mainName}·深度专精`
-    : `双职业天赋`;
-
-  const desc = sameTheme
-    ? '深度专精（稍后提供）'
-    : '双职业天赋（稍后提供）';
-
-  const variant = sameTheme ? 'depth' : 'dual';
-
-  const toNode = (opt) => ({
-    id: opt.id,
-    name: opt.name,
-    maxLevel: opt.maxLevel || 1,
-    desc: opt.desc || ''
-  });
-
-  const depthNodes = [
-    { id: 'third_depth_prep', name: '深度专精（前置）', maxLevel: 1, desc: '占位：后续接入深度专精天赋。' },
-    ...((DEPTH_SPEC_POOLS[normalizedMainCoreKey] || []).map(toNode))
-  ];
-
-  const accentCoreKey = normalizeCoreKey(getAccentCoreKeyForOffFaction(offFaction));
-  const dualPool = (accentCoreKey && DUAL_SPEC_POOLS[normalizedMainCoreKey] && DUAL_SPEC_POOLS[normalizedMainCoreKey][accentCoreKey])
-    ? DUAL_SPEC_POOLS[normalizedMainCoreKey][accentCoreKey]
-    : [];
-  const dualNodes = [
-    { id: 'third_dual_prep', name: '双职业专精（前置）', maxLevel: 1, desc: '占位：后续接入双职业天赋。' },
-    ...dualPool.map(toNode)
-  ];
-
-  const nodes = sameTheme ? depthNodes : dualNodes;
-
-  return {
-    id,
-    name,
-    color,
-    variant,
-    core: { id: `${id}_core`, name: '（预留）', maxLevel: 1, desc },
-    nodes
-  };
-}
-
 const MAX_LEVELS = Object.fromEntries(
   TREE_DEFS.flatMap(t => [t.core, ...t.nodes].filter(Boolean).map(n => [n.id, n.maxLevel || 1]))
 );
-
-const THIRD_SPEC_MAX_LEVELS = (() => {
-  const entries = [];
-
-  // 前置
-  entries.push(['third_depth_prep', 1]);
-  entries.push(['third_dual_prep', 1]);
-
-  // 深度池
-  Object.values(DEPTH_SPEC_POOLS || {}).forEach((arr) => {
-    (arr || []).forEach((opt) => {
-      if (opt?.id) entries.push([opt.id, opt.maxLevel || 1]);
-    });
-  });
-
-  // 双职业池
-  Object.values(DUAL_SPEC_POOLS || {}).forEach((bySub) => {
-    Object.values(bySub || {}).forEach((arr) => {
-      (arr || []).forEach((opt) => {
-        if (opt?.id) entries.push([opt.id, opt.maxLevel || 1]);
-      });
-    });
-  });
-
-  // 兜底：如果有人只改了 PREP_OPTIONS
-  if (THIRD_SPEC_PREP_OPTIONS?.depth?.id) entries.push([THIRD_SPEC_PREP_OPTIONS.depth.id, THIRD_SPEC_PREP_OPTIONS.depth.maxLevel || 1]);
-  if (THIRD_SPEC_PREP_OPTIONS?.dual?.id) entries.push([THIRD_SPEC_PREP_OPTIONS.dual.id, THIRD_SPEC_PREP_OPTIONS.dual.maxLevel || 1]);
-
-  return Object.fromEntries(entries);
-})();
 
 export function getTreeIdForSkill(skillId) {
   const normalizedSkillId = normalizeSkillId(skillId);
   const explicitTreeId = SKILL_TO_TREE[normalizedSkillId] || null;
   if (explicitTreeId) return explicitTreeId;
 
-  // 双职业通用池会动态生成 dual_* id，这些 id 不会逐条静态登记，统一归到第三树。
-  if (typeof normalizedSkillId === 'string' && normalizedSkillId.startsWith('dual_')) {
-    return 'third';
-  }
-
   return null;
 }
 
 export function getMaxLevel(skillId) {
   const normalizedSkillId = normalizeSkillId(skillId);
-  return THIRD_SPEC_MAX_LEVELS[normalizedSkillId] || MAX_LEVELS[normalizedSkillId] || 1;
+  return MAX_LEVELS[normalizedSkillId] || 1;
 }

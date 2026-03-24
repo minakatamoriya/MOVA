@@ -236,13 +236,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.warlockDepthInfernalUnlocked = false;
 
     // 通用被动（副职业派系）
-    this.universalFireRateMult = 1;
     this.universalDamageMult = 1;
-    this.offEntryDamageMult = 1;
-    this.offEntryDamageReduction = 0;
-    this.offEntryDodgeChance = 0;
-    this.offEntryCritChance = 0;
-    this.offEntryRegenRatioPerSec = 0;
     this.thirdSpecDamageBonus = 0;
     this.thirdSpecFireRateBonus = 0;
     this.thirdSpecCritChanceBonus = 0;
@@ -292,6 +286,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.guardianSealUntil = 0;
     this.guardianHolyRebukeLevel = 0;
     this.guardianLightFortressLevel = 0;
+    this.paladinShelterExtensionLevel = 0;
     this.guardianBarrierHp = 0;
     this.curseSkeletonGuardLevel = 0;
     this.curseSkeletonMageLevel = 0;
@@ -1906,7 +1901,6 @@ export default class Player extends Phaser.GameObjects.Container {
   updatePassiveRegen(delta) {
     if (!this.isAlive) return;
     const regenPerSec = Math.max(0, Number(this.passiveRegenPerSec || 0))
-      + Math.max(0, Number(this.offEntryRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0))
       + Math.max(0, Number(this.thirdSpecRegenRatioPerSec || 0)) * Math.max(1, Number(this.maxHp || 0));
     if (regenPerSec <= 0 || this.hp >= this.maxHp) return;
     this.heal(regenPerSec * Math.max(0, Number(delta || 0)) / 1000);
@@ -2123,7 +2117,6 @@ export default class Player extends Phaser.GameObjects.Container {
     const resolved = normalizeStatMods(effects);
     this.critChance = this.baseCritChance
       + resolved.critChance
-      + Math.max(0, Number(this.offEntryCritChance || 0))
       + Math.max(0, Number(this.thirdSpecCritChanceBonus || 0));
     this.critMultiplier = this.baseCritMultiplier + resolved.critMultiplier;
     this.lifestealPercent = resolved.lifestealPercent;
@@ -2156,7 +2149,7 @@ export default class Player extends Phaser.GameObjects.Container {
   }
 
   upgradeArcherRange() {
-    this.archerArrowRangeLevel = Math.min(3, (this.archerArrowRangeLevel || 0) + 1);
+    this.archerArrowRangeLevel = 3;
     // 射程不再直接写当前值，改为走统一派生，避免被后续装备/掉落重算覆盖
     this.applyStatMultipliers(this.equipmentMods);
   }

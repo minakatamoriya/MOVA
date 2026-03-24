@@ -47,6 +47,91 @@ export function migrateLegacyProgressionRegistry(registry) {
     const current = migratedSkillTreeLevels[normalizedSkillId] || 0;
     migratedSkillTreeLevels[normalizedSkillId] = Math.max(current, Number(level) || 0);
   });
+
+  const legacyMageFrostNovaLevel = Number(migratedSkillTreeLevels.mage_frost_nova || 0);
+  const legacyMageFrostDomainLevel = Number(migratedSkillTreeLevels.mage_frost_domain || 0);
+  const mergedMageFrostNovaLevel = legacyMageFrostDomainLevel > 0 || legacyMageFrostNovaLevel >= 2
+    ? 2
+    : (legacyMageFrostNovaLevel >= 1 ? 1 : 0);
+  if (mergedMageFrostNovaLevel !== legacyMageFrostNovaLevel || legacyMageFrostDomainLevel > 0) {
+    migratedSkillTreeLevels.mage_frost_nova = mergedMageFrostNovaLevel;
+    delete migratedSkillTreeLevels.mage_frost_domain;
+    levelMapChanged = true;
+  }
+
+  const legacyPaladinShelterLevel = Number(migratedSkillTreeLevels.paladin_divine_shelter || 0);
+  const legacyPaladinShelterExtensionLevel = Number(migratedSkillTreeLevels.paladin_shelter_extension || 0);
+  const mergedPaladinShelterLevel = legacyPaladinShelterExtensionLevel > 0 || legacyPaladinShelterLevel >= 2
+    ? 2
+    : (legacyPaladinShelterLevel >= 1 ? 1 : 0);
+  if (mergedPaladinShelterLevel !== legacyPaladinShelterLevel || legacyPaladinShelterExtensionLevel > 0) {
+    migratedSkillTreeLevels.paladin_divine_shelter = mergedPaladinShelterLevel;
+    delete migratedSkillTreeLevels.paladin_shelter_extension;
+    levelMapChanged = true;
+  }
+
+  const legacyArcherEvadeLevel = Number(migratedSkillTreeLevels.archer_nimble_evade || 0);
+  const legacyArcherEvadeMasteryLevel = Number(migratedSkillTreeLevels.archer_evade_mastery || 0);
+  const mergedArcherEvadeLevel = legacyArcherEvadeMasteryLevel > 0 || legacyArcherEvadeLevel >= 2
+    ? 2
+    : (legacyArcherEvadeLevel >= 1 ? 1 : 0);
+  if (mergedArcherEvadeLevel !== legacyArcherEvadeLevel || legacyArcherEvadeMasteryLevel > 0) {
+    migratedSkillTreeLevels.archer_nimble_evade = mergedArcherEvadeLevel;
+    delete migratedSkillTreeLevels.archer_evade_mastery;
+    levelMapChanged = true;
+  }
+
+  const legacyDruidNourishLevel = Number(migratedSkillTreeLevels.druid_nourish || 0);
+  const legacyDruidNourishGrowthLevel = Number(migratedSkillTreeLevels.druid_nourish_growth || 0);
+  const mergedDruidNourishLevel = legacyDruidNourishGrowthLevel > 0 || legacyDruidNourishLevel >= 2
+    ? 2
+    : (legacyDruidNourishLevel >= 1 ? 1 : 0);
+  if (mergedDruidNourishLevel !== legacyDruidNourishLevel || legacyDruidNourishGrowthLevel > 0) {
+    migratedSkillTreeLevels.druid_nourish = mergedDruidNourishLevel;
+    delete migratedSkillTreeLevels.druid_nourish_growth;
+    levelMapChanged = true;
+  }
+
+  const legacyWarriorBloodConversionLevel = Number(migratedSkillTreeLevels.warrior_blood_conversion || 0);
+  const legacyWarriorBloodlustMasteryLevel = Number(migratedSkillTreeLevels.warrior_bloodlust_mastery || 0);
+  const mergedWarriorBloodLevel = legacyWarriorBloodlustMasteryLevel > 0 || legacyWarriorBloodConversionLevel >= 2
+    ? 2
+    : (legacyWarriorBloodConversionLevel >= 1 ? 1 : 0);
+  if (mergedWarriorBloodLevel !== legacyWarriorBloodConversionLevel || legacyWarriorBloodlustMasteryLevel > 0) {
+    migratedSkillTreeLevels.warrior_blood_conversion = mergedWarriorBloodLevel;
+    delete migratedSkillTreeLevels.warrior_bloodlust_mastery;
+    levelMapChanged = true;
+  }
+
+  const legacyWarlockInfernalLevel = Number(migratedSkillTreeLevels.warlock_infernal || 0);
+  const legacyWarlockInfernalContractLevel = Number(migratedSkillTreeLevels.warlock_infernal_contract || 0);
+  const mergedWarlockInfernalLevel = legacyWarlockInfernalContractLevel > 0 || legacyWarlockInfernalLevel >= 2
+    ? 2
+    : (legacyWarlockInfernalLevel >= 1 ? 1 : 0);
+  if (mergedWarlockInfernalLevel !== legacyWarlockInfernalLevel || legacyWarlockInfernalContractLevel > 0) {
+    migratedSkillTreeLevels.warlock_infernal = mergedWarlockInfernalLevel;
+    delete migratedSkillTreeLevels.warlock_infernal_contract;
+    levelMapChanged = true;
+  }
+
+  const legacyArcherRangeLevel = Number(migratedSkillTreeLevels.archer_range || 0);
+  if (legacyArcherRangeLevel > 1) {
+    migratedSkillTreeLevels.archer_range = 1;
+    levelMapChanged = true;
+  }
+
+  const legacyWarriorRangeLevel = Number(migratedSkillTreeLevels.warrior_range || 0);
+  if (legacyWarriorRangeLevel > 1) {
+    migratedSkillTreeLevels.warrior_range = 1;
+    levelMapChanged = true;
+  }
+
+  const legacyWarriorEndureLevel = Number(migratedSkillTreeLevels.warrior_endure || 0);
+  if (legacyWarriorEndureLevel > 1) {
+    migratedSkillTreeLevels.warrior_endure = 1;
+    levelMapChanged = true;
+  }
+
   if (levelMapChanged) {
     registry.set('skillTreeLevels', migratedSkillTreeLevels);
     changed = true;
@@ -55,10 +140,10 @@ export function migrateLegacyProgressionRegistry(registry) {
   return changed;
 }
 
-// 由升级驱动写入 registry，供技能树 UI 展示 & 双修判断
+// 由升级驱动写入 registry，供技能树 UI 展示与双树进度判断
 export function recordSkillTreeProgress(registry, upgrade) {
   if (!registry?.get || !registry?.set) return;
-  if (!upgrade || (upgrade.category !== 'build' && upgrade.category !== 'mix' && upgrade.category !== 'third_depth' && upgrade.category !== 'third_dual')) return;
+  if (!upgrade || (upgrade.category !== 'build' && upgrade.category !== 'mix' && upgrade.category !== 'third_depth')) return;
 
   const skillId = normalizeSkillId(upgrade.id);
   const treeId = getTreeIdForSkill(skillId);
@@ -68,12 +153,9 @@ export function recordSkillTreeProgress(registry, upgrade) {
   const skillTreeLevels = registry.get('skillTreeLevels') || {};
 
   if (!selectedTrees.includes(treeId)) {
-    // 现版本：最多展示三套天赋（主职业/副职业/第三套：深度专精或双职业天赋）
-    // 第三套天赋的具体内容稍后接入，这里先放开记录容量。
-    if (selectedTrees.length < 3) {
+    if (selectedTrees.length < 2) {
       selectedTrees.push(treeId);
     } else {
-      // 已经双修两系时，不再接纳第三系
       return;
     }
   }
@@ -94,10 +176,9 @@ export function resetSkillTreeProgress(registry) {
   registry.set('selectedTrees', []);
   registry.set('skillTreeLevels', {});
 
-  // 与天赋树展示/第三天赋路线判断相关的 registry key
+  // 与天赋树展示相关的 registry key
   registry.set('mainCore', null);
   registry.set('offCore', null);
   registry.set('offFaction', null);
-  registry.set('thirdSpecType', null);
   registry.set('naturePetType', null);
 }

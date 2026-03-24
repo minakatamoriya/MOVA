@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { uiBus } from '../../ui/bus';
-import { TREE_DEFS, buildThirdTalentTreePlaceholder } from '../../classes/talentTrees';
+import { TREE_DEFS } from '../../classes/talentTrees';
 
 /**
  * 查看菜单（职业配置 / 装备背包 / 全局属性）相关方法
@@ -690,17 +690,6 @@ export function applyViewMenuMixin(GameScene) {
       const offTreeId = selectedTrees[1] || null;
       const mainDef = mainTreeId ? TREE_DEFS.find(t => t.id === mainTreeId) : null;
       const offDef = offTreeId ? TREE_DEFS.find(t => t.id === offTreeId) : null;
-      const thirdDef = buildThirdTalentTreePlaceholder({
-        mainCoreKey: mainCore,
-        offFaction,
-        mainTreeDef: mainDef,
-        offTreeDef: offDef
-      });
-
-      this._viewTalentThirdFrameBorder = null;
-      this._viewTalentThirdFrameGlow1 = null;
-      this._viewTalentThirdFrameGlow2 = null;
-      this._viewTalentThirdVariant = null;
 
       if (!selectedTrees || selectedTrees.length === 0) {
         const t = this.add.text(contentX, (areaTop + areaBottom) / 2, '尚未获得任何技能\n首次三选一后将出现主修路线', {
@@ -712,13 +701,12 @@ export function applyViewMenuMixin(GameScene) {
         return;
       }
 
-      const cols = 3;
+      const cols = 2;
       const colWidth = contentW / cols;
 
       const panels = [
         { key: 'main', title: mainDef ? mainDef.name : '主职业（未选择）', def: mainDef },
-        { key: 'off', title: offDef ? offDef.name : '副职业（未选择）', def: offDef },
-        { key: 'third', title: thirdDef ? thirdDef.name : '第三天赋（未解锁）', def: thirdDef }
+        { key: 'off', title: offDef ? offDef.name : '副职业（未选择）', def: offDef }
       ];
 
       for (let col = 0; col < cols; col++) {
@@ -744,39 +732,6 @@ export function applyViewMenuMixin(GameScene) {
         frameBorder.setStrokeStyle(2, def?.color ?? 0x2a2a3a);
         this.viewTalentRoot.add(frameBg);
         this.viewTalentRoot.add(frameBorder);
-
-        if (col === 2 && def === thirdDef) {
-          this._viewTalentThirdFrameBorder = frameBorder;
-          this._viewTalentThirdVariant = thirdDef?.variant || null;
-
-          if (thirdDef?.variant === 'depth' && def?.color) {
-            const glow1 = this.add.rectangle(cx, (frameTop + frameBottom) / 2, frameW + 10, frameH + 10, 0x000000, 0);
-            glow1.setStrokeStyle(8, def.color, 0.18);
-            const glow2 = this.add.rectangle(cx, (frameTop + frameBottom) / 2, frameW + 20, frameH + 20, 0x000000, 0);
-            glow2.setStrokeStyle(14, def.color, 0.09);
-            this.viewTalentRoot.add(glow2);
-            this.viewTalentRoot.add(glow1);
-
-            if (this.viewTalentRoot?.bringToTop) this.viewTalentRoot.bringToTop(frameBorder);
-          }
-
-          if (thirdDef?.variant === 'dual') {
-            const initial = 0xff66ff;
-            frameBorder.setStrokeStyle(3, initial);
-
-            const glow1 = this.add.rectangle(cx, (frameTop + frameBottom) / 2, frameW + 10, frameH + 10, 0x000000, 0);
-            glow1.setStrokeStyle(8, initial, 0.22);
-            const glow2 = this.add.rectangle(cx, (frameTop + frameBottom) / 2, frameW + 20, frameH + 20, 0x000000, 0);
-            glow2.setStrokeStyle(14, initial, 0.10);
-            this.viewTalentRoot.add(glow2);
-            this.viewTalentRoot.add(glow1);
-
-            this._viewTalentThirdFrameGlow1 = glow1;
-            this._viewTalentThirdFrameGlow2 = glow2;
-
-            if (this.viewTalentRoot?.bringToTop) this.viewTalentRoot.bringToTop(frameBorder);
-          }
-        }
 
         if (!def) {
           const tip = this.add.text(cx, (frameTop + frameBottom) / 2, '等待选择', {

@@ -6,11 +6,10 @@
 
 - 主职业核心：决定基础攻击形态。
 - 主职业专精：只对主职业生效。
-- 副职业入口：解锁副职业派系与入口被动。
+- 副职业入口：解锁副职业派系并立即发放基础副职业能力。
 - 副职业通用池：不切主武器，只提供副玩法系统与被动。
-- 深度预备：主副同主题时出现，进入本职业深度专精。
-- 双职预备：主副不同主题时出现，进入双职业专精。
-- 多级节点统一展开为 Lv1 / Lv2 / Lv3；战士的 [warrior_range](src/classes/upgradePools.js) 当前仍是 4 级。
+- 深度专精：已并入主职业后期天赋池，不再通过单独预备卡解锁。
+- 多级节点统一展开为 Lv1 / Lv2 / Lv3；已完成的压缩节点会直接标注为 1级 或 2级。
 - 旧 id 别名：mage_refract -> mage_frostbite，mage_arcane_perception -> mage_cold_focus，mage_energy_focus -> mage_ice_veins。
 - 以下 2 个深度节点当前仍未完全接入最终数值公式：mage_arcanomorph、paladin_avenger。
 
@@ -22,24 +21,22 @@
 
 ### 主职业专精
 
-- archer_range，3级：Lv1 基础射击射程加成 0% -> 12%；Lv2 12% -> 24%；Lv3 24% -> 36%。
+- archer_range，1级：Lv1 基础射击射程直接提升到 +36%。
 - archer_volley，3级：Lv1 箭列数 3 -> 5；Lv2 维持 5 列并收束散射角、强化锁定；Lv3 箭列数 5 -> 7。
-- archer_nimble_evade，3级：Lv1 低血自动闪避 0% -> 40%，持续 3 秒，冷却 30 秒；Lv2 40% -> 60%；Lv3 60% -> 80%。
-- archer_evade_mastery，3级：Lv1 灵巧回避持续时间 3秒 -> 5秒；Lv2 5秒 -> 8秒；Lv3 8秒 -> 10秒。
+- archer_nimble_evade，2级：Lv1 低血自动闪避提升到 60%，持续 8 秒，冷却 30 秒；Lv2 提升到 80%，持续 10 秒。
 
 ### 作为副职业：猎人
 
-- off_ranger：Lv1 解锁猎人副职业，闪避率 +10%；基础每 10 秒自动布置 1 个诱饵假人，持续 15 秒，划定吸引范围并向圈内优先目标射出单发箭矢。
-- ranger_snaretrap，3级：Lv1 牵引半径 172 -> 194、箭矢伤害系数 18% -> 24%、定身时长 0毫秒 -> 260毫秒；Lv2 半径 194 -> 216、伤害 24% -> 32%、定身 260毫秒 -> 380毫秒；Lv3 半径 216 -> 238、伤害 32% -> 42%、定身 380毫秒 -> 520毫秒。
-- ranger_huntmark，3级：Lv1 猎印承伤 0% -> 10%，持续 0秒 -> 3.9秒；Lv2 10% -> 16%，持续 3.9秒 -> 4.3秒；Lv3 16% -> 22%，持续 4.3秒 -> 4.7秒。
+- off_ranger：Lv1 解锁猎人副职业，并立即获得基础诱饵假人；不再附带额外闪避数值。
+- ranger_snaretrap，2级：基础假人已在副职业选择时获得；Lv1 牵引半径直接提升到 216、箭矢伤害系数直接提升到 32%、定身直接提升到 380 毫秒；Lv2 进一步提升到 238 / 42% / 520 毫秒。
+- ranger_huntmark，1级：Lv1 猎印承伤直接提升到 22%，持续 4.7 秒。
 - ranger_spiketrap，3级：Lv1 爆炸追加伤害 0% -> 18%，持续伤害系数 0% -> 8%，持续时间 0秒 -> 2.2秒；Lv2 爆炸 18% -> 26%，持续伤害 8% -> 12%，持续时间 2.2秒 -> 3.0秒；Lv3 爆炸 26% -> 36%，持续伤害 12% -> 18%，持续时间 3.0秒 -> 3.8秒。
-- ranger_blasttrap，3级：Lv1 结束爆炸伤害系数 55% -> 78%；Lv2 78% -> 102%；Lv3 102% -> 135%。
+- ranger_blasttrap，1级：Lv1 结束爆炸伤害系数直接提升到 135%。
 - ranger_trapcraft，3级：Lv1 部署间隔 10.0秒 -> 8.8秒；Lv2 部署间隔 8.8秒 -> 7.6秒，并存假人上限 1 -> 2；Lv3 部署间隔 7.6秒 -> 6.4秒，并存上限维持 2。
-- ranger_pack_hunter，3级：Lv1 对猎印目标暴击率 0% -> 6%，暴击伤害 0% -> 12%；Lv2 暴击率 6% -> 10%，暴击伤害 12% -> 20%；Lv3 暴击率 10% -> 14%，暴击伤害 20% -> 30%。
+- ranger_pack_hunter，1级：Lv1 对猎印目标暴击率直接提升到 14%，暴击伤害直接提升到 30%。
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁猎人深度专精，并获得暴击率 +30%。
 - archer_bounce，3级：Lv1 箭矢获得 1 次敌人间弹射追猎；Lv2 1 -> 2 次；Lv3 2 -> 3 次。当前不是墙体物理反弹，而是命中后改向追击下一个目标。
 - archer_windfury，3级：Lv1 主射击改为 360° 箭环，并追加 1 波延迟箭幕；Lv2 箭环密度提高，并追加第 2 波；Lv3 再提高密度，并追加第 3 波。
 - archer_eagleeye，3级：Lv1 箭幕基础伤害提高，并对猎印目标获得额外暴击权重；Lv2 继续提高暴击权重与箭幕伤害；Lv3 对猎印目标的暴击伤害再提升。
@@ -55,8 +52,7 @@
 - druid_meteor_shower：Lv1 星落数量 +2，但单次伤害略微降低。
 - druid_meteor：Lv1 每 10 秒，下一次星落变为巨型陨石，范围更大、伤害更高。
 - druid_starfire：Lv1 星落命中后有 30% 概率在同位置额外触发一次，不连锁。
-- druid_nourish，3级：Lv1 30% 总治疗在 15 秒内完成，冷却 30 秒；Lv2 压缩到 10 秒；Lv3 压缩到 5 秒。
-- druid_nourish_growth，3级：Lv1 自然滋养总回复加成 0% -> 50%；Lv2 50% -> 80%；Lv3 80% -> 100%。
+- druid_nourish，2级：Lv1 在 10 秒内回复 54% 生命，冷却 30 秒；Lv2 在 5 秒内回复 60% 生命。
 
 ### 作为副职业：自然伙伴
 
@@ -70,7 +66,6 @@
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁德鲁伊深度专精，并获得攻击间隔 -30%。
 - druid_kingofbeasts，3级：Lv1 星落额外追加 1 颗陨星，并同步放大熊灵、战鹰、树精体型与部分基础面板；Lv2 额外陨星提高到 2 颗；Lv3 提高到 3 颗，范围继续扩大。
 - druid_naturefusion，3级：Lv1 陨石命中后追加 1 段连星陨爆；Lv2 追加数提高到 2；Lv3 提高到 3，并让自然伙伴攻击更容易挂联动状态。
 - druid_astralstorm，3级：Lv1 星落下坠节奏与额外星火触发率提升；Lv2 进一步加速；Lv3 达到最高频率，并继续放大星火追击概率。
@@ -85,24 +80,22 @@
 
 - warrior_spin：Lv1 挥砍变为 360° 回旋斩，造成范围伤害。
 - warrior_swordqi：Lv1 挥砍时额外发射一道月牙剑气。
-- warrior_endure：Lv1 战士近战形态获得 20% 伤害减免。
-- warrior_range，4级：Lv1 月牙斩基础范围 220 -> 245；Lv2 245 -> 270；Lv3 270 -> 295；Lv4 295 -> 320。
-- warrior_blood_conversion，3级：Lv1 解锁低血吸血，持续 5 秒，吸血转化固定 100%，冷却 30 秒；Lv2 持续时间 5秒 -> 10秒；Lv3 10秒 -> 15秒。
-- warrior_bloodlust_mastery，3级：Lv1 吸血转化 100% -> 120%；Lv2 120% -> 150%；Lv3 150% -> 200%。
+- warrior_endure，1级：Lv1 次元斩命中后直接获得 16% 减伤，持续 1.8 秒，可刷新。
+- warrior_range，1级：Lv1 次元斩组合展开角度直接提升到 270°。
+- warrior_blood_conversion，2级：Lv1 获得 150% 吸血，持续 10 秒，冷却 30 秒；Lv2 提升到 200% 吸血，持续 15 秒。
 
 ### 作为副职业：不屈
 
-- off_unyielding：Lv1 解锁战士副职业，暴击率 +10%；生命每损失 10%，伤害 +2%。
-- unyielding_bloodrage，3级：Lv1 每损失 10% 生命的增伤 0% -> 2%；Lv2 2% -> 3%；Lv3 3% -> 4%。
-- unyielding_battlecry，3级：Lv1 战吼增伤 0% -> 10%，持续 3 秒；Lv2 10% -> 20%；Lv3 20% -> 30%。
-- unyielding_hamstring，3级：Lv1 断筋减速 0% -> 15%，持续 0秒 -> 1.5秒；Lv2 15% -> 25%，持续维持 1.5 秒；Lv3 25% -> 35%，持续 1.5秒 -> 2秒。
-- unyielding_sunder，3级：Lv1 破甲承伤 0% -> 6%；Lv2 6% -> 12%；Lv3 12% -> 18%。
-- unyielding_standfast，3级：Lv1 贴身减伤 0% -> 6%；Lv2 6% -> 12%；Lv3 12% -> 18%，并额外获得抗击退。
-- unyielding_executioner，3级：Lv1 对 35% 以下生命目标伤害加成 0% -> 12%；Lv2 12% -> 24%；Lv3 24% -> 36%。
+- off_unyielding：Lv1 解锁战士副职业，并立即获得基础血怒；不再附带额外暴击数值。
+- unyielding_bloodrage，2级：副职业选择时已获得基础血怒；后续强化会把每损失 10% 生命的增伤直接提升到 4%。
+- unyielding_battlecry，1级：Lv1 战吼增伤直接提升到 30%，持续 3 秒。
+- unyielding_hamstring，1级：Lv1 断筋减速直接提升到 35%，持续 2 秒。
+- unyielding_sunder，1级：Lv1 破甲承伤直接提升到 18%。
+- unyielding_standfast，2级：Lv1 贴身减伤直接提升到 12%；Lv2 提升到 18%。
+- unyielding_executioner，1级：Lv1 对 35% 以下生命目标伤害加成直接提升到 36%。
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁战士深度专精，并获得造成伤害 +30%。
 - warrior_bladestorm：Lv1 永动旋刃，近战挥砍改为全周持续旋转，攻击频率显著加快，并持续维持贴身绞杀范围。
 - warrior_berserkgod，3级：Lv1 旋转期间每轮额外追加 1 道延迟破风刃；Lv2 追加数提高到 2 道；Lv3 提高到 3 道，形成连续外放压制。
 - warrior_unyielding：Lv1 暴走战躯，低血量时永动旋刃进一步提速；当前代码阈值为生命低于 35% 时额外加快旋转频率。
@@ -115,27 +108,25 @@
 
 ### 主职业专精
 
-- mage_frostbite，3级：Lv1 冰弹减速 22% -> 30%，持续 1.5秒 -> 1.9秒；Lv2 30% -> 38%，持续 1.9秒 -> 2.3秒；Lv3 38% -> 48%，持续 2.3秒 -> 2.7秒。
-- mage_cold_focus，3级：Lv1 冰弹索敌范围 +0 -> +45；Lv2 +45 -> +90；Lv3 +90 -> +135。
-- mage_ice_veins，3级：Lv1 冰弹伤害加成 0% -> 10%；Lv2 10% -> 20%；Lv3 20% -> 30%。
-- mage_deep_freeze，3级：Lv1 额外冻结时长 0秒 -> 0.8秒；Lv2 0.8秒 -> 1.2秒；Lv3 1.2秒 -> 1.7秒。
+- mage_frostbite，1级：Lv1 冰弹减速直接提升到 48%，持续 2.7 秒。
+- mage_cold_focus，1级：Lv1 冰弹索敌范围直接提升到 +135。
+- mage_ice_veins，1级：Lv1 冰弹伤害加成直接提升到 30%。
+- mage_deep_freeze，1级：Lv1 额外冻结时长直接提升到 1.7 秒。
 - mage_shatter，3级：Lv1 碎冰半径 0 -> 120，伤害 0% -> 70%，传染 1 层寒霜；Lv2 半径 120 -> 150，伤害 70% -> 100%；Lv3 半径 150 -> 185，伤害 100% -> 135%，传染层数 1 -> 2。
-- mage_frost_nova，3级：Lv1 冰霜新星冻结时长 0秒 -> 3秒，冷却 30 秒；Lv2 3秒 -> 5秒；Lv3 5秒 -> 10秒。
-- mage_frost_domain，3级：Lv1 冰霜新星范围 0 -> 300；Lv2 300 -> 380；Lv3 380 -> 480。
+- mage_frost_nova，2级：Lv1 冻结 5 秒，范围 380，冷却 30 秒；Lv2 冻结 10 秒，范围 480。
 
 ### 作为副职业：奥术
 
-- off_arcane：Lv1 解锁法师副职业，所有攻击间隔 -8%；基础每 10 秒自动部署 1 座奥术炮台，驻场 15 秒，并向射程内目标发射粗直线贯穿激光。
-- arcane_circle，3级：Lv1 法阵内增伤 0% -> 8%，部署间隔 10.0秒 -> 9.3秒，开火间隔 3.00秒 -> 2.78秒；Lv2 增伤 8% -> 16%，部署间隔 9.3秒 -> 8.6秒，开火间隔 2.78秒 -> 2.56秒；Lv3 增伤 16% -> 24%，部署间隔 8.6秒 -> 7.9秒，开火间隔 2.56秒 -> 2.34秒。
-- arcane_circle_range，3级：Lv1 炮台索敌范围 380 -> 460；Lv2 460 -> 540；Lv3 540 -> 620。
-- arcane_fire_circle，3级：Lv1 炮台激光额外伤害系数 0% -> 24%；Lv2 24% -> 48%；Lv3 48% -> 72%。
-- arcane_frost_circle，3级：Lv1 炮台驻场时间 15.0秒 -> 16.8秒；Lv2 16.8秒 -> 18.6秒；Lv3 18.6秒 -> 20.4秒。
-- arcane_resonance_mark，3级：Lv1 激光易伤倍率 0% -> 6%；Lv2 6% -> 12%；Lv3 12% -> 18%。
+- off_arcane：Lv1 解锁法师副职业，并立即获得基础奥术炮台；不再附带额外攻速数值。
+- arcane_circle，2级：基础炮台已在副职业选择时获得；Lv1 法阵增伤直接提升到 16%，部署间隔直接提升到 8.6 秒，开火间隔直接提升到 2.56 秒；Lv2 进一步提升到 24% / 7.9 秒 / 2.34 秒。
+- arcane_circle_range，1级：Lv1 炮台索敌范围直接提升到 620。
+- arcane_fire_circle，1级：Lv1 炮台激光额外伤害系数直接提升到 72%。
+- arcane_frost_circle，1级：Lv1 炮台驻场时间直接提升到 20.4 秒。
+- arcane_resonance_mark，1级：Lv1 激光易伤倍率直接提升到 18%。
 - arcane_flowcasting，3级：Lv1 部署间隔额外缩短 0秒 -> 0.9秒，等效为 10.0秒 -> 9.1秒；Lv2 额外缩短 0.9秒 -> 1.8秒，并存炮台上限 1 -> 2，等效为 9.1秒 -> 8.2秒；Lv3 额外缩短 1.8秒 -> 2.7秒，并存炮台上限 2 -> 3，等效为 8.2秒 -> 7.3秒。
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁法师深度专精，并获得攻击间隔 -30%。
 - mage_dualcaster：Lv1 星界贯炮，站定后快速展开超宽贯穿激光，射程扩展到覆盖当前屏幕；移动时光束消失，主束会持续减速命中的敌人。
 - mage_trilaser：Lv1 棱镜超载，主激光命中后会从主目标继续裂出最多 2 条副光束，补打周围后排目标。
 - mage_arcanomorph，3级：Lv1 / Lv2 / Lv3 当前仅记录为奥术叠界强度档位，代码尚未接入明确数值公式。
@@ -151,23 +142,21 @@
 - paladin_pierce：Lv1 提升锤击范围与伤害。
 - paladin_repulse：Lv1 锤击命中附带明显击退，更难让敌人贴身。
 - paladin_triple：Lv1 每 5 秒，下一次锤击额外追加 2 次余震落点。
-- paladin_stun，3级：Lv1 锤击眩晕率 0% -> 10%；Lv2 10% -> 20%；Lv3 20% -> 30%。
-- paladin_divine_shelter，3级：Lv1 低血减伤 0% -> 40%，持续 5 秒，冷却 30 秒；Lv2 40% -> 60%；Lv3 60% -> 80%。
-- paladin_shelter_extension，3级：Lv1 神圣庇护持续时间 5秒 -> 8秒；Lv2 8秒 -> 10秒；Lv3 10秒 -> 12秒。
+- paladin_stun，1级：Lv1 锤击眩晕率直接提升到 30%。
+- paladin_divine_shelter，2级：Lv1 低血自动获得 60% 减伤，持续 8 秒，冷却 30 秒；Lv2 提升到 80% 减伤，持续 12 秒。
 
 ### 作为副职业：守护
 
-- off_guardian：Lv1 解锁圣骑士副职业，受到伤害 -10%；获得格挡与圣印。
-- guardian_block，3级：Lv1 格挡率 0% -> 5%，格挡减伤固定 50%；Lv2 5% -> 10%；Lv3 10% -> 15%。
-- guardian_armor，3级：Lv1 固定减伤 0 -> 2；Lv2 2 -> 4；Lv3 4 -> 6。
-- guardian_counter，3级：Lv1 反击伤害 0% -> 80%；Lv2 80% -> 120%；Lv3 120% -> 160%。
-- guardian_sacred_seal，3级：Lv1 圣印上限 0 -> 3，单层减伤 0% -> 2%；Lv2 上限 3 -> 4，单层减伤 2% -> 3%；Lv3 上限 4 -> 5，单层减伤 3% -> 4%。
-- guardian_holy_rebuke，3级：Lv1 神圣回击半径 0 -> 120，伤害 0% -> 100%；Lv2 半径 120 -> 135，伤害 100% -> 150%；Lv3 半径 135 -> 150，伤害 150% -> 200%，并追加 0.5 秒冻结。
-- guardian_light_fortress，3级：Lv1 每层圣印护盾转化 0% -> 4%；Lv2 4% -> 6%；Lv3 6% -> 8%。
+- off_guardian：Lv1 解锁圣骑士副职业，并立即获得基础格挡与圣印；不再附带额外减伤数值。
+- guardian_block，2级：副职业选择时已获得基础格挡；后续强化会把格挡率直接提升到 15%。
+- guardian_armor，1级：Lv1 固定减伤直接提升到 6。
+- guardian_counter，1级：Lv1 反击伤害直接提升到 160%。
+- guardian_sacred_seal，2级：副职业选择时已获得基础圣印；后续强化会把圣印上限直接提升到 5，单层减伤直接提升到 4%。
+- guardian_holy_rebuke，2级：Lv1 神圣回击半径直接提升到 135，伤害直接提升到 150%；Lv2 半径直接提升到 150，伤害直接提升到 200%，并追加 0.5 秒冻结。
+- guardian_light_fortress，1级：Lv1 每层圣印护盾转化直接提升到 8%。
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁圣骑士深度专精，并获得造成伤害 +30%。
 - paladin_avenger，3级：当前已接入为主锤伤害成长档位，但“震退反制”的终局表现仍需继续补到更鲜明的专属数值链路。
 - paladin_sacredshield，3级：Lv1 受击、格挡、护盾吸收会触发近身神圣回响；Lv2 回响范围与伤害提高；Lv3 进一步提高范围与伤害，形成稳定反制光环。
 - paladin_divine，3级：Lv1 受击、神圣回击与锤击会触发审判波，并给敌人挂审判承伤；Lv2 审判波范围与伤害提高；Lv3 进一步提高，并有概率追加短暂眩晕。
@@ -181,121 +170,29 @@
 ### 主职业专精
 
 - warlock_toxicity，3级：Lv1 剧毒最大层数 0 -> 1；Lv2 1 -> 2；Lv3 2 -> 3。
-- warlock_corrode，3级：Lv1 毒圈持续时间加成 0秒 -> 1秒；Lv2 1秒 -> 2秒；Lv3 2秒 -> 3秒。
-- warlock_spread，3级：Lv1 毒圈范围加成 0% -> 20%；Lv2 20% -> 40%；Lv3 40% -> 60%。
-- warlock_infernal，3级：Lv1 生命首次跌破 30% 时触发灵魂虹吸，持续 3 秒，造成伤害的 30% 转化为生命；Lv2 持续 5 秒，吸血 50%；Lv3 持续 10 秒，吸血 100%；冷却 30 秒。
-- warlock_infernal_contract，3级：Lv1 灵魂虹吸期间，过量治疗转化为上限 10% 最大生命的白骨护甲；Lv2 上限 20%；Lv3 上限 30%。
+- warlock_corrode，1级：Lv1 毒圈持续时间直接额外增加 3 秒。
+- warlock_spread，1级：Lv1 毒圈范围加成直接提升到 60%。
+- warlock_infernal，2级：Lv1 持续 5 秒，50% 伤害吸血，并可转化上限 20% 最大生命的白骨护甲；Lv2 持续 10 秒，100% 吸血，并可转化上限 30% 最大生命的白骨护甲；冷却 30 秒。
 
 ### 作为副职业：召唤
 
-- off_summon：Lv1 解锁召唤副职业，造成伤害 +8%；立即获得 1 名骷髅卫士与 1 名骷髅法师。
-- summon_necrotic_vitality，3级：Lv1 召唤物生命加成 0% -> 12%；Lv2 12% -> 24%；Lv3 24% -> 36%。
+- off_summon：Lv1 解锁召唤副职业，并立即获得 1 名骷髅卫士与 1 名骷髅法师；不再附带额外增伤数值。
+- summon_necrotic_vitality，1级：Lv1 召唤物生命加成直接提升到 36%。
 - summon_skeleton_guard，3级：Lv1 骷髅卫士总上限 1 -> 3；Lv2 3 -> 5；Lv3 5 -> 7。
 - summon_skeleton_mage，3级：Lv1 骷髅法师总上限 1 -> 3；Lv2 3 -> 5；Lv3 5 -> 7。
-- summon_mage_empower，3级：Lv1 骷髅法师伤害加成 0% -> 15%；Lv2 15% -> 30%；Lv3 30% -> 45%，并额外获得 15% 攻击间隔缩短。
-- summon_guard_bulwark，3级：Lv1 卫士生命加成 0% -> 20%，承伤减免 0% -> 10%；Lv2 生命 20% -> 40%，减免 10% -> 15%；Lv3 生命 40% -> 60%，减免 15% -> 20%，并强化拦截倾向。
+- summon_mage_empower，2级：Lv1 骷髅法师伤害加成直接提升到 30%；Lv2 进一步提升到 45%，并额外获得 15% 攻击间隔缩短。
+- summon_guard_bulwark，1级：Lv1 卫士生命加成直接提升到 60%，承伤减免直接提升到 20%。
 - summon_ember_echo，3级：Lv1 每次亡灵死亡获得魂火层数 0 -> 1，层数上限 0 -> 3；Lv2 层数上限 3 -> 5；Lv3 每次死亡获得层数 1 -> 2，层数上限 5 -> 6；每层伤害固定 +4%，持续 6 秒。
 
 ### 深度专精
 
-- third_depth_prep：Lv1 解锁术士深度专精，并获得造成伤害 +30%；拿到该卡时会立即召唤 1 只常驻地狱火，地狱火被击杀后 30 秒重生。
 - warlock_autoseek，3级：Lv1 毒圈获得主动索敌漂移；Lv2 漂移速度、持续与覆盖进一步提升；Lv3 继续增强追猎与压场。当前尚未实现毒圈融合。
 - warlock_souleater，3级：Lv1 中毒目标死亡时在尸体位置触发一次腐灭扩散，并补加毒层；Lv2 扩散范围与补层提高；Lv3 继续提高范围、伤害与滚雪球速度。
-- warlock_netherlord，3级：Lv1 地狱火体型、生命、攻速与伤害提升，同时地狱火自带近身灼烧环，对周围敌人持续造成伤害；Lv2 继续放大毒圈伤害与覆盖，并强化地狱火驻场压制；Lv3 达到最高压场档位。
-
-## 第三天赋预备节点
-
-- third_depth_prep：单级。按主职业给固定预备加成。法师、德鲁伊为攻击间隔 -30%；猎人为暴击率 +30%；战士、术士、圣骑士为造成伤害 +30%。
-- third_dual_prep：单级。按主职业给予 15% 主轴加成，再按副职业给予 10% 风格加成。主轴加成为：法师攻击间隔 -15%，猎人暴击率 +15%，战士/术士/圣骑士造成伤害 +15%，德鲁伊攻击间隔 -15%。风格加成为：奥术攻击间隔 -10%，猎人闪避率 +10%，不屈暴击率 +10%，召唤造成伤害 +10%，守护受到伤害 -10%，自然伙伴每秒恢复 1% 最大生命。
-
-## 双职业专精
-
-### 自定义组合
-
-- 法师 + 德鲁伊
-- dual_mage_druid_arcanebear：Lv1 奥术之熊，熊灵继承法阵效果，在法阵内减伤 +20%、攻击力 +30%。
-- dual_mage_druid_starwisdom，3级：Lv1 星落命中后的激光冷却缩减 0% -> 2%；Lv2 2% -> 4%；Lv3 4% -> 6%；上限 30%。
-- dual_mage_druid_natureoverflow：Lv1 自然溢流，自然伙伴节点出现权重提高，且熊灵、战鹰、树精强化不会晚于对应宠物本体出现。
-
-- 猎人 + 法师
-- dual_scatter_mage_enchantedarrow：Lv1 附魔箭矢，箭矢有 20% 概率附加一次激光伤害，系数 50%。
-- dual_scatter_mage_hastefocus，3级：Lv1 猎人攻速 0% -> 5%，法师迅捷加成 0% -> 2%；Lv2 猎人攻速 5% -> 10%，法师迅捷 2% -> 4%；Lv3 猎人攻速 10% -> 15%，法师迅捷 4% -> 6%。
-- dual_scatter_mage_archercircle：Lv1 射手法阵，可以在法阵内移动，且法阵内暴击伤害 +30%。
-
-- 战士 + 圣骑士
-- dual_warrior_paladin_crusade：Lv1 十字军，旋风斩每命中一个敌人，格挡率 +5%，持续 3 秒，可叠加。
-- dual_warrior_paladin_righteousrage，3级：Lv1 每层血怒额外增伤 0% -> 1%，血怒格挡率 0% -> 10%；Lv2 额外增伤 1% -> 2%，格挡率 10% -> 20%；Lv3 额外增伤 2% -> 3%，格挡率 20% -> 30%。
-- dual_warrior_paladin_sacredspin：Lv1 神圣旋风，旋风斩转为神圣伤害，对亡灵或恶魔伤害 +50%。
-
-- 术士 + 德鲁伊
-- dual_warlock_druid_decay：Lv1 腐败滋养，宠物攻击时有 25% 概率施加腐蚀，且腐蚀伤害可治疗宠物。
-- dual_warlock_druid_witheringroar：Lv1 凋零咆哮，熊灵咆哮时对周围敌人施加虚弱，伤害 -20%。
-- dual_warlock_druid_soulbloom，3级：Lv1 树精净化概率 0% -> 10%；Lv2 10% -> 20%；Lv3 20% -> 30%。
-
-- 圣骑士 + 猎人
-- dual_paladin_scatter_holyrain：Lv1 圣光箭雨，箭雨转为神圣箭雨，额外造成 20% 神圣伤害并致盲 1 秒。
-- dual_paladin_scatter_blessedquiver，3级：Lv1 额外暴击率 0% -> 3%，暴击回血概率 0% -> 20%；Lv2 暴击率 3% -> 6%，回血概率 20% -> 40%；Lv3 暴击率 6% -> 9%，回血概率 40% -> 60%。
-- dual_paladin_scatter_retribution：Lv1 惩戒射击，对攻击你的敌人，下次攻击必定暴击，并附带击退或短暂硬直。
-
-- 德鲁伊 + 战士
-- dual_drone_warrior_ironbark：Lv1 铁木之熊，熊灵获得战士不屈特性，生命低于 50% 时伤害 +30%。
-- dual_drone_warrior_predator，3级：Lv1 战鹰对生命低于 50% 的敌人伤害 0% -> 10%；Lv2 10% -> 20%；Lv3 20% -> 30%。
-- dual_drone_warrior_ancestral：Lv1 先祖韧性，树精每 5 秒为战士提供 1 层血怒，无伤害，仅增伤。
-
-### 通用生成组合
-
-- 通用生成组合均为单级 3 选：onslaught、style、fusion。
-- onslaught：取该组合左侧职业主轴加成的 70%。
-- style：取该组合右侧职业风格加成的 70%。
-- fusion：再取上述两项的 55%，并同时给两种加成。
-
-- 猎人 + 德鲁伊
-- dual_archer_druid_onslaught：Lv1 暴击率 +10.5%。
-- dual_archer_druid_style：Lv1 每秒恢复 0.7% 最大生命。
-- dual_archer_druid_fusion：Lv1 暴击率 +5.8%，并每秒恢复 0.4% 最大生命。
-
-- 猎人 + 战士
-- dual_archer_warrior_onslaught：Lv1 暴击率 +10.5%。
-- dual_archer_warrior_style：Lv1 暴击率 +7.0%。
-- dual_archer_warrior_fusion：Lv1 暴击率 +5.8%，并暴击率 +3.9%。
-
-- 猎人 + 术士
-- dual_archer_warlock_onslaught：Lv1 暴击率 +10.5%。
-- dual_archer_warlock_style：Lv1 造成伤害 +7.0%。
-- dual_archer_warlock_fusion：Lv1 暴击率 +5.8%，并造成伤害 +3.9%。
-
-- 法师 + 战士
-- dual_mage_warrior_onslaught：Lv1 攻击间隔 -10.5%。
-- dual_mage_warrior_style：Lv1 暴击率 +7.0%。
-- dual_mage_warrior_fusion：Lv1 攻击间隔 -5.8%，并暴击率 +3.9%。
-
-- 法师 + 术士
-- dual_mage_warlock_onslaught：Lv1 攻击间隔 -10.5%。
-- dual_mage_warlock_style：Lv1 造成伤害 +7.0%。
-- dual_mage_warlock_fusion：Lv1 攻击间隔 -5.8%，并造成伤害 +3.9%。
-
-- 法师 + 圣骑士
-- dual_mage_paladin_onslaught：Lv1 攻击间隔 -10.5%。
-- dual_mage_paladin_style：Lv1 受到伤害 -7.0%。
-- dual_mage_paladin_fusion：Lv1 攻击间隔 -5.8%，并受到伤害 -3.9%。
-
-- 术士 + 战士
-- dual_warlock_warrior_onslaught：Lv1 造成伤害 +10.5%。
-- dual_warlock_warrior_style：Lv1 暴击率 +7.0%。
-- dual_warlock_warrior_fusion：Lv1 造成伤害 +5.8%，并暴击率 +3.9%。
-
-- 圣骑士 + 术士
-- dual_paladin_warlock_onslaught：Lv1 造成伤害 +10.5%。
-- dual_paladin_warlock_style：Lv1 造成伤害 +7.0%。
-- dual_paladin_warlock_fusion：Lv1 造成伤害 +5.8%，并造成伤害 +3.9%。
-
-- 德鲁伊 + 圣骑士
-- dual_drone_paladin_onslaught：Lv1 攻击间隔 -10.5%。
-- dual_drone_paladin_style：Lv1 受到伤害 -7.0%。
-- dual_drone_paladin_fusion：Lv1 攻击间隔 -5.8%，并受到伤害 -3.9%。
+- warlock_netherlord，3级：Lv1 立即解锁 1 只常驻地狱火，并同步提升其体型、生命、攻速与伤害；地狱火被击杀后会在 30 秒后重生。Lv2 继续放大毒圈伤害与覆盖，并强化地狱火驻场压制；Lv3 达到最高压场档位。
 
 ## 备注
 
 - 本文档优先反映当前已接入升级池与展示层的实际数值，不再保留旧版设计稿文案。
 - 若代码与文档不一致，应先修正 [src/classes/upgradePools.js](src/classes/upgradePools.js) 与 [src/classes/upgradeOfferPresentation.js](src/classes/upgradeOfferPresentation.js)，再同步本文档。
-- 双职业 30 组的重设计草案已单独整理到 [DUAL_CLASS_REDESIGN.md](DUAL_CLASS_REDESIGN.md)，避免与当前已实装内容混淆。
+- 天赋等级压缩与分层重构建议，见 [TALENT_LAYERING_REBUILD.md](TALENT_LAYERING_REBUILD.md)。
+- 已废弃的双职业方案仅保留在 [DUAL_CLASS_REDESIGN.md](DUAL_CLASS_REDESIGN.md) 作为历史草案，不属于当前版本内容。

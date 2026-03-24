@@ -1,6 +1,6 @@
 import { resolveClassColor } from '../classes/visual/classColors';
 import { getTreeIdForSkill } from '../classes/talentTrees';
-import { DEPTH_SPEC_POOLS, DUAL_SPEC_POOLS } from '../classes/upgradePools';
+import { DEPTH_SPEC_POOLS } from '../classes/upgradePools';
 
 const OFF_CLASS_TREE_BY_ID = {
   off_arcane: 'mage',
@@ -49,18 +49,6 @@ const DEPTH_CARD_THEME_BY_ID = (() => {
   Object.entries(DEPTH_SPEC_POOLS || {}).forEach(([mainKey, options]) => {
     (options || []).forEach((option) => {
       if (option?.id) entries[option.id] = mainKey;
-    });
-  });
-  return entries;
-})();
-
-const DUAL_CARD_THEME_BY_ID = (() => {
-  const entries = {};
-  Object.entries(DUAL_SPEC_POOLS || {}).forEach(([mainKey, byOff]) => {
-    Object.entries(byOff || {}).forEach(([offKey, options]) => {
-      (options || []).forEach((option) => {
-        if (option?.id) entries[option.id] = { mainKey, offKey };
-      });
     });
   });
   return entries;
@@ -222,95 +210,13 @@ function createDepthTheme(mainKey) {
   };
 }
 
-function createDualTheme(mainKey, offKey) {
-  const mainAccent = resolveClassColor(TREE_TO_COLOR_KEY[mainKey] || mainKey);
-  const offAccent = resolveClassColor(TREE_TO_COLOR_KEY[offKey] || offKey);
-  const brightMain = brighten(mainAccent, 0.2);
-  const brightOff = brighten(offAccent, 0.2);
-  const mainName = TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[mainKey] || mainKey]
-    || TREE_DISPLAY_NAME[mainKey]
-    || mainKey;
-  const offName = TREE_DISPLAY_NAME[offKey]
-    || TREE_DISPLAY_NAME[TREE_TO_COLOR_KEY[offKey] || offKey]
-    || offKey;
-  return {
-    kind: 'third_dual',
-    badge: `${mainName} x ${offName}`,
-    kicker: '双职业专精',
-    iconText: '双职',
-    accent: mainAccent,
-    accentSoft: brightOff,
-    secondaryAccent: offAccent,
-    secondaryAccentSoft: brightMain,
-    splitBackground: true,
-    panelFill: mainAccent,
-    secondaryFill: offAccent,
-    panelSelectedFill: brightMain,
-    secondarySelectedFill: brightOff,
-    panelAlpha: 0.16,
-    secondaryAlpha: 0.16,
-    panelSelectedAlpha: 0.22,
-    secondarySelectedAlpha: 0.22,
-    border: brighten(((mainAccent & 0xfefefe) + (offAccent & 0xfefefe)) / 2, 0.18),
-    selectedBorder: 0xffffff,
-    outerGlow: brightMain,
-    shadow: `0 0 0 1px ${toRgba(mainAccent, 0.24)}, 0 22px 44px ${toRgba(offAccent, 0.24)}, inset 0 1px 0 ${toRgba(0xffffff, 0.22)}`,
-    gradient: `linear-gradient(115deg, ${toRgba(mainAccent, 0.28)} 0%, ${toRgba(mainAccent, 0.18)} 46%, ${toRgba(offAccent, 0.18)} 54%, ${toRgba(offAccent, 0.28)} 100%)`,
-    badgeBackground: `linear-gradient(90deg, ${toRgba(mainAccent, 0.22)}, ${toRgba(offAccent, 0.22)})`,
-    badgeBorder: toRgba(brightOff, 0.46),
-    badgeColor: '#fffdf8',
-    titleColor: '#fffdf7',
-    descColor: '#eef3ff',
-    effectClassName: 'levelup-card-shimmer'
-  };
-}
-
-function createThirdTheme(kind) {
-  const accent = kind === 'third_depth' ? 0xffd26a : 0x7ad7ff;
-  const secondary = kind === 'third_depth' ? 0xfff2c1 : 0xb8a5ff;
-  const badge = kind === 'third_depth' ? '本职业专精入门' : '双职业专精入门';
-  const iconText = kind === 'third_depth' ? '深度' : '双职';
-  return {
-    kind,
-    badge,
-    kicker: kind === 'third_depth' ? '深度专精' : '双职业专精',
-    iconText,
-    accent,
-    accentSoft: secondary,
-    panelFill: accent,
-    panelSelectedFill: secondary,
-    panelAlpha: 0.16,
-    panelSelectedAlpha: 0.22,
-    border: secondary,
-    selectedBorder: 0xffffff,
-    outerGlow: accent,
-    shadow: `0 0 0 1px ${toRgba(accent, 0.30)}, 0 22px 46px ${toRgba(accent, 0.28)}, inset 0 1px 0 ${toRgba(0xffffff, 0.28)}`,
-    gradient: kind === 'third_depth'
-      ? `linear-gradient(145deg, ${toRgba(accent, 0.28)}, rgba(31, 20, 8, 0.94) 56%, ${toRgba(secondary, 0.16)})`
-      : `linear-gradient(145deg, ${toRgba(accent, 0.20)}, rgba(10, 16, 30, 0.94) 55%, ${toRgba(secondary, 0.18)})`,
-    badgeBackground: toRgba(accent, 0.18),
-    badgeBorder: toRgba(secondary, 0.50),
-    badgeColor: '#fffdf5',
-    titleColor: '#fff9d8',
-    descColor: '#f2f4ff',
-    effectClassName: 'levelup-card-pulse'
-  };
-}
-
 export function getUpgradeCardTheme(upgrade) {
   const id = upgrade?.id || '';
   const offClassTree = OFF_CLASS_TREE_BY_ID[id];
   if (offClassTree) return createOffClassTheme(offClassTree);
-  if (id === 'third_depth_prep') return createThirdTheme('third_depth');
-  if (id === 'third_dual_prep') return createThirdTheme('third_dual');
 
   if (DEPTH_CARD_THEME_BY_ID[id]) {
     return createDepthTheme(DEPTH_CARD_THEME_BY_ID[id]);
-  }
-
-  if (DUAL_CARD_THEME_BY_ID[id]) {
-    const pair = DUAL_CARD_THEME_BY_ID[id];
-    return createDualTheme(pair.mainKey, pair.offKey);
   }
 
   const treeId = getTreeIdForSkill(id);
