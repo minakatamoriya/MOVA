@@ -3,6 +3,7 @@ import { ALL_MAPS, NEUTRAL, getMapById } from '../../data/mapPool';
 import { getMapBoss, getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
 import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { rollEliteAffixes } from '../../data/eliteAffixes';
+import { OUTRUN_ITEM_SLOT_COUNT } from '../../data/items';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
@@ -54,12 +55,14 @@ export function applyLevelProgressionMixin(GameScene) {
       this._roundVendorPending = false;
       this._roundVendorOpen = false;
       this._roundVendorSpawned = false;
+      this._roundVendorRequireExitBeforeReopen = false;
     },
 
     cleanupRoundVendor() {
       this.roundVendorActive = false;
       this.roundVendorAnchor = null;
       this.roundVendorStock = [];
+      this._roundVendorRequireExitBeforeReopen = false;
       if (this.roundVendorZone) {
         this.roundVendorZone.destroy();
         this.roundVendorZone = null;
@@ -122,6 +125,21 @@ export function applyLevelProgressionMixin(GameScene) {
       return Array.isArray(this.roundVendorStock) ? this.roundVendorStock : [];
     },
 
+    getRunConsumableBackpackState() {
+      const consumables = this.runConsumables && typeof this.runConsumables === 'object'
+        ? Object.values(this.runConsumables)
+        : [];
+      const usedSlots = consumables.reduce((sum, count) => {
+        return sum + Math.max(0, Math.floor(Number(count || 0)));
+      }, 0);
+      const capacity = OUTRUN_ITEM_SLOT_COUNT;
+      return {
+        usedSlots,
+        capacity,
+        full: usedSlots >= capacity
+      };
+    },
+
     getRoundVendorOfferState(offerId) {
       const entry = this.getRoundVendorStock().find((candidate) => candidate?.id === offerId || candidate?.itemId === offerId);
       if (!entry) return { ok: false, reason: 'missing', price: 0 };
@@ -143,6 +161,7 @@ export function applyLevelProgressionMixin(GameScene) {
         if (entry.kind === 'consumable') {
           const def = this.itemPool?.find?.((item) => item.id === entry.itemId) || null;
           const state = this.canBuyRunVendorItem(entry.itemId);
+          const backpackState = this.getRunConsumableBackpackState();
           return def ? {
             id: entry.id,
             itemId: def.id,
@@ -155,6 +174,8 @@ export function applyLevelProgressionMixin(GameScene) {
             carryLimit: Math.max(0, Math.floor(Number(def.carryLimit || def.maxOwned || 0))),
             canBuy: !!state.ok,
             disabledReason: state.reason || '',
+            backpackCount: backpackState.usedSlots,
+            backpackCapacity: backpackState.capacity,
             rarityLabel: `${def.qualityLabel || '白'}质`,
             rarityTextColor: def.qualityColor || '#fef08a',
             qualityLabel: def.qualityLabel || '白',
@@ -437,7 +458,7 @@ export function applyLevelProgressionMixin(GameScene) {
         strokeThickness: 8,
       }).setOrigin(0.5).setScrollFactor(0).setDepth(2800);
 
-      this._roundClearCountdownSubText = this.add.text(cam.centerX, cam.centerY + 64, '战场已清空，10 秒后小商贩抵达', {
+      this._roundClearCountdownSubText = this.add.text(cam.centerX, cam.centerY + 64, '战场已清空，10 秒后小商贩离开', {
         fontSize: '24px',
         fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
@@ -467,7 +488,11 @@ export function applyLevelProgressionMixin(GameScene) {
             this._roundClearCountdownText.setText(String(this._roundClearCountdownSeconds));
           }
           if (this._roundClearCountdownSubText) {
-            this._roundClearCountdownSubText.setText(`战场已清空，${this._roundClearCountdownSeconds} 秒后小商贩抵达`);
+            if (this._roundClearCountdownSeconds <= 2) {
+              this._roundClearCountdownSubText.setText(`战场已清空，小商贩即将离开（${this._roundClearCountdownSeconds}）`);
+            } else {
+              this._roundClearCountdownSubText.setText(`战场已清空，${this._roundClearCountdownSeconds} 秒后小商贩离开`);
+            }
           }
         }
       });

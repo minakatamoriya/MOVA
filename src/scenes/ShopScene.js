@@ -31,6 +31,20 @@ export default class ShopScene extends Phaser.Scene {
     return this.mode === 'round_vendor';
   }
 
+  closeRoundVendorShop() {
+    const gameScene = this.getGameScene();
+    if (gameScene) {
+      gameScene._roundVendorOpen = false;
+      gameScene._roundVendorRequireExitBeforeReopen = true;
+    }
+
+    this.scene.resume('GameScene');
+    uiBus.emit('phaser:sceneChanged', 'GameScene');
+    uiBus.emit('phaser:inGameChanged', true);
+    gameScene?.emitUiSnapshot?.();
+    this.scene.stop();
+  }
+
   getShopItems() {
     if (this.isRoundVendorMode()) {
       return this.getGameScene()?.getRoundVendorSnapshot?.() || [];
@@ -118,8 +132,7 @@ export default class ShopScene extends Phaser.Scene {
 
       this._uiCloseHandler = () => {
         if (this.isRoundVendorMode()) {
-          this.scene.resume('GameScene');
-          this.scene.stop();
+          this.closeRoundVendorShop();
           return;
         }
 
@@ -194,6 +207,10 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   shutdown() {
+    if (this.isRoundVendorMode()) {
+      const gameScene = this.getGameScene();
+      if (gameScene) gameScene._roundVendorOpen = false;
+    }
     if (this._uiRequestSnapshotHandler) {
       uiBus.off('ui:requestSnapshot', this._uiRequestSnapshotHandler);
       this._uiRequestSnapshotHandler = null;

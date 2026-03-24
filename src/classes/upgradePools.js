@@ -49,9 +49,9 @@ export const UPGRADE_POOLS = {
 
   // 🟠 战士·次元斩（近战挥砍驱动的多段风刃组合）
   warrior: [
-    { id: 'warrior_range', category: 'build', name: '斩域展开', desc: '次元斩展开角度直接提升到 270°。', icon: '战主', maxLevel: 1 },
-    { id: 'warrior_swordqi', category: 'build', name: '真空刃强化', desc: '基础真空刃持续强化：1级提升飞行质量，2级强化伤害/速度并获得轻度追踪，3级变为双发连斩。', icon: '战主', maxLevel: 3 },
-    { id: 'warrior_endure', category: 'build', name: '斩势护体', desc: '次元斩命中后直接获得 16% 减伤，持续 1.8 秒。', icon: '战主', maxLevel: 1 },
+    { id: 'warrior_range', category: 'build', name: '斩域展开', desc: '风刃基础射程提升：0% -> 27% -> 55% -> 91%（220 -> 280 -> 340 -> 420）。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_swordqi', category: 'build', name: '真空刃强化', desc: '每次挥砍的风刃数量与飞行速度持续提升：1 -> 3 -> 5 -> 10。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_damage', category: 'build', name: '破军刃势', desc: '基础技能伤害提高：0% -> 12% -> 24% -> 40%。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: 'Lv1 获得 150% 吸血，持续 10 秒；Lv2 提升至 200% 吸血，持续 15 秒。冷却 30 秒。', icon: '战主', maxLevel: 2 }
   ],
 
@@ -172,7 +172,7 @@ export const DEPTH_SPEC_POOLS = {
     { id: 'archer_eagleeye', category: 'third_depth', name: '终局鹰眼', desc: '所有箭幕获得更高暴击权重，对被标记目标进一步提高处决能力', icon: '猎深', maxLevel: 3 }
   ],
   warrior: [
-    { id: 'warrior_bladestorm', category: 'third_depth', name: '永动旋刃', desc: '进入持续旋转状态，持续升级旋转伤害与节奏', icon: '战深', maxLevel: 3 },
+    { id: 'warrior_spin', category: 'third_depth', name: '回旋斩', desc: '终极技能：每 30 秒自动启动一次回旋斩，持续 10 秒。', icon: '战深', maxLevel: 1 },
     { id: 'warrior_berserkgod', category: 'third_depth', name: '破风利刃', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
     { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '低血时持续提高旋转速度、伤害与追击风刃数量', icon: '战深', maxLevel: 3 }
   ],

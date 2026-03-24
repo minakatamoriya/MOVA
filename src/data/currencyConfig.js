@@ -12,7 +12,7 @@ function rollInt(rng, min, max) {
 }
 
 export const COIN_ATTRACT_RULES = {
-  baseAttractRadius: 148,
+  baseAttractRadius: 96,
   collectRadius: 42,
   itemCollectRadius: 28,
   coinSpeed: 520,
