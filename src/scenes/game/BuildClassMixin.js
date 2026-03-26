@@ -16,6 +16,7 @@ import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '..
 import { getAccentCoreKeyForOffFaction, getFrontierSkillIds, getMaxLevel, getTreeIdForSkill, getTreeSpentPoints, normalizeSkillId } from '../../classes/talentTrees';
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
+import { getArcaneRayAcquireRange } from '../../classes/attacks/weapons/laser';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 import { spawnWarriorMeleeHit as _spawnWarriorMeleeHit, spawnWarriorCrescentProjectile as _spawnWarriorCrescentProjectile } from '../../classes/attacks/weapons/warriorSlash';
 
@@ -1258,7 +1259,13 @@ export function applyBuildClassMixin(GameScene) {
       const mainCore = normalizeCoreKey(this.registry.get('mainCore') || this.buildState.core);
       const offFaction = this.registry.get('offFaction') || null;
       const mainTreeSpentPoints = mainCore ? getTreeSpentPoints(mainCore, skillTreeLevels) : 0;
-      const depthUnlocked = !!mainCore && mainTreeSpentPoints >= 5;
+      const offTreeSpentPoints = offFaction ? getTreeSpentPoints(offFaction, skillTreeLevels) : 0;
+      const depthMainThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecMainPointThreshold || 6));
+      const depthOffThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecOffPointThreshold || 2));
+      const depthUnlocked = !!mainCore
+        && !!offFaction
+        && mainTreeSpentPoints >= depthMainThreshold
+        && offTreeSpentPoints >= depthOffThreshold;
 
       let combinedPool = [];
 
@@ -1298,6 +1305,8 @@ export function applyBuildClassMixin(GameScene) {
         stage,
         mainCore,
         offFaction,
+        mainTreeSpentPoints,
+        offTreeSpentPoints,
         skillTreeLevels,
         offFactionEntryIds,
         frontierIds,
@@ -1328,12 +1337,15 @@ export function applyBuildClassMixin(GameScene) {
       const stage = context.stage || 'main_only';
       const mainCore = context.mainCore || null;
       const offFaction = context.offFaction || null;
+      const mainTreeSpentPoints = Math.max(0, Number(context.mainTreeSpentPoints || 0));
+      const offTreeSpentPoints = Math.max(0, Number(context.offTreeSpentPoints || 0));
       const skillTreeLevels = context.skillTreeLevels || {};
       const offFactionEntryIds = context.offFactionEntryIds || new Set();
       const currentLevel = skillTreeLevels[normalizeSkillId(option.id)] || skillTreeLevels[option.id] || 0;
       const maxLevel = getMaxLevel(option.id);
       const isRepeatableTalent = maxLevel > 1;
       const treeId = getTreeIdForSkill(option.id) || null;
+      const isDepthSpec = String(option.category || '').startsWith('third_');
       const baseWeight = Math.max(0.01, Number(option.weight) || 1);
 
       let weight = baseWeight;
@@ -1348,6 +1360,20 @@ export function applyBuildClassMixin(GameScene) {
 
       if (offFaction && treeId === offFaction) {
         weight *= Number(cfg.ownedOffFactionWeight) || 1;
+      }
+
+      if (offFaction && treeId === offFaction && offTreeSpentPoints < Math.max(1, Number(cfg.depthSpecOffPointThreshold || 2))) {
+        weight *= Number(cfg.offTreeCatchupMultiplier) || 1;
+      }
+
+      if (isDepthSpec) {
+        weight *= Number(cfg.depthSpecBaseWeight) || 1;
+
+        const requiredMain = Math.max(1, Number(cfg.depthSpecMainPointThreshold || 6));
+        const requiredOff = Math.max(1, Number(cfg.depthSpecOffPointThreshold || 2));
+        if (mainTreeSpentPoints < requiredMain || offTreeSpentPoints < requiredOff) {
+          weight *= 0.05;
+        }
       }
 
       if (currentLevel > 0) {
@@ -2257,8 +2283,9 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_mageRangeRing', 'mage');
 
-      // 冰法基础技能使用单发冰弹，范围圈对齐冰弹索敌范围
-      const r = Math.max(80, Math.round(this.player.mageMissileRange || this.player.mageMissileRangeBase || 280));
+      const r = this.player.mageDualcaster > 0
+        ? getArcaneRayAcquireRange(this.player)
+        : Math.max(80, Math.round(this.player.mageMissileRange || this.player.mageMissileRangeBase || 280));
 
       this._mageRangeRing.setRadius(r);
       const hp = this.player.getHitboxPosition?.();

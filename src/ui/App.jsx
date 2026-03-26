@@ -2,12 +2,232 @@ import React, { useEffect, useRef, useState } from 'react';
 import { uiBus } from './bus';
 import { useUiStore } from './store';
 import { TREE_DEFS, getMaxLevel } from '../classes/talentTrees';
+import { DEPTH_SPEC_POOLS, UPGRADE_POOLS, UNIVERSAL_POOLS } from '../classes/upgradePools';
 import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { getGlobalShopCatalog } from '../managers/ShopManager';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
 
 const GAME_VIEW_WIDTH = 720;
 const GAME_VIEW_HEIGHT = 1280;
+const OFFCLASS_ENTRY_IDS = new Set(['off_arcane', 'off_ranger', 'off_unyielding', 'off_summon', 'off_guardian', 'off_nature']);
+
+const TALENT_NODE_META_BY_ID = (() => {
+  const byId = {};
+
+  const registerPool = (treeId, options, source) => {
+    (options || []).forEach((option, index) => {
+      if (!option?.id) return;
+      byId[option.id] = {
+        treeId,
+        source,
+        order: index,
+        requiredSkillId: option.requiredSkillId || null,
+        requiredSkillLevel: Math.max(1, Number(option.requiredSkillLevel || 1)),
+        isDepth: source === 'depth' || String(option.category || '').startsWith('third_')
+      };
+    });
+  };
+
+  Object.entries(UPGRADE_POOLS || {}).forEach(([treeId, options]) => registerPool(treeId, options, 'main'));
+  Object.entries(UNIVERSAL_POOLS || {}).forEach(([treeId, options]) => registerPool(treeId, options, 'off'));
+  Object.entries(DEPTH_SPEC_POOLS || {}).forEach(([treeId, options]) => registerPool(treeId, options, 'depth'));
+
+  return byId;
+})();
+
+const TREE_ICON_ROW_LAYOUTS = {
+  archer: [
+    ['archer_core'],
+    ['archer_range', 'archer_volley', 'archer_rapidfire'],
+    ['archer_nimble_evade', 'archer_arrowrain'],
+    ['archer_bounce', 'archer_windfury', 'archer_eagleeye']
+  ],
+  druid: [
+    ['druid_core'],
+    ['druid_meteor_shower', 'druid_meteor', 'druid_starfire'],
+    ['druid_nourish'],
+    ['druid_kingofbeasts', 'druid_naturefusion', 'druid_astralstorm']
+  ],
+  warrior: [
+    ['warrior_core'],
+    ['warrior_range', 'warrior_swordqi', 'warrior_damage'],
+    ['warrior_blood_conversion'],
+    ['warrior_spin', 'warrior_berserkgod', 'warrior_unyielding']
+  ],
+  mage: [
+    ['mage_core'],
+    ['mage_frostbite', 'mage_cold_focus', 'mage_ice_veins'],
+    ['mage_deep_freeze', 'mage_shatter', 'mage_frost_nova'],
+    ['mage_dualcaster', 'mage_trilaser', 'mage_arcanomorph']
+  ],
+  paladin: [
+    ['paladin_core'],
+    ['paladin_pierce', 'paladin_repulse', 'paladin_triple'],
+    ['paladin_stun', 'paladin_divine_shelter', 'paladin_pulse'],
+    ['paladin_avenger', 'paladin_sacredshield', 'paladin_divine']
+  ],
+  warlock: [
+    ['warlock_core'],
+    ['warlock_toxicity', 'warlock_corrode', 'warlock_spread'],
+    ['warlock_infernal', 'warlock_malady'],
+    ['warlock_autoseek', 'warlock_souleater', 'warlock_netherlord']
+  ],
+  arcane: [
+    ['off_arcane'],
+    ['arcane_circle', 'arcane_circle_range', 'arcane_fire_circle'],
+    ['arcane_frost_circle', 'arcane_resonance_mark', 'arcane_flowcasting']
+  ],
+  ranger: [
+    ['off_ranger'],
+    ['ranger_snaretrap', 'ranger_huntmark', 'ranger_blasttrap'],
+    ['ranger_spiketrap', 'ranger_trapcraft', 'ranger_pack_hunter']
+  ],
+  unyielding: [
+    ['off_unyielding'],
+    ['unyielding_bloodrage', 'unyielding_battlecry', 'unyielding_sunder'],
+    ['unyielding_hamstring', 'unyielding_standfast', 'unyielding_executioner']
+  ],
+  summon: [
+    ['off_summon'],
+    ['summon_necrotic_vitality', 'summon_skeleton_guard', 'summon_skeleton_mage'],
+    ['summon_mage_empower', 'summon_guard_bulwark', 'summon_ember_echo']
+  ],
+  guardian: [
+    ['off_guardian'],
+    ['guardian_block', 'guardian_armor', 'guardian_counter'],
+    ['guardian_sacred_seal', 'guardian_holy_rebuke', 'guardian_light_fortress']
+  ],
+  nature: [
+    ['off_nature'],
+    ['druid_pet_bear', 'druid_pet_hawk', 'druid_pet_treant'],
+    ['nature_bear_guard', 'nature_hawk_huntmark', 'nature_treant_bloom']
+  ]
+};
+
+function chunkTalentNodes(nodes, chunkSize) {
+  const result = [];
+  const size = Math.max(1, Math.floor(Number(chunkSize) || 1));
+  for (let index = 0; index < nodes.length; index += size) {
+    result.push(nodes.slice(index, index + size));
+  }
+  return result;
+}
+
+function getTalentNodeMeta(nodeId) {
+  return TALENT_NODE_META_BY_ID[nodeId] || null;
+}
+
+function buildTalentRows(def) {
+  if (!def?.core) return [];
+
+  const nodes = Array.isArray(def.nodes) ? def.nodes : [];
+  const depthNodes = [];
+  const rootNodes = [];
+  const dependentByRequirement = new Map();
+  const unorderedDependents = [];
+
+  nodes.forEach((node) => {
+    const meta = getTalentNodeMeta(node.id);
+    if (meta?.isDepth) {
+      depthNodes.push(node);
+      return;
+    }
+
+    if (!meta?.requiredSkillId) {
+      rootNodes.push(node);
+      return;
+    }
+
+    const key = String(meta.requiredSkillId);
+    if (!dependentByRequirement.has(key)) dependentByRequirement.set(key, []);
+    dependentByRequirement.get(key).push(node);
+  });
+
+  const rows = [
+    { key: `${def.id}:core`, label: '起点', tone: 'core', nodes: [def.core] }
+  ];
+
+  chunkTalentNodes(rootNodes, 4).forEach((group, index) => {
+    rows.push({
+      key: `${def.id}:base:${index}`,
+      label: index === 0 ? '基础层' : '基础延展',
+      tone: 'base',
+      nodes: group
+    });
+  });
+
+  rootNodes.forEach((rootNode) => {
+    const children = dependentByRequirement.get(rootNode.id) || [];
+    if (!children.length) return;
+    chunkTalentNodes(children, 4).forEach((group, index) => {
+      rows.push({
+        key: `${def.id}:dep:${rootNode.id}:${index}`,
+        label: `${rootNode.name} 后续`,
+        tone: 'branch',
+        requires: rootNode.name,
+        nodes: group
+      });
+    });
+    dependentByRequirement.delete(rootNode.id);
+  });
+
+  dependentByRequirement.forEach((children, requiredSkillId) => {
+    unorderedDependents.push(...chunkTalentNodes(children, 4).map((group, index) => ({
+      key: `${def.id}:dep:${requiredSkillId}:${index}`,
+      label: '进阶层',
+      tone: 'branch',
+      requires: requiredSkillId,
+      nodes: group
+    })));
+  });
+
+  rows.push(...unorderedDependents);
+
+  chunkTalentNodes(depthNodes, 3).forEach((group, index) => {
+    rows.push({
+      key: `${def.id}:depth:${index}`,
+      label: '深度专精',
+      tone: 'depth',
+      nodes: group
+    });
+  });
+
+  return rows;
+}
+
+function buildTalentIconRows(def, skillTreeLevels = {}) {
+  if (!def?.core) return [];
+
+  const nodes = [def.core, ...(Array.isArray(def.nodes) ? def.nodes : [])].filter(Boolean);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const layout = TREE_ICON_ROW_LAYOUTS[def.id] || [];
+  const usedIds = new Set();
+  const rows = [];
+
+  layout.forEach((rowIds) => {
+    const row = rowIds
+      .map((nodeId) => nodeById.get(nodeId))
+      .filter(Boolean);
+    row.forEach((node) => usedIds.add(node.id));
+    if (row.length > 0) rows.push(row);
+  });
+
+  const remainingNodes = nodes
+    .filter((node) => !usedIds.has(node.id))
+    .sort((left, right) => {
+      const leftMeta = getTalentNodeMeta(left.id);
+      const rightMeta = getTalentNodeMeta(right.id);
+      const leftLevel = Math.max(0, Number(skillTreeLevels?.[left.id] || 0));
+      const rightLevel = Math.max(0, Number(skillTreeLevels?.[right.id] || 0));
+      const leftBucket = leftLevel > 0 ? 0 : (leftMeta?.isDepth ? 2 : 1);
+      const rightBucket = rightLevel > 0 ? 0 : (rightMeta?.isDepth ? 2 : 1);
+      if (leftBucket !== rightBucket) return leftBucket - rightBucket;
+      return Number(leftMeta?.order || 0) - Number(rightMeta?.order || 0);
+    });
+
+  rows.push(...chunkTalentNodes(remainingNodes, 4));
+  return rows;
+}
 
 function getGameViewportRect() {
   if (typeof window === 'undefined') {
@@ -193,6 +413,8 @@ export default function App() {
     Number(levelUp?.rerollDiceCount ?? runConsumables?.reroll_dice?.count ?? 0)
   );
   const levelUpOptions = Array.isArray(levelUp?.options) ? levelUp.options : [];
+  const isOffClassChoice = levelUpOptions.length === OFFCLASS_ENTRY_IDS.size
+    && levelUpOptions.every((opt) => OFFCLASS_ENTRY_IDS.has(String(opt?.id || '')));
   const rerollItemDef = ITEM_DEFS.find((it) => it.id === 'reroll_dice') || null;
   const levelUpGridRows = 4;
   const denseLevelUpCards = levelUpOptions.length >= 4;
@@ -678,16 +900,22 @@ export default function App() {
     };
 
     const TalentIconButton = ({ node, def }) => {
+      const meta = getTalentNodeMeta(node.id);
       const level = skillTreeLevels?.[node.id] || 0;
       const maxLevel = node.maxLevel || getMaxLevel(node.id) || 1;
       const kind = getNodeKind(node, def);
       const badge = badgeTextFor(level, maxLevel);
-      const borderColor = toCssHex(def?.color);
+      const isLearned = level > 0;
+      const isDepth = !!meta?.isDepth;
+      const borderColor = isLearned
+        ? toCssHex(def?.color)
+        : (isDepth ? '#d8b4fe' : 'rgba(148,163,184,0.65)');
       const iconText = getNodeBadgeText(node, def);
       const isSelected = selectedTalent?.node?.id === node.id;
       const hintText = kind === 'core'
         ? '起点'
         : (kind === 'ultimate' ? '终极' : String(node.name || '').replace(/^初始：|^终极：|^选择：/, '').trim().slice(0, 4));
+      const labelText = String(node.name || hintText || '').replace(/^初始：|^选择：/, '').trim();
 
       return (
         <button
@@ -728,8 +956,8 @@ export default function App() {
             flexDirection: 'column',
             alignItems: 'stretch',
             justifyContent: 'flex-start',
-            gap: 6,
-            width: '100%',
+            gap: 5,
+            width: 56,
             userSelect: 'none',
             WebkitUserSelect: 'none',
             touchAction: 'none'
@@ -738,36 +966,76 @@ export default function App() {
         >
           <div
             style={{
-              width: '100%',
-              aspectRatio: '1 / 1',
-              borderRadius: 0,
+              width: 56,
+              height: 56,
+              borderRadius: 12,
               border: isSelected ? `2px solid ${borderColor}` : `1px solid ${borderColor}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 900,
-              fontSize: kind === 'talent' ? 16 : 14,
-              background: isSelected ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.06)',
-              color: '#fff',
+              fontSize: kind === 'talent' ? 13 : 11,
+              background: isSelected
+                ? (isLearned
+                  ? `radial-gradient(circle at 30% 28%, ${toCssRgba(def?.color, 0.52)}, rgba(255,255,255,0.14) 42%, rgba(15,23,42,0.98) 100%)`
+                  : (isDepth
+                    ? 'radial-gradient(circle at 30% 28%, rgba(216,180,254,0.34), rgba(168,85,247,0.18) 42%, rgba(30,18,46,0.96) 100%)'
+                    : 'radial-gradient(circle at 30% 28%, rgba(203,213,225,0.28), rgba(120,130,148,0.18) 48%, rgba(30,41,59,0.96) 100%)'))
+                : (isLearned
+                  ? `linear-gradient(180deg, ${toCssRgba(def?.color, 0.30)}, rgba(15,23,42,0.98))`
+                  : (isDepth
+                    ? 'linear-gradient(180deg, rgba(192,132,252,0.26), rgba(46,16,70,0.96))'
+                    : 'linear-gradient(180deg, rgba(148,163,184,0.22), rgba(51,65,85,0.98))')),
+              color: isLearned ? '#ffffff' : (isDepth ? '#f3e8ff' : 'rgba(226,232,240,0.88)'),
               letterSpacing: '0.04em',
               position: 'relative',
-              boxShadow: isSelected ? `0 0 0 1px ${borderColor}33 inset` : 'none'
+              boxShadow: isSelected
+                ? `0 0 0 1px ${borderColor}44 inset, 0 0 18px ${isLearned ? toCssRgba(def?.color, 0.42) : (isDepth ? 'rgba(216,180,254,0.34)' : 'rgba(148,163,184,0.22)')}, 0 10px 22px rgba(0,0,0,0.28)`
+                : `inset 0 1px 0 rgba(255,255,255,0.12), 0 0 12px ${isLearned ? toCssRgba(def?.color, 0.20) : (isDepth ? 'rgba(192,132,252,0.20)' : 'rgba(15,23,42,0.18)')}, 0 6px 14px rgba(0,0,0,0.24)`,
+              overflow: 'hidden'
             }}
           >
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: isLearned
+                  ? `linear-gradient(135deg, rgba(255,255,255,0.20), rgba(255,255,255,0) 45%)`
+                  : (isDepth
+                    ? 'linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 48%)'
+                    : 'linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0) 48%)'),
+                pointerEvents: 'none'
+              }}
+            />
+            {!isLearned ? (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: isDepth
+                    ? 'repeating-linear-gradient(-45deg, rgba(216,180,254,0.14) 0 6px, rgba(30,41,59,0.0) 6px 12px)'
+                    : 'repeating-linear-gradient(-45deg, rgba(148,163,184,0.12) 0 6px, rgba(30,41,59,0.0) 6px 12px)',
+                  opacity: isDepth ? 0.82 : 0.72,
+                  pointerEvents: 'none'
+                }}
+              />
+            ) : null}
             {badge ? (
               <div
                 style={{
                   position: 'absolute',
                   top: 6,
                   right: 6,
-                  minWidth: 20,
-                  height: 20,
+                  minWidth: 18,
+                  height: 18,
                   padding: '0 5px',
-                  borderRadius: 0,
+                  borderRadius: 999,
                   border: 'none',
-                  background: isSelected ? '#ffffff' : toCssRgba(def?.color, 0.92),
+                  background: isSelected
+                    ? '#ffffff'
+                    : (isLearned ? toCssRgba(def?.color, 0.92) : 'rgba(100,116,139,0.92)'),
                   color: isSelected ? '#111827' : '#ffffff',
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: 900,
                   lineHeight: 1,
                   display: 'flex',
@@ -780,22 +1048,25 @@ export default function App() {
             ) : null}
             {iconText}
           </div>
-
           <div
             style={{
-              fontSize: 11,
-              lineHeight: 1.2,
-              opacity: 0.78,
+              minHeight: 24,
+              fontSize: 10,
+              lineHeight: 1.15,
+              opacity: isLearned ? 0.96 : (isDepth ? 0.88 : 0.68),
+              color: isLearned ? '#f8fafc' : (isDepth ? '#ead7ff' : 'rgba(226,232,240,0.72)'),
               textAlign: 'center',
-              padding: '0 2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              padding: '0 1px',
               userSelect: 'none',
-              WebkitUserSelect: 'none'
+              WebkitUserSelect: 'none',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
             }}
           >
-            {hintText || node.name}
+            {labelText}
           </div>
         </button>
       );
@@ -806,16 +1077,16 @@ export default function App() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 12,
             alignContent: 'start'
           }}
         >
           {panels.map((panel) => {
             const def = panel.def;
-            const borderColor = toCssHex(def?.color);
             const allNodes = def ? [def.core, ...(def.nodes || [])].filter(Boolean) : [];
-            const acquired = def ? allNodes.filter((n) => (skillTreeLevels?.[n.id] || 0) > 0) : [];
+            const learnedCount = def ? allNodes.filter((n) => (skillTreeLevels?.[n.id] || 0) > 0).length : 0;
+            const talentRows = def ? buildTalentIconRows(def, skillTreeLevels) : [];
 
             return (
               <div
@@ -870,42 +1141,52 @@ export default function App() {
                   <div style={{ minWidth: 0, fontSize: 15, fontWeight: 900, lineHeight: 1.2, color: def ? toCssHex(def.color) : '#ffffff' }}>
                     {panel.title}
                   </div>
-                  {panel.key === 'right' && def?.variant ? (
+                  {def ? (
                     <div
                       style={{
                         flexShrink: 0,
                         fontSize: 10,
                         fontWeight: 900,
                         letterSpacing: '0.06em',
-                        color: panel.key === 'right' && def.variant === 'dual' ? '#f5d0fe' : toCssHex(def.color),
+                        color: panel.key === 'right' && def?.variant === 'dual' ? '#f5d0fe' : toCssHex(def?.color),
                         opacity: 0.92
                       }}
                     >
-                      {def.variant === 'dual' ? '双职业' : '深度专精'}
+                      {`${learnedCount}/${allNodes.length} 已激活`}
                     </div>
                   ) : null}
                 </div>
 
                 {!def ? (
                   <div style={{ borderRadius: 0, background: 'rgba(11, 11, 24, 0.58)', padding: 12, fontSize: 13, lineHeight: 1.6, opacity: 0.75 }}>
-                    等待选择
-                  </div>
-                ) : acquired.length === 0 ? (
-                  <div style={{ borderRadius: 0, background: 'rgba(11, 11, 24, 0.58)', padding: 12, fontSize: 13, lineHeight: 1.6, opacity: 0.75 }}>
-                    尚未获得天赋
+                    {panel.key === 'right' ? '副职业尚未选择，选择后显示完整副职业天赋树。' : '等待选择'}
                   </div>
                 ) : (
                   <div
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                      gap: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 16,
                       userSelect: 'none',
-                      WebkitUserSelect: 'none'
+                      WebkitUserSelect: 'none',
+                      padding: '8px 2px 10px',
+                      minHeight: 0
                     }}
                   >
-                    {acquired.map((node) => (
-                      <TalentIconButton key={node.id} node={node} def={def} />
+                    {talentRows.map((row) => (
+                      <div
+                        key={row.map((node) => node.id).join('|')}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'center',
+                          gap: 14,
+                          flexWrap: 'nowrap'
+                        }}
+                      >
+                        {row.map((node) => (
+                          <TalentIconButton key={node.id} node={node} def={def} />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -950,6 +1231,16 @@ export default function App() {
                 <div style={{ fontSize: 12, opacity: 0.66, marginTop: 4 }}>
                   {`${selectedTalent.level || 0}/${selectedTalent.maxLevel || 1} · ${getNodeKind(selectedTalent.node, selectedTalent.def) === 'core' ? '职业起点' : (getNodeKind(selectedTalent.node, selectedTalent.def) === 'ultimate' ? '终局强化' : '普通节点')}`}
                 </div>
+                {getTalentNodeMeta(selectedTalent.node.id)?.requiredSkillId ? (
+                  <div style={{ fontSize: 12, opacity: 0.62, marginTop: 6 }}>
+                    前置条件：{([selectedTalent.def?.core, ...(selectedTalent.def?.nodes || [])].find((item) => item?.id === getTalentNodeMeta(selectedTalent.node.id)?.requiredSkillId)?.name) || getTalentNodeMeta(selectedTalent.node.id)?.requiredSkillId}
+                  </div>
+                ) : null}
+                {(selectedTalent.level || 0) <= 0 ? (
+                  <div style={{ fontSize: 12, opacity: 0.62, marginTop: 6 }}>
+                    当前未投入点数，灰色图标表示仅预览未激活节点。
+                  </div>
+                ) : null}
                 <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9, marginTop: 8 }}>{selectedTalent.node.desc || '暂无描述'}</div>
               </div>
             </div>
@@ -1005,6 +1296,7 @@ export default function App() {
     };
 
     const Slot = ({ item, slotLabel, label }) => {
+      const isRunLootEquipment = item?.kind === 'run_loot_equipment';
       const def = item?.id ? ITEM_DEFS.find((d) => d.id === item.id) : null;
       const cdMs = Math.max(0, Number(def?.consumable?.cooldownMs || 0));
       const until = item?.id ? Math.max(0, Number(itemCooldowns?.[item.id] || 0)) : 0;
@@ -1056,8 +1348,8 @@ export default function App() {
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
         style={{
           cursor: 'pointer',
-          width: 92,
-          height: 92,
+          width: isRunLootEquipment ? 82 : 92,
+          height: isRunLootEquipment ? 82 : 92,
           borderRadius: 12,
           border: theme.border,
           background: theme.background,
@@ -1067,8 +1359,8 @@ export default function App() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
-          padding: 8,
+          gap: isRunLootEquipment ? 4 : 6,
+          padding: isRunLootEquipment ? 6 : 8,
           position: 'relative',
           overflow: 'hidden',
           userSelect: 'none',
@@ -1101,9 +1393,9 @@ export default function App() {
             {Number(item.count)}
           </div>
         ) : null}
-        <div style={{ fontWeight: 900, fontSize: 16, ...(dimStyle || {}) }}>{item?.icon || label || ''}</div>
-        <div style={{ opacity: 0.8, fontSize: 12, textAlign: 'center', ...(dimStyle || {}) }}>{item?.name || ''}</div>
-        {item?.rarityLabel ? (
+        <div style={{ fontWeight: 900, fontSize: isRunLootEquipment ? 14 : 16, ...(dimStyle || {}) }}>{item?.icon || label || ''}</div>
+        <div style={{ opacity: 0.8, fontSize: isRunLootEquipment ? 11 : 12, textAlign: 'center', ...(dimStyle || {}) }}>{item?.name || ''}</div>
+        {!isRunLootEquipment && item?.rarityLabel ? (
           <div style={{ position: 'absolute', left: 7, bottom: 6, fontSize: 10, fontWeight: 900, color: item.rarityTextColor || '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.45)' }}>
             {item.rarityLabel}
           </div>
@@ -2115,6 +2407,135 @@ export default function App() {
               overflow: 'hidden'
             }}
           >
+            {isOffClassChoice ? (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 'clamp(28px, 6vw, 40px)', fontWeight: 900, lineHeight: 1.02, color: '#f8fafc' }}>
+                    选择副职业
+                  </div>
+                  <div style={{ opacity: 0.84, fontSize: 15, lineHeight: 1.5, maxWidth: 560 }}>
+                    从六个副职业中选择一个分支。选定后将解锁对应基础能力，并在天赋树中显示完整副职业路线。
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gridTemplateRows: 'repeat(3, minmax(0, 1fr))',
+                    gap: 12,
+                    alignContent: 'stretch'
+                  }}
+                >
+                  {levelUpOptions.map((opt) => {
+                    const theme = getUpgradeCardTheme(opt);
+                    const iconText = theme.iconText || opt.icon;
+                    const displayDesc = opt.offerDesc || opt.desc;
+
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => uiBus.emit('ui:levelUp:select', opt.id)}
+                        style={{
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          padding: '18px 18px 16px',
+                          borderRadius: 18,
+                          border: `2px solid ${toRgba(theme.border, 0.94)}`,
+                          background: theme.gradient,
+                          color: '#fff',
+                          width: '100%',
+                          minHeight: 0,
+                          height: '100%',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          boxShadow: theme.shadow,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          touchAction: 'manipulation'
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: `linear-gradient(180deg, ${toRgba(theme.accentSoft, 0.14)}, rgba(255,255,255,0))`,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 14,
+                            bottom: 14,
+                            width: 7,
+                            borderRadius: 999,
+                            background: toRgba(theme.accent, 0.96),
+                            boxShadow: `0 0 18px ${toRgba(theme.outerGlow, 0.38)}`,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        <div
+                          style={{
+                            alignSelf: 'flex-start',
+                            padding: '5px 10px',
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 900,
+                            letterSpacing: '0.08em',
+                            color: theme.badgeColor,
+                            background: theme.badgeBackground,
+                            border: `1px solid ${theme.badgeBorder}`
+                          }}
+                        >
+                          {theme.badge || '副职业'}
+                        </div>
+
+                        <div style={{ position: 'relative', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                          <div
+                            style={{
+                              minWidth: 54,
+                              height: 54,
+                              borderRadius: 14,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 18,
+                              fontWeight: 900,
+                              color: '#fff',
+                              background: toRgba(theme.accent, 0.22),
+                              border: `1px solid ${toRgba(theme.accentSoft, 0.44)}`,
+                              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 20px ${toRgba(theme.outerGlow, 0.16)}`
+                            }}
+                          >
+                            {iconText}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 20, fontWeight: 900, color: theme.titleColor, lineHeight: 1.1 }}>
+                              {opt.name}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', opacity: 0.88, marginTop: 6 }}>
+                              {theme.kicker || '副职业解锁'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ position: 'relative', color: theme.descColor, opacity: 0.94, fontSize: 13, lineHeight: 1.55 }}>
+                          {displayDesc}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+            <>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: denseLevelUpCards ? 'clamp(24px, 5.2vw, 32px)' : 'clamp(28px, 6vw, 36px)', fontWeight: 900, color: '#ffff00', lineHeight: 1.05 }}>
@@ -2349,6 +2770,8 @@ export default function App() {
                 <span style={{ fontSize: denseLevelUpCards ? 14 : 15, lineHeight: 1 }}>{rerollDiceCount}</span>
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       ) : null}

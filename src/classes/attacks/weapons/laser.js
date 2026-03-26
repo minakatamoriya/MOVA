@@ -23,18 +23,19 @@ function expApproach(current, target, deltaMs, timeConstantMs) {
 function getArcaneRayConfig(player) {
   const dualLevel = Phaser.Math.Clamp(Math.round(player?.mageDualcaster || 0), 0, 3);
   const trilaserLevel = Phaser.Math.Clamp(Math.round(player?.mageTrilaser || 0), 0, 3);
-  const camera = player?.scene?.cameras?.main;
-  const view = camera?.worldView;
-  const screenRange = view
-    ? Math.max(view.width, view.height) * 1.18
-    : 520;
+  const baseRange = Math.max(220, Number(player?.mageMissileRange || player?.mageMissileRangeBase || 280));
+  const expandedAcquireRange = [0, 520, 620, 760][dualLevel] || 520;
+  const expandedBeamRange = [0, 760, 940, 1120][dualLevel] || 760;
 
   return {
     requiresStationary: dualLevel > 0,
-    range: dualLevel > 0
-      ? Math.max(520, Math.round(screenRange * ([1, 1.0, 1.12, 1.24][dualLevel] || 1)))
+    acquireRange: dualLevel > 0
+      ? Math.max(expandedAcquireRange, Math.round(baseRange * ([1, 1.55, 1.9, 2.3][dualLevel] || 1.55)))
       : Math.max(60, player?.arcaneRayRange || player?.arcaneRayBaseRange || 220),
-    baseWidth: dualLevel > 0 ? ([0, 28, 36, 44][dualLevel] || 28) : 16,
+    beamRange: dualLevel > 0
+      ? Math.max(expandedBeamRange, Math.round(baseRange * ([1, 2.25, 2.75, 3.2][dualLevel] || 2.25)))
+      : Math.max(60, player?.arcaneRayRange || player?.arcaneRayBaseRange || 220),
+    baseWidth: dualLevel > 0 ? ([0, 54, 74, 96][dualLevel] || 54) : 16,
     damageMult: dualLevel > 0 ? ([0, 3.1, 3.9, 4.8][dualLevel] || 3.1) : 2,
     refractEnabled: trilaserLevel > 0,
     refractCount: [0, 1, 2, 3][trilaserLevel] || 0,
@@ -45,6 +46,11 @@ function getArcaneRayConfig(player) {
     slowDurationMs: dualLevel > 0 ? ([0, 260, 340, 420][dualLevel] || 260) : 0,
     moveCancelFadeMs: dualLevel > 0 ? 120 : 220,
   };
+}
+
+export function getArcaneRayAcquireRange(player) {
+  const cfg = getArcaneRayConfig(player);
+  return Math.max(60, Number(cfg.acquireRange || player?.arcaneRayRange || player?.arcaneRayBaseRange || 220));
 }
 
 function ensureArcaneRayState(player) {
@@ -81,7 +87,7 @@ function destroyHitbox(scene, hitbox) {
 }
 
 function ensureCircle(scene, state, player, scheme) {
-  const range = Math.max(60, player.arcaneRayRange || player.arcaneRayBaseRange || 220);
+  const range = getArcaneRayAcquireRange(player);
   const rc = getRangeCenter(player);
   if (!state.circle || !state.circle.active) {
     const c = scene.add.circle(rc.x, rc.y, range, scheme.accentColor, 0);
@@ -344,6 +350,14 @@ function updateBeamDraw(state, player, end, scheme, beamAlpha) {
   state.beamG.fillCircle(endX, endY, Math.max(6, Math.round(baseWidth * 0.55)));
 }
 
+function getArcaneBeamHitRadius(player) {
+  const cfg = getArcaneRayConfig(player);
+  const focusLvl = Phaser.Math.Clamp(Math.round(player?.mageDualcaster || 0), 0, 3);
+  const widthScale = 1 + 0.12 * focusLvl;
+  const baseWidth = Math.max(10, cfg.baseWidth * widthScale);
+  return Math.max(8, Math.round(baseWidth * 0.5));
+}
+
 function getEnemyUid(scene, enemy) {
   if (!enemy) return '0';
   if (!scene._enemyUidSeq) scene._enemyUidSeq = 1;
@@ -455,7 +469,8 @@ export function updateArcaneRay(player, delta) {
 
   // 选目标：若 Boss 在圈内，优先 Boss；否则选最近的可达目标
   let target = null;
-  const range = cfg.range;
+  const acquireRange = Math.max(60, Number(cfg.acquireRange || 0));
+  const beamRange = Math.max(acquireRange, Number(cfg.beamRange || acquireRange));
   let targetRadius = 0;
   const rc = getRangeCenter(player);
 
@@ -463,7 +478,7 @@ export function updateArcaneRay(player, delta) {
     if (boss && boss.isAlive) {
       const br = getEnemyRadius(boss);
       const bd = Phaser.Math.Distance.Between(rc.x, rc.y, boss.x, boss.y);
-      if (bd <= range) {
+      if (bd <= acquireRange) {
         target = boss;
         targetRadius = br;
       }
@@ -475,7 +490,7 @@ export function updateArcaneRay(player, delta) {
       const e = enemies[i];
       const r = getEnemyRadius(e);
       const d = Phaser.Math.Distance.Between(rc.x, rc.y, e.x, e.y);
-      const inR = isEnemyTouchingRange(rc.x, rc.y, range, e);
+      const inR = isEnemyTouchingRange(rc.x, rc.y, acquireRange, e);
       if (!inR) continue;
       const score = d;
       if (score < bestScore) {
@@ -492,7 +507,7 @@ export function updateArcaneRay(player, delta) {
   // 触碰范围：以“圆圈触碰到敌方中心点”为进入/脱离标准
   // - 进入：distance(center, center) <= range
   // - 脱离：distance(center, center) > range
-  const inRange = !!(target && isEnemyTouchingRange(rc.x, rc.y, range, target));
+  const inRange = !!(target && isEnemyTouchingRange(rc.x, rc.y, acquireRange, target));
 
   // 折射：命中 A 后，从 A 分裂两道短束到附近 B/C（小范围寻怪）
   const stationarySatisfied = !cfg.requiresStationary || !player.isMoving;
@@ -570,7 +585,7 @@ export function updateArcaneRay(player, delta) {
   if (hasAnyBeam) {
     ensureBeamGraphics(scene, state);
     const drawEnd = target
-      ? getExtendedBeamEnd(getBeamStart(player), target, range)
+      ? getExtendedBeamEnd(getBeamStart(player), target, beamRange)
       : ((state.lastEnd && now <= (state.lastEnd.until || 0)) ? { x: state.lastEnd.x, y: state.lastEnd.y } : null);
     updateBeamDraw(state, player, drawEnd, scheme, state.beamAlpha || 0);
 
@@ -591,7 +606,7 @@ export function updateArcaneRay(player, delta) {
     const s = getBeamStart(player);
     const startX = s.x;
     const startY = s.y;
-    const extendedEnd = getExtendedBeamEnd({ x: startX, y: startY }, target, range);
+    const extendedEnd = getExtendedBeamEnd({ x: startX, y: startY }, target, beamRange);
     const dx = extendedEnd.x - startX;
     const dy = extendedEnd.y - startY;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
@@ -601,6 +616,7 @@ export function updateArcaneRay(player, delta) {
     // ====== 路径伤害 ======
     const tickIntervalMs = Math.max(60, Math.round(player.fireRate || 320));
     const start = getBeamStart(player);
+    const beamHitRadius = getArcaneBeamHitRadius(player);
     // 主目标直伤：
     // - 常规情况下（Boss）由碰撞系统扣血
     // - 兜底：若教程/试炼 Boss 的碰撞链路异常，走直伤 tick，避免“激光不掉血”
@@ -633,8 +649,9 @@ export function updateArcaneRay(player, delta) {
       if (!e || !e.isAlive || e === target) continue;
       const r = getEnemyRadius(e);
       if (r <= 0) continue;
-      if (!segmentIntersectsCircle(start.x, start.y, mainEndX, mainEndY, e.x, e.y, r)) continue;
-      const hp = getHitPointOnCircleEdge(start.x, start.y, mainEndX, mainEndY, e.x, e.y, r);
+      const effectiveRadius = r + beamHitRadius;
+      if (!segmentIntersectsCircle(start.x, start.y, mainEndX, mainEndY, e.x, e.y, effectiveRadius)) continue;
+      const hp = getHitPointOnCircleEdge(start.x, start.y, mainEndX, mainEndY, e.x, e.y, Math.max(r, effectiveRadius * 0.6));
       const key = `main:${getEnemyUid(scene, e)}`;
       applyArcaneRayDirectDamage(scene, player, e, baseDamage, hp.x, hp.y, scheme, now, key, tickIntervalMs);
       if (cfg.slowMultiplier > 0 && cfg.slowDurationMs > 0) {

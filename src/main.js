@@ -117,15 +117,45 @@ console.log(`  CSS 分辨率: ${deviceInfo.cssWidth}×${deviceInfo.cssHeight}`);
 console.log(`  物理分辨率: ${deviceInfo.physicalWidth}×${deviceInfo.physicalHeight} (DPR: ${deviceInfo.devicePixelRatio})`);
 console.log(`  屏幕方向: ${deviceInfo.orientation}`);
 
-/**
- * Phaser 游戏配置（方案 A：固定设计视口）
- * - 逻辑分辨率固定为 720×1280（9:16），确保所有机型“玩法视野一致”。
- * - 使用 FIT 等比缩放：不同长宽比设备会出现黑边（通常是两侧黑边），但不会增加/减少可视范围。
- */
-const GAME_WIDTH = 720;
-const GAME_HEIGHT = 1280;
+const FIXED_GAME_WIDTH = 720;
+const FIXED_GAME_HEIGHT = 1280;
 
-console.log(`🎮 逻辑游戏分辨率(固定): ${GAME_WIDTH}×${GAME_HEIGHT} (9:16)`);
+function getFixedGameSizeBackup() {
+  return {
+    width: FIXED_GAME_WIDTH,
+    height: FIXED_GAME_HEIGHT,
+    mode: 'fixed-backup'
+  };
+}
+
+function getAdaptivePortraitGameSize() {
+  const vp = getViewportCssSize();
+  const viewportWidth = Number(vp.width || 0);
+  const viewportHeight = Number(vp.height || 0);
+
+  if (!(viewportWidth > 0 && viewportHeight > 0)) {
+    return getFixedGameSizeBackup();
+  }
+
+  if (viewportWidth >= viewportHeight) {
+    return {
+      ...getFixedGameSizeBackup(),
+      mode: 'landscape-fallback'
+    };
+  }
+
+  return {
+    width: FIXED_GAME_WIDTH,
+    height: Math.max(1, Math.round(FIXED_GAME_WIDTH * (viewportHeight / viewportWidth))),
+    mode: 'adaptive-height'
+  };
+}
+
+const initialGameSize = getAdaptivePortraitGameSize();
+const GAME_WIDTH = initialGameSize.width;
+const GAME_HEIGHT = initialGameSize.height;
+
+console.log(`🎮 逻辑游戏分辨率: ${GAME_WIDTH}×${GAME_HEIGHT} (${initialGameSize.mode})`);
 
 const config = {
   type: Phaser.AUTO,
@@ -167,6 +197,7 @@ const game = new Phaser.Game(config);
 
 // 将设备显示信息存入 registry，供任意场景访问
 game.registry.set('deviceInfo', deviceInfo);
+game.registry.set('gameSizeMode', initialGameSize.mode);
 
 const applyResponsiveGameSize = (reason) => {
   const vp = getViewportCssSize();
@@ -174,14 +205,20 @@ const applyResponsiveGameSize = (reason) => {
   const h = Number(vp.height || 0);
   if (!(w > 0 && h > 0)) return;
 
-  // 方案 A：不要改变逻辑尺寸，只刷新 FIT 布局（必要时同步父容器尺寸）。
+  const nextGameSize = getAdaptivePortraitGameSize();
+
+  // 仅处理竖屏高度自适应；横屏时保留当前逻辑尺寸，不额外扩展适配。
   try {
+    if (nextGameSize.mode === 'adaptive-height') {
+      game.scale.resize(nextGameSize.width, nextGameSize.height);
+      game.registry.set('gameSizeMode', nextGameSize.mode);
+    }
     if (typeof game.scale.setParentSize === 'function') {
       game.scale.setParentSize(w, h);
     }
     game.scale.refresh();
     const orientation = w > h ? 'landscape' : 'portrait';
-    console.log(`📐 Resize(${reason || 'unknown'}): viewport ${w}×${h} (${vp.source}) -> game fixed ${GAME_WIDTH}×${GAME_HEIGHT} (${orientation})`);
+    console.log(`📐 Resize(${reason || 'unknown'}): viewport ${w}×${h} (${vp.source}) -> game ${game.scale.width}×${game.scale.height} (${nextGameSize.mode}, ${orientation})`);
   } catch (_) {
     // ignore
   }
