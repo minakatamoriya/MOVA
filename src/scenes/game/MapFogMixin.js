@@ -3,6 +3,8 @@ import { START_ROOM, NEUTRAL } from '../../data/mapPool';
 import { getMapBoss } from '../../data/mapMonsters';
 import { getBossArenaWorldRect, getBossSpawnWorldPoint } from '../../data/balanceConfig';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
+import TestMinion from '../../enemies/minions/TestMinion';
+import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 
 /**
  * 地图/迷雾/小地图 相关方法
@@ -185,6 +187,15 @@ export function applyMapFogMixin(GameScene) {
     },
 
     cleanupStartRoomObjects() {
+      const tutorialTarget = this.startRoomTutorialTarget;
+      if (Array.isArray(this.bossManager?.minions) && tutorialTarget) {
+        this.bossManager.minions = this.bossManager.minions.filter((unit) => unit && unit !== tutorialTarget);
+      }
+      if (this.startRoomTutorialTarget?.destroy) {
+        this.startRoomTutorialTarget.destroy();
+      }
+      this.startRoomTutorialTarget = null;
+
       if (Array.isArray(this._startRoomObjects) && this._startRoomObjects.length > 0) {
         this._startRoomObjects.forEach(o => o?.destroy?.());
       }
@@ -258,22 +269,68 @@ export function applyMapFogMixin(GameScene) {
       else this.clearDebugGridOverlay();
 
       this.weaponSelected = false;
-      this.setupStartingWeaponPickups({ force: true, layout: 'startRoom' });
+      this.startRoomTutorialCleared = false;
+
+      const selectedCore = this.selectedMainCore || this.registry?.get?.('preferredMainCore') || 'archer';
+      if (selectedCore) {
+        this.registry?.set?.('preferredMainCore', selectedCore);
+        applyCoreUpgrade(this, `${selectedCore}_core`);
+        this.weaponSelected = true;
+      }
 
       this.currentMapInfo = { ...START_ROOM };
       if (this.miniMapRoot) { this.miniMapRoot.destroy(); this.miniMapRoot = null; }
       this.miniMap = null;
 
       if (this.systemMessage) {
-        this.systemMessage.show('请选择一件趁手的武器！', {
-          key: 'startroom_pick_weapon',
+        this.systemMessage.show('击败前方试炼傀儡，熟悉当前职业的基础攻击。', {
+          key: 'startroom_trial_intro',
           sticky: true
         });
       }
 
+      this.spawnStartRoomTutorialTarget();
+
       this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
 
       console.log('[StartRoom] entered. weaponSelected=', this.weaponSelected);
+    },
+
+    spawnStartRoomTutorialTarget() {
+      if (!this.player || this.startRoomTutorialTarget?.active) return;
+
+      const cfg = this.getStartRoomConfig();
+      const neededExp = Math.max(1, Math.ceil((this.playerData?.maxExp || 120) - (this.playerData?.exp || 0)));
+      const target = new TestMinion(this, {
+        x: Math.floor(cfg.worldW * 0.5),
+        y: Math.floor(cfg.worldH * 0.40),
+        name: '试炼傀儡',
+        hp: 20,
+        expReward: neededExp,
+        size: 24,
+        color: 0x9bd7ff,
+        type: 'static',
+        moveSpeed: 0,
+        aggroRadius: 0,
+        shootRange: 0,
+        shootCdMs: 999999,
+        contactDamage: 0,
+        spawnProtectedUntilVisible: false
+      });
+
+      target.isStartRoomTutorialTarget = true;
+      target.showStatusUi = false;
+      target.syncOverheadUiVisibility?.();
+      target.hpBarBg?.setVisible?.(false);
+      target.hpBar?.setVisible?.(false);
+      target.hpText?.setVisible?.(false);
+      target.debuffAnchor?.setVisible?.(false);
+
+      this.startRoomTutorialTarget = target;
+      if (Array.isArray(this.bossManager?.minions)) {
+        this.bossManager.minions.push(target);
+      }
+      this._startRoomObjects.push(target);
     },
 
     spawnStartRoomDoor() {
@@ -295,7 +352,7 @@ export function applyMapFogMixin(GameScene) {
         width: w,
         height: h,
         depth: 380,
-        label: '空间裂隙\n开始冒险',
+        label: '空间裂隙\n进入混沌竞技场',
         labelFontSize: '22px',
         labelColor: '#ffffff'
       });

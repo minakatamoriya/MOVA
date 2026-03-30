@@ -274,6 +274,10 @@ class GameScene extends Phaser.Scene {
     this._postBossRewardObjects = [];
     this._arenaContinueKey = null;
 
+    this.selectedMainCore = null;
+    this.startRoomTutorialTarget = null;
+    this.startRoomTutorialCleared = false;
+
     // 进图过场：半透明遮罩 + 居中文字，期间冻结局内逻辑
     this._sceneIntroActive = false;
     this._sceneIntroOverlay = null;
@@ -285,7 +289,9 @@ class GameScene extends Phaser.Scene {
     this._combatBehaviorPauseRestore = null;
   }
 
-  init() {
+  init(data = {}) {
+    this.selectedMainCore = normalizeCoreKey(data?.selectedMainCore || this.registry?.get?.('preferredMainCore') || null);
+
     // 注意：Phaser 的 scene.start() 会复用 Scene 实例；constructor 不会再次执行。
     // 因此每次开新局都必须在 init() 重置"六选一/出口门/关卡"状态。
 
@@ -323,7 +329,10 @@ class GameScene extends Phaser.Scene {
     this.startRoomDoorActive = false;
     this.startRoomDoorZone = null;
     this.startRoomDoorVisuals = null;
+    this.startRoomDoorRift = null;
     this._startRoomObjects = [];
+    this.startRoomTutorialTarget = null;
+    this.startRoomTutorialCleared = false;
 
     // 从菜单/查看界面返回重新开局时：强制恢复可操作状态
     //（Scene 实例复用，上一局可能残留 pause）
@@ -349,7 +358,8 @@ class GameScene extends Phaser.Scene {
 
     // 新开一局：清理本局职业/天赋状态（避免上局残留导致"主武器不重新摆放/不切换"）
     if (this.registry) {
-      this.registry.remove('mainCore');
+      if (this.selectedMainCore) this.registry.set('mainCore', this.selectedMainCore);
+      else this.registry.remove('mainCore');
       this.registry.remove('offCore');
       this.registry.remove('offFaction');
       this.registry.remove('naturePetType');
@@ -2848,10 +2858,25 @@ class GameScene extends Phaser.Scene {
       this.events.off('minionKilled', this._minionKilledHandler);
     }
     this._minionKilledHandler = (payload) => {
+      const isStartRoomTutorialTarget = !!payload?.isStartRoomTutorialTarget;
+
       this.triggerWarlockSouleaterBurst?.(payload?.x ?? 0, payload?.y ?? 0);
 
       const exp = Math.max(0, payload?.expReward || 0);
       if (exp > 0) this.addExp(exp, { source: 'minion' });
+
+      if (isStartRoomTutorialTarget) {
+        this.startRoomTutorialCleared = true;
+        this.startRoomTutorialTarget = null;
+        this.spawnStartRoomDoor?.();
+        this.systemMessage?.hide?.('startroom_trial_intro', { immediate: false });
+        this.systemMessage?.show?.('试炼完成，已升至 2 级。前往上方裂隙进入混沌竞技场。', {
+          key: 'startroom_trial_clear',
+          durationMs: 3200
+        });
+        this.events.emit('updatePlayerInfo');
+        return;
+      }
 
       const coinDrops = rollMinionCoinDrops({
         isElite: !!payload?.isElite,

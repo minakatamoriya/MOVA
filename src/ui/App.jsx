@@ -104,6 +104,117 @@ const TREE_ICON_ROW_LAYOUTS = {
   ]
 };
 
+const MENU_CLASS_OPTIONS = [
+  {
+    id: 'warrior',
+    name: '战士',
+    glyph: '⚔',
+    color: '#f97316',
+    accent: 'rgba(249,115,22,0.26)',
+    tags: ['近战', '爆发', '硬冲'],
+    summary: '挥砍贴脸，月牙外放。适合喜欢顶住压力正面压进的打法。',
+    baseSkill: '月牙斩：近战挥砍命中后外放刀波，前期清杂效率很高。',
+    strengths: ['前线压制强', '血量和容错高', '清近身怪稳定'],
+    showcase: ['剑气增程', '旋风连斩', '狂战神'],
+    stats: [
+      { label: '生存', value: 5 },
+      { label: '输出', value: 4 },
+      { label: '机动', value: 2 },
+      { label: '上手', value: 4 }
+    ]
+  },
+  {
+    id: 'paladin',
+    name: '圣骑士',
+    glyph: '⛨',
+    color: '#facc15',
+    accent: 'rgba(250,204,21,0.24)',
+    tags: ['防守', '反击', '控场'],
+    summary: '护盾脉冲兼顾防守和反制，适合偏稳健、喜欢顶住弹幕慢慢推进。',
+    baseSkill: '护盾脉冲：近身触发冲击，清弹并震退周围敌人。',
+    strengths: ['减伤和格挡稳定', '近身清弹强', '对密集怪舒服'],
+    showcase: ['重锤穿透', '神圣庇护', '圣光堡垒'],
+    stats: [
+      { label: '生存', value: 5 },
+      { label: '输出', value: 3 },
+      { label: '机动', value: 2 },
+      { label: '上手', value: 5 }
+    ]
+  },
+  {
+    id: 'archer',
+    name: '猎人',
+    glyph: '➶',
+    color: '#22c55e',
+    accent: 'rgba(34,197,94,0.24)',
+    tags: ['远程', '高频', '走位'],
+    summary: '持续连射、节奏快、射程舒服，适合手机端边走边打的直觉体验。',
+    baseSkill: '箭矢连射：自动索敌连续射击，可一路强化成多列箭雨。',
+    strengths: ['射程稳定', '输出频率高', '走位容错好'],
+    showcase: ['射程扩张', '多列箭雨', '风怒连发'],
+    stats: [
+      { label: '生存', value: 3 },
+      { label: '输出', value: 4 },
+      { label: '机动', value: 5 },
+      { label: '上手', value: 5 }
+    ]
+  },
+  {
+    id: 'mage',
+    name: '法师',
+    glyph: '✦',
+    color: '#38bdf8',
+    accent: 'rgba(56,189,248,0.24)',
+    tags: ['控制', '冻结', '射线'],
+    summary: '冰弹起手，后期可转向极强控场与星界贯炮，成长上限很高。',
+    baseSkill: '冰弹：命中叠加寒霜，持续强化后能冻结、碎裂并扩散。',
+    strengths: ['控制能力强', '后期成长夸张', '对精英和 Boss 有压制感'],
+    showcase: ['寒霜侵蚀', '冰霜新星', '星界贯炮'],
+    stats: [
+      { label: '生存', value: 2 },
+      { label: '输出', value: 5 },
+      { label: '机动', value: 3 },
+      { label: '上手', value: 3 }
+    ]
+  },
+  {
+    id: 'warlock',
+    name: '术士',
+    glyph: '☠',
+    color: '#a855f7',
+    accent: 'rgba(168,85,247,0.24)',
+    tags: ['持续伤害', '地面圈', '召唤'],
+    summary: '走位本身就是输出的一部分，适合喜欢布场和持续磨血的打法。',
+    baseSkill: '剧毒新星：在脚下留下持续扩张的毒圈，边走边布置伤害区。',
+    strengths: ['清杂覆盖大', '持续压血稳定', '后续可顺接召唤流'],
+    showcase: ['毒性扩张', '腐蚀传播', '虚空领主'],
+    stats: [
+      { label: '生存', value: 3 },
+      { label: '输出', value: 4 },
+      { label: '机动', value: 4 },
+      { label: '上手', value: 3 }
+    ]
+  },
+  {
+    id: 'druid',
+    name: '德鲁伊',
+    glyph: '✺',
+    color: '#84cc16',
+    accent: 'rgba(132,204,22,0.24)',
+    tags: ['范围', '召星', '自然'],
+    summary: '星落锁敌、打点柔和，后续还能接自然伙伴体系，属于均衡型职业。',
+    baseSkill: '星落：锁定敌方落下范围伤害，节奏平稳，覆盖感很强。',
+    strengths: ['范围伤害舒服', '成长路线全面', '对新手友好'],
+    showcase: ['陨星连落', '自然滋养', '星界风暴'],
+    stats: [
+      { label: '生存', value: 4 },
+      { label: '输出', value: 4 },
+      { label: '机动', value: 3 },
+      { label: '上手', value: 4 }
+    ]
+  }
+];
+
 function chunkTalentNodes(nodes, chunkSize) {
   const result = [];
   const size = Math.max(1, Math.floor(Number(chunkSize) || 1));
@@ -271,6 +382,7 @@ export default function App() {
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [floatingInfoText, setFloatingInfoText] = useState('');
   const [gameViewportRect, setGameViewportRect] = useState(() => getGameViewportRect());
+  const [selectedMenuCore, setSelectedMenuCore] = useState(MENU_CLASS_OPTIONS[0]?.id || 'warrior');
   const floatingInfoTimerRef = useRef(null);
 
   const showFloatingInfo = (text) => {
@@ -429,6 +541,8 @@ export default function App() {
     Number(levelUp?.pendingSinceMs || 0),
     Number(levelUp?.lastInteractionMs || 0)
   );
+  const selectedMenuClass = MENU_CLASS_OPTIONS.find((item) => item.id === selectedMenuCore) || MENU_CLASS_OPTIONS[0];
+  const menuViewportCompact = gameViewportRect.width <= 430;
   const levelUpAttentionElapsedMs = (!levelUpPanelOpen && levelUpPendingPoints > 0)
     ? Math.max(0, gameplayNowMs - levelUpAttentionBaseMs)
     : 0;
@@ -1650,18 +1764,167 @@ export default function App() {
         >
           <div
             style={{
-              width: 520,
-              maxWidth: '92%',
-              borderRadius: 12,
-              background: 'rgba(15, 16, 26, 0.92)',
+              width: 640,
+              maxWidth: '94%',
+              maxHeight: '92%',
+              overflowY: 'auto',
+              borderRadius: 18,
+              background: 'linear-gradient(180deg, rgba(15,16,26,0.96), rgba(8,10,18,0.98))',
               border: '2px solid rgba(42,42,58,1)',
-              padding: 18
+              padding: menuViewportCompact ? 14 : 18,
+              boxShadow: '0 20px 48px rgba(0,0,0,0.36)'
             }}
           >
-            <div style={{ fontSize: 44, fontWeight: 900, textAlign: 'center', marginBottom: 6 }}>MOVA</div>
-            <div style={{ opacity: 0.85, textAlign: 'center', marginBottom: 16 }}>走位·策略·双职业·三选一</div>
+            <div style={{ fontSize: menuViewportCompact ? 34 : 44, fontWeight: 900, textAlign: 'center', marginBottom: 6 }}>MOVA</div>
+            <div style={{ opacity: 0.85, textAlign: 'center', marginBottom: 6 }}>主职业六选一</div>
+            <div style={{ opacity: 0.62, textAlign: 'center', fontSize: 13, lineHeight: 1.55, marginBottom: 14 }}>
+              轻触卡片切换职业详情。开局会先进入试炼之地，击败一只训练目标后再从上方裂隙进入混沌竞技场。
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+              {MENU_CLASS_OPTIONS.map((item) => {
+                const selected = selectedMenuClass?.id === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedMenuCore(item.id)}
+                    style={{
+                      cursor: 'pointer',
+                      minHeight: menuViewportCompact ? 84 : 96,
+                      borderRadius: 16,
+                      border: selected ? `2px solid ${item.color}` : '1px solid rgba(255,255,255,0.12)',
+                      background: selected ? `linear-gradient(180deg, ${item.accent}, rgba(11,11,24,0.92))` : 'rgba(255,255,255,0.05)',
+                      color: '#fff',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '10px 8px',
+                      boxShadow: selected ? `0 0 0 1px ${item.color}44 inset, 0 12px 24px ${item.color}22` : 'none'
+                    }}
+                  >
+                    <div style={{ fontSize: menuViewportCompact ? 24 : 28, lineHeight: 1 }}>{item.glyph}</div>
+                    <div style={{ fontSize: menuViewportCompact ? 13 : 14, fontWeight: 900 }}>{item.name}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedMenuClass ? (
+              <div
+                style={{
+                  borderRadius: 18,
+                  border: `1px solid ${selectedMenuClass.color}66`,
+                  background: `linear-gradient(180deg, ${selectedMenuClass.accent}, rgba(11,11,24,0.88))`,
+                  padding: menuViewportCompact ? 14 : 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  marginBottom: 14
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div
+                    style={{
+                      width: menuViewportCompact ? 58 : 68,
+                      height: menuViewportCompact ? 58 : 68,
+                      borderRadius: 18,
+                      background: 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${selectedMenuClass.color}66`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: menuViewportCompact ? 28 : 34,
+                      flexShrink: 0
+                    }}
+                  >
+                    {selectedMenuClass.glyph}
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: menuViewportCompact ? 24 : 28, fontWeight: 900 }}>{selectedMenuClass.name}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      {selectedMenuClass.tags.map((tag) => (
+                        <div
+                          key={tag}
+                          style={{
+                            height: 24,
+                            padding: '0 10px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(255,255,255,0.14)',
+                            background: 'rgba(255,255,255,0.06)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            fontSize: 11,
+                            fontWeight: 900,
+                            opacity: 0.92
+                          }}
+                        >
+                          {tag}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 14, lineHeight: 1.65, opacity: 0.9 }}>{selectedMenuClass.summary}</div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+                  {selectedMenuClass.stats.map((stat) => (
+                    <div key={stat.label} style={{ borderRadius: 12, background: 'rgba(11,11,24,0.58)', padding: '10px 10px 8px' }}>
+                      <div style={{ fontSize: 12, opacity: 0.68 }}>{stat.label}</div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+                        {new Array(5).fill(null).map((_, index) => (
+                          <div
+                            key={`${stat.label}-${index}`}
+                            style={{
+                              flex: 1,
+                              height: 7,
+                              borderRadius: 999,
+                              background: index < stat.value ? selectedMenuClass.color : 'rgba(255,255,255,0.08)',
+                              opacity: index < stat.value ? 0.95 : 1
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
+                    <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>基础攻击</div>
+                    <div style={{ fontSize: 14, lineHeight: 1.6 }}>{selectedMenuClass.baseSkill}</div>
+                  </div>
+                  <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
+                    <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>职业优势</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14, lineHeight: 1.5 }}>
+                      {selectedMenuClass.strengths.map((text) => <div key={text}>{text}</div>)}
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
+                    <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>代表成长</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {selectedMenuClass.showcase.map((text) => (
+                        <div key={text} style={{ borderRadius: 999, padding: '6px 10px', background: 'rgba(255,255,255,0.06)', fontSize: 12, fontWeight: 800 }}>
+                          {text}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-              <button type="button" onClick={() => uiBus.emit('ui:gotoScene', 'GameScene')} style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%' }}>开始游戏</button>
+              <button
+                type="button"
+                onClick={() => uiBus.emit('ui:gotoScene', 'GameScene', { selectedMainCore: selectedMenuClass?.id || 'warrior' })}
+                style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 100%', height: 54, background: `linear-gradient(180deg, ${selectedMenuClass?.accent || 'rgba(255,255,255,0.12)'}, rgba(255,255,255,0.10))`, border: `1px solid ${selectedMenuClass?.color || 'rgba(255,255,255,0.25)'}` }}
+              >
+                以{selectedMenuClass?.name || '该职业'}进入试炼之地
+              </button>
               <button type="button" onClick={() => uiBus.emit('ui:gotoScene', 'ItemShopScene')} style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%' }}>道具商店</button>
               <button type="button" onClick={() => uiBus.emit('ui:gotoScene', 'EquipmentScene')} style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%' }}>装备系统</button>
               <button

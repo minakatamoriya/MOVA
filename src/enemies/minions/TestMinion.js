@@ -1108,7 +1108,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         x: this.x,
         y: this.y,
         isElite: !!this.isElite,
-        expReward: this.expReward
+        expReward: this.expReward,
+        isStartRoomTutorialTarget: !!this.isStartRoomTutorialTarget,
+        minion: this
       });
     }
 

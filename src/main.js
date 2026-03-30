@@ -283,7 +283,11 @@ uiBus.on('ui:gotoScene', (sceneKey, data) => {
   if (!sceneKey) return;
   try {
     if (sceneKey === 'GameScene') {
+      const selectedMainCore = data?.selectedMainCore || null;
       resetSkillTreeProgress(game.registry);
+      if (selectedMainCore) {
+        game.registry.set('preferredMainCore', selectedMainCore);
+      }
     }
     game.scene.start(sceneKey, data || {});
   } catch (e) {

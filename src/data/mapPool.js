@@ -212,7 +212,7 @@ export const NEUTRAL_MAPS = [
 // ════════════════════════════════════════════
 
 export const START_ROOM = {
-  id: 'start_room',  name: '命运十字',  subtitle: '选择你的命运',
+  id: 'start_room',  name: '试炼之地',  subtitle: '熟悉职业并完成首战',
   line: NEUTRAL, type: 'start',
 };
 
