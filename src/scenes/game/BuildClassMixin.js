@@ -2350,11 +2350,9 @@ export function applyBuildClassMixin(GameScene) {
 
       this.ensureUnifiedRangeRing('_warlockRangeRing', 'warlock');
 
-      // 术士：剧毒新星是“脚下施放”，这里提示的是毒圈影响半径
-      const baseRadius = Math.max(10, Math.round(this.player.warlockPoisonNovaRadius || this.player.warlockPoisonNovaRadiusBase || 96));
-      const spreadStacks = Math.max(0, Math.floor(this.player.warlockPoisonSpreadStacks || 0));
-      const radius = Math.round(baseRadius * (1 + 0.2 * spreadStacks));
-      const r = Phaser.Math.Clamp(radius, 60, 360);
+      // 术士：显示圈与实际索敌/投掷半径保持完全一致
+      const radius = Math.max(10, Math.round(this.player.warlockRange || this.player.warlockRangeBase || this.player.warlockPoisonNovaRadiusBase || 96));
+      const r = Phaser.Math.Clamp(radius, 60, 520);
 
       this._warlockRangeRing.setRadius(r);
       const hp = this.player.getHitboxPosition?.();
@@ -3736,7 +3734,7 @@ export function applyBuildClassMixin(GameScene) {
 
     enableWarlockBuild() {
       this.warlockEnabled = true;
-      this.warlockDebuffEnabled = true;
+      this.warlockDebuffEnabled = false;
       if (this.player) {
         this.player.canFire = true;
         this.player.baseFireRate = 2000;
@@ -3787,20 +3785,37 @@ export function applyBuildClassMixin(GameScene) {
 
     applyWarlockOnHit(boss, forceApply = false) {
       if ((!this.warlockEnabled && !forceApply) || !boss) return;
-      if (!boss.debuffs) {
-        boss.debuffs = { poisonEnd: 0, poisonTick: 0, weakenEnd: 0 };
-      }
-      const now = this.time.now;
-      const base = this.player?.baseFireRate || 2000;
-      const fr = this.player?.fireRate || base;
-      const ratio = Phaser.Math.Clamp(fr / base, 0.35, 2.0);
-      const poisonTickMs = Math.max(120, Math.round(500 * ratio));
-      boss.debuffs.poisonEnd = now + this.warlockPoisonDuration;
-      boss.debuffs.poisonTick = Math.min(boss.debuffs.poisonTick || now, now + poisonTickMs);
-      boss.debuffs.weakenEnd = now + this.warlockPoisonDuration;
-      boss.damageTakenMult = 1 + this.warlockWeakenAmount;
+      if (!boss?.isAlive) return;
 
-      boss.debuffs.poisonStacks = Math.max(1, boss.debuffs.poisonStacks || 1);
+      boss.debuffs = boss.debuffs || {};
+      boss.debuffs.poisonZone = boss.debuffs.poisonZone || { stacks: 0, inZoneUntil: 0, nextGainAt: 0, nextDecayAt: 0, nextTickAt: 0 };
+
+      const now = this.time.now;
+      const capBonus = Math.max(0, this.player?.warlockPoisonToxicityStacks || 0);
+      const cap = 3 + capBonus;
+      const stackIntervalMs = 1000;
+      const pz = boss.debuffs.poisonZone;
+      const lastStackAt = Number(boss.debuffs._warlockPoisonStackAt || 0);
+      const currentStacks = Math.max(0, Math.min(cap, Math.round(pz.stacks || 0)));
+
+      pz.inZoneUntil = Math.max(pz.inZoneUntil || 0, now + 250);
+      pz.nextGainAt = now + stackIntervalMs;
+      pz.nextDecayAt = 0;
+      pz.nextTickAt = Math.min(pz.nextTickAt || now, now);
+      pz.weakenMult = 1 + this.warlockWeakenAmount;
+
+      if (currentStacks <= 0) {
+        pz.stacks = 1;
+        boss.debuffs._warlockPoisonStackAt = now;
+      } else if (now - lastStackAt >= stackIntervalMs) {
+        pz.stacks = Math.min(cap, currentStacks + 1);
+        boss.debuffs._warlockPoisonStackAt = now;
+      } else {
+        pz.stacks = currentStacks;
+      }
+
+      if (pz.stacks < cap) pz.capBurstTriggered = false;
+
     },
 
     updateWarlockDebuff(time, delta) {
@@ -3848,6 +3863,7 @@ export function applyBuildClassMixin(GameScene) {
           const pz = target.debuffs.poisonZone;
           const wasInZone = (pz.inZoneUntil || 0) > now;
           pz.inZoneUntil = now + 250;
+          pz.weakenMult = 1 + this.warlockWeakenAmount;
           if (!wasInZone) {
             pz.stacks = Math.max(1, pz.stacks || 0);
             pz.nextGainAt = now + 1000;
@@ -3858,9 +3874,7 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       if (boss && boss.isAlive) {
-        if (!boss.debuffs) {
-          boss.debuffs = { poisonEnd: 0, poisonTick: 0, weakenEnd: 0 };
-        }
+        boss.debuffs = boss.debuffs || {};
       }
 
       if (boss && boss.isAlive && boss.debuffs) {
@@ -3872,6 +3886,112 @@ export function applyBuildClassMixin(GameScene) {
           boss.damageDealtMult = Math.min(boss.damageDealtMult || 1, 0.85);
         }
       }
+
+      const triggerPoisonContagionBurst = (sourceTarget) => {
+        if (!sourceTarget || !sourceTarget.isAlive || sourceTarget.isInvincible) return;
+
+        const felCore = 0x7df56a;
+        const felBright = 0xc8ff8a;
+        const felDark = 0x2e8f3a;
+        const maladyStacks = Math.max(0, this.player?.warlockPoisonDiseaseStacks || 0);
+        const damageMult = 1 + 0.15 * maladyStacks;
+        const atk = Math.max(1, this.player?.bulletDamage || 1);
+        const netherlordLevel = Math.max(0, Math.min(3, Math.round(this.player?.warlockNetherlord || 0)));
+        const burstDamage = Math.max(1, Math.round(atk * 0.48 * damageMult * ([1, 1.10, 1.22, 1.38][netherlordLevel] || 1)));
+        const burstRadius = 68;
+
+        const burst = this.createManagedPlayerAreaBullet?.(
+          sourceTarget.x,
+          sourceTarget.y,
+          felCore,
+          {
+            radius: burstRadius,
+            damage: burstDamage,
+            alpha: 0.001,
+            maxLifeMs: 90,
+            pierce: true,
+            maxHits: 99,
+            hitCooldownMs: 9999,
+            tags: ['player_warlock_contagion_burst']
+          }
+        );
+
+        if (burst) {
+          burst.poison = true;
+          burst.hitEffectType = 'poison_burst';
+          this.player?.bullets?.push?.(burst);
+        }
+
+        const ring = this.add.circle(sourceTarget.x, sourceTarget.y, 18, felCore, 0.18);
+        ring.setStrokeStyle(3, felBright, 0.95);
+        ring.setBlendMode(Phaser.BlendModes.ADD);
+        ring.setDepth(18);
+
+        const haze = this.add.circle(sourceTarget.x, sourceTarget.y, 14, felDark, 0.24);
+        haze.setBlendMode(Phaser.BlendModes.SCREEN);
+        haze.setDepth(17);
+
+        for (let i = 0; i < 14; i++) {
+          const angle = (Math.PI * 2 * i) / 14 + Phaser.Math.FloatBetween(-0.08, 0.08);
+          const shard = this.add.rectangle(sourceTarget.x, sourceTarget.y, Phaser.Math.Between(10, 18), Phaser.Math.Between(3, 5), Phaser.Math.RND.pick([felCore, felBright, 0xffffff]), 0.92);
+          shard.setAngle(Phaser.Math.RadToDeg(angle));
+          shard.setBlendMode(Phaser.BlendModes.ADD);
+          shard.setDepth(19);
+          this.tweens.add({
+            targets: shard,
+            alpha: 0,
+            scaleX: 0.2,
+            scaleY: 0.2,
+            x: sourceTarget.x + Math.cos(angle) * Phaser.Math.Between(28, 68),
+            y: sourceTarget.y + Math.sin(angle) * Phaser.Math.Between(28, 68),
+            angle: shard.angle + Phaser.Math.Between(-40, 40),
+            duration: Phaser.Math.Between(180, 280),
+            ease: 'Cubic.Out',
+            onComplete: () => shard.destroy()
+          });
+        }
+
+        this.tweens.add({
+          targets: ring,
+          alpha: 0,
+          scale: 3.2,
+          duration: 240,
+          ease: 'Cubic.Out',
+          onComplete: () => ring.destroy()
+        });
+
+        this.tweens.add({
+          targets: haze,
+          alpha: 0,
+          scale: 2.1,
+          duration: 320,
+          ease: 'Quad.Out',
+          onComplete: () => haze.destroy()
+        });
+
+        this.collisionManager?.createHitEffect?.(sourceTarget.x, sourceTarget.y, felCore);
+
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i];
+          if (!target || target === sourceTarget || !target.isAlive || target.isInvincible) continue;
+
+          const dx = target.x - sourceTarget.x;
+          const dy = target.y - sourceTarget.y;
+          const rr = burstRadius + (target.bossSize ?? target.radius ?? 28);
+          if ((dx * dx + dy * dy) > rr * rr) continue;
+
+          target.debuffs = target.debuffs || {};
+
+          target.debuffs.poisonZone = target.debuffs.poisonZone || { stacks: 0, inZoneUntil: 0, nextGainAt: 0, nextDecayAt: 0, nextTickAt: 0 };
+          const pz = target.debuffs.poisonZone;
+          pz.stacks = Math.max(1, pz.stacks || 0);
+          pz.inZoneUntil = Math.max(pz.inZoneUntil || 0, now + 250);
+          pz.weakenMult = 1 + this.warlockWeakenAmount;
+          pz.nextGainAt = pz.nextGainAt || (now + 1000);
+          pz.nextDecayAt = 0;
+          pz.nextTickAt = Math.min(pz.nextTickAt || now, now + 200);
+        }
+      };
 
       const tickPoisonZone = (target) => {
         if (!target || !target.isAlive) return;
@@ -3888,6 +4008,8 @@ export function applyBuildClassMixin(GameScene) {
         const tickIntervalMs = 1000;
 
         pz.stacks = Math.max(0, Math.min(cap, pz.stacks || 0));
+        pz.weakenMult = pz.stacks > 0 ? (1 + this.warlockWeakenAmount) : 1;
+        if (pz.stacks < cap) pz.capBurstTriggered = false;
 
         if (inZone) {
           if (!pz.nextGainAt) pz.nextGainAt = now + gainIntervalMs;
@@ -3909,6 +4031,11 @@ export function applyBuildClassMixin(GameScene) {
 
         if (target?.setDebuffStacks) {
           target.setDebuffStacks('poisonZone', pz.stacks, { label: '毒', color: '#66ff99' });
+        }
+
+        if (pz.stacks >= cap && !pz.capBurstTriggered) {
+          pz.capBurstTriggered = true;
+          triggerPoisonContagionBurst(target);
         }
 
         if (pz.stacks > 0) {
@@ -3937,6 +4064,8 @@ export function applyBuildClassMixin(GameScene) {
             pz.nextTickAt = 0;
             pz.nextGainAt = 0;
             pz.nextDecayAt = 0;
+            pz.capBurstTriggered = false;
+            pz.weakenMult = 1;
             if (target?.setDebuffStacks) {
               target.setDebuffStacks('poisonZone', 0, { label: '毒', color: '#66ff99' });
             }
@@ -3948,29 +4077,8 @@ export function applyBuildClassMixin(GameScene) {
         tickPoisonZone(targets[i]);
       }
 
-      if (boss && boss.isAlive && !boss.isInvincible && time < boss.debuffs.poisonEnd && time >= boss.debuffs.poisonTick) {
-        const base = this.player?.baseFireRate || 2000;
-        const fr = this.player?.fireRate || base;
-        const ratio = Phaser.Math.Clamp(fr / base, 0.35, 2.0);
-        boss.debuffs.poisonTick = time + Math.max(120, Math.round(500 * ratio));
-        const stacks = Math.max(1, boss.debuffs.poisonStacks || 1);
-        const poisonDamage = Math.round(this.warlockPoisonDps * 0.5 * stacks);
-
-        // Boss 中毒 DOT 统一走同一结算链，保证与毒圈体系一致
-        const damageResult = calculateResolvedDamage({ attacker: this.player, target: boss, baseDamage: poisonDamage, now: time });
-
-        boss.takeDamage(damageResult.amount);
-        this.player?.onDealDamage?.(damageResult.amount);
-        this.applyWarriorOffclassHitEffects?.(boss, time);
-        this.showDamageNumber(boss.x, boss.y - 30, damageResult.amount, { color: '#66ff99', isCrit: damageResult.isCrit });
-      }
-
-      if (boss && boss.debuffs.poisonEnd && time > boss.debuffs.poisonEnd) {
-        boss.debuffs.poisonStacks = 1;
-      }
-
-      if (boss && boss.debuffs.weakenEnd && time > boss.debuffs.weakenEnd) {
-        boss.damageTakenMult = 1;
+      if (boss && boss.debuffs?.poisonZone?.stacks <= 0) {
+        boss.debuffs._warlockPoisonStackAt = 0;
       }
     },
 

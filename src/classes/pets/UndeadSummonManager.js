@@ -203,6 +203,37 @@ export default class UndeadSummonManager {
     return best;
   }
 
+  getNearestTrackedEnemy(originX, originY, acquireRange) {
+    const player = this.player;
+    if (!player) return null;
+
+    const acquire2 = acquireRange * acquireRange;
+    const enemies = this.getAllEnemies();
+    let best = null;
+    let bestD2 = Infinity;
+
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      if (!enemy || !enemy.isAlive) continue;
+
+      const pdx = enemy.x - player.x;
+      const pdy = enemy.y - player.y;
+      const playerD2 = pdx * pdx + pdy * pdy;
+
+      const dx = enemy.x - originX;
+      const dy = enemy.y - originY;
+      const summonD2 = dx * dx + dy * dy;
+
+      if (playerD2 > acquire2 && summonD2 > acquire2) continue;
+      if (summonD2 < bestD2) {
+        best = enemy;
+        bestD2 = summonD2;
+      }
+    }
+
+    return best;
+  }
+
   getNearestVisibleEnemy(originX, originY) {
     if (!this.player) return null;
 
@@ -544,7 +575,7 @@ export default class UndeadSummonManager {
     const acquireRange = this.getAcquireRange();
 
     for (let i = 0; i < guardList.length; i++) {
-      this.updateGuard(guardList[i], i, guardList.length, time, delta);
+      this.updateGuard(guardList[i], i, guardList.length, time, delta, acquireRange);
     }
 
     for (let i = 0; i < mageList.length; i++) {
@@ -553,7 +584,7 @@ export default class UndeadSummonManager {
 
     this.infernals = (this.infernals || []).filter((unit) => unit && unit.active && (unit.currentHp || 0) > 0);
     for (let i = 0; i < this.infernals.length; i++) {
-      this.updateInfernal(this.infernals[i], time, delta);
+      this.updateInfernal(this.infernals[i], time, delta, acquireRange);
     }
   }
 
@@ -586,17 +617,17 @@ export default class UndeadSummonManager {
     }
   }
 
-  updateGuard(unit, index, total, time, delta) {
+  updateGuard(unit, index, total, time, delta, acquireRange) {
     if (!unit || !unit.active) return;
 
-    const target = this.getNearestVisibleEnemy(unit.x, unit.y);
+    const target = this.getNearestVisibleEnemy(unit.x, unit.y) || this.getNearestTrackedEnemy(unit.x, unit.y, acquireRange || this.getAcquireRange());
     const anchorAngle = unit.anchorAngle + time * 0.0012;
     const anchorX = this.player.x + Math.cos(anchorAngle) * (unit.anchorRadius || 42);
     const anchorY = this.player.y + 20 + Math.sin(anchorAngle) * 18;
     const needsRecall = !isPointInPlayerVision(this.scene, this.player, unit.x, unit.y, MELEE_RETURN_VISION_PADDING);
 
-    let desiredX = unit.x;
-    let desiredY = unit.y;
+    let desiredX = anchorX;
+    let desiredY = anchorY;
     if (needsRecall) {
       desiredX = anchorX;
       desiredY = anchorY;
@@ -706,7 +737,7 @@ export default class UndeadSummonManager {
     }
   }
 
-  updateInfernal(unit, time, delta) {
+  updateInfernal(unit, time, delta, acquireRange) {
     if (!unit || !unit.active) return;
 
     if ((unit.expireAt || 0) > 0 && (unit.expireAt || 0) <= time) {
@@ -714,14 +745,14 @@ export default class UndeadSummonManager {
       return;
     }
 
-    const target = this.getNearestVisibleEnemy(unit.x, unit.y);
+    const target = this.getNearestVisibleEnemy(unit.x, unit.y) || this.getNearestTrackedEnemy(unit.x, unit.y, acquireRange || this.getAcquireRange());
     const anchorAngle = (unit.anchorAngle || 0) + time * 0.0009;
     const anchorX = this.player.x + Math.cos(anchorAngle) * (unit.anchorRadius || 56);
     const anchorY = this.player.y + 24 + Math.sin(anchorAngle) * 22;
     const needsRecall = !isPointInPlayerVision(this.scene, this.player, unit.x, unit.y, MELEE_RETURN_VISION_PADDING);
 
-    let desiredX = unit.x;
-    let desiredY = unit.y;
+    let desiredX = anchorX;
+    let desiredY = anchorY;
     if (needsRecall) {
       desiredX = anchorX;
       desiredY = anchorY;

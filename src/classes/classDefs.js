@@ -83,7 +83,7 @@ export const CLASSES = [
     icon: '术主',
     coreUpgradeId: CORE_UPGRADE_IDS.warlock,
     coreKey: CORE_KEYS.warlock,
-    coreDesc: '基础攻击变为剧毒新星：每 2 秒在脚下留下毒圈并逐渐扩大（走位引导）'
+    coreDesc: '基础攻击变为腐疫沼弹：朝最近目标投出腐疫弹，落地生成毒沼并持续叠毒'
   }
 ];
 

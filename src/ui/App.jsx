@@ -183,10 +183,10 @@ const MENU_CLASS_OPTIONS = [
     glyph: '☠',
     color: '#a855f7',
     accent: 'rgba(168,85,247,0.24)',
-    tags: ['持续伤害', '地面圈', '召唤'],
-    summary: '走位本身就是输出的一部分，适合喜欢布场和持续磨血的打法。',
-    baseSkill: '剧毒新星：在脚下留下持续扩张的毒圈，边走边布置伤害区。',
-    strengths: ['清杂覆盖大', '持续压血稳定', '后续可顺接召唤流'],
+    tags: ['持续伤害', '远程布场', '召唤'],
+    summary: '以缓慢投掷和区域腐蚀压制战场，适合喜欢远程布场与持续结算的打法。',
+    baseSkill: '腐疫沼弹：朝最近目标投出腐疫弹，落地化作毒沼；敌人停留其中会叠毒，满层时触发传染爆裂。',
+    strengths: ['远程起手安全', '持续压血稳定', '后续可顺接召唤流'],
     showcase: ['毒性扩张', '腐蚀传播', '虚空领主'],
     stats: [
       { label: '生存', value: 3 },
@@ -782,7 +782,7 @@ export default function App() {
       [p.archerArrowRange, p.archerArrowRangeBase],
       [p.mageMissileRange, p.mageMissileRangeBase],
       [p.moonfireRange, p.moonfireRangeBase],
-      [p.warlockRange, p.warlockPoisonNovaRadiusBase],
+      [p.warlockRange, p.warlockRangeBase || p.warlockPoisonNovaRadiusBase],
       [p.druidStarfallRange, p.druidStarfallRangeBase]
     ];
 
@@ -1818,10 +1818,7 @@ export default function App() {
               </>
             ) : (
               <>
-                <div style={{ opacity: 0.85, textAlign: 'center', marginBottom: 6 }}>主职业六选一</div>
-                <div style={{ opacity: 0.62, textAlign: 'center', fontSize: 13, lineHeight: 1.55, marginBottom: 14 }}>
-                  轻触卡片切换职业详情。确认后会直接以该职业进入试炼之地。
-                </div>
+                <div style={{ opacity: 0.85, textAlign: 'center', marginBottom: 6 }}>主职业选择</div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
                   {MENU_CLASS_OPTIONS.map((item) => {

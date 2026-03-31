@@ -364,10 +364,11 @@ export default class Player extends Phaser.GameObjects.Container {
     this.mageMissileRangeBase = 280;
     this.mageMissileRange = this.mageMissileRangeBase;
 
-    // 术士：剧毒新星半径（范围圈提示脚下 AoE）
+    // 术士：投掷索敌半径与毒沼基础半径
+    this.warlockRangeBase = 248;
     this.warlockPoisonNovaRadiusBase = 96;
     this.warlockPoisonNovaRadius = this.warlockPoisonNovaRadiusBase;
-    this.warlockRange = this.warlockPoisonNovaRadiusBase;
+    this.warlockRange = this.warlockRangeBase;
 
     // 战士：近战基础索敌/挥砍范围
     this.warriorRangeBase = 220;
@@ -680,6 +681,31 @@ export default class Player extends Phaser.GameObjects.Container {
     });
   }
 
+  restartAutoFireTimer() {
+    if (this.fireTimer) {
+      this.fireTimer.remove();
+    }
+    this.startAutoFire();
+  }
+
+  hasImmediateAutoFireTarget() {
+    if (!this.isAlive || !this.canFire) return false;
+
+    if (this.weaponType === 'archer_arrow') {
+      return !!this.getArcherTargetInRange();
+    }
+
+    if (this.weaponType === 'mage_frostbolt') {
+      return !!this.getMageTargetInRange();
+    }
+
+    if (this.weaponType === 'warlock_poisonnova') {
+      return !!this.getWarlockTargetInRange();
+    }
+
+    return false;
+  }
+
   /**
    * 发射子弹
    */
@@ -720,8 +746,8 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     if (this.weaponType === 'warlock_poisonnova') {
-      this.playAttackAnimation();
-      fireWarlockPoisonNova(this);
+      const didFire = fireWarlockPoisonNova(this);
+      if (didFire) this.playAttackAnimation();
       return;
     }
 
@@ -812,6 +838,46 @@ export default class Player extends Phaser.GameObjects.Container {
       const d = dx * dx + dy * dy;
       if (d > acquireRange * acquireRange) continue;
       if (enemy.isBoss) return enemy;
+      if (d < bestD) {
+        best = enemy;
+        bestD = d;
+      }
+    }
+
+    return best;
+  }
+
+  getWarlockTargetInRange() {
+    const scene = this.scene;
+    const boss = scene?.bossManager?.getCurrentBoss?.();
+    const minions = scene?.bossManager?.getMinions?.() || scene?.bossManager?.minions || [];
+    const enemies = [];
+
+    if (boss && boss.isAlive) enemies.push(boss);
+    if (Array.isArray(minions) && minions.length > 0) {
+      minions.forEach((unit) => {
+        if (unit && unit.isAlive) enemies.push(unit);
+      });
+    }
+    if (enemies.length === 0) return null;
+
+    const hp = (typeof this.getHitboxPosition === 'function') ? this.getHitboxPosition() : null;
+    const rangeX = (hp && Number.isFinite(hp.x)) ? hp.x : this.x;
+    const rangeY = (hp && Number.isFinite(hp.y)) ? hp.y : this.y;
+    const acquireRange = Phaser.Math.Clamp(
+      Math.round(this.warlockRange || this.warlockRangeBase || this.warlockPoisonNovaRadiusBase || 96),
+      80,
+      520
+    );
+
+    let best = null;
+    let bestD = Infinity;
+    for (let i = 0; i < enemies.length; i++) {
+      const enemy = enemies[i];
+      const dx = enemy.x - rangeX;
+      const dy = enemy.y - rangeY;
+      const d = dx * dx + dy * dy;
+      if (d > acquireRange * acquireRange) continue;
       if (d < bestD) {
         best = enemy;
         bestD = d;
@@ -1169,6 +1235,13 @@ export default class Player extends Phaser.GameObjects.Container {
     }
 
     this.updateExternalSpeedModifiers(gameplayNow);
+
+    const hasImmediateTarget = this.hasImmediateAutoFireTarget();
+    if (!combatPaused && hasImmediateTarget && !this._hadImmediateAutoFireTarget) {
+      this.fire();
+      this.restartAutoFireTimer();
+    }
+    this._hadImmediateAutoFireTarget = hasImmediateTarget;
 
     this.updateEmergencyStatusEffects(time, delta, gameplayNow);
     
@@ -2216,7 +2289,7 @@ export default class Player extends Phaser.GameObjects.Container {
       this.weaponType = 'starfall';
       this.baseFireRate = this.baseFireRateMoonfire;
     } else if (coreKey === 'warlock') {
-      // 术士主普攻：剧毒新星（每 2 秒在脚下留下毒圈并扩张，无需瞄准）
+      // 术士主普攻：腐疫沼弹（慢速投掷，落地生成毒沼）
       this.weaponType = 'warlock_poisonnova';
       this.baseFireRate = 2000;
     }

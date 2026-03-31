@@ -428,18 +428,16 @@ export default class CollisionManager {
 
         // ====== 剧毒新星：毒圈接触逻辑（不因命中而消失；按持续时间销毁） ======
         // 注意：毒圈需要“持续接触”判定，因此不能被 hitCooldownMs 节流。
-        // 这里仅负责：标记“仍在毒圈中”、处理进入判定、刷新浓烟；具体叠层/扣血在 GameScene.updateWarlockDebuff 里统一驱动。
+        // Boss 与小怪/精英共用同一套 poisonZone 叠层体系。
         if (bullet.isPoisonZone) {
-          boss.debuffs = boss.debuffs || { poisonEnd: 0, poisonTick: 0, weakenEnd: 0 };
+          boss.debuffs = boss.debuffs || {};
           boss.debuffs.poisonZone = boss.debuffs.poisonZone || { stacks: 0, inZoneUntil: 0, nextGainAt: 0, nextDecayAt: 0, nextTickAt: 0 };
           const pz = boss.debuffs.poisonZone;
 
           const wasInZone = (pz.inZoneUntil || 0) > now;
           pz.inZoneUntil = now + 250;
 
-          // 进入：不立刻给层数；仅启动“满 1 秒 +1 层”的计时（由 GameScene.updateWarlockDebuff 驱动）
           if (!wasInZone) {
-            // 进入毒圈：立刻记 1 层，并立即触发一次跳毒
             pz.stacks = Math.max(1, pz.stacks || 0);
             pz.nextGainAt = now + 1000;
             pz.nextDecayAt = 0;

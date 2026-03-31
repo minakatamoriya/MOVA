@@ -1020,7 +1020,7 @@ export function applyLevelProgressionMixin(GameScene) {
             case 'paladin_core':
               return '护盾脉冲';
             case 'warlock_core':
-              return '剧毒新星';
+              return '腐疫沼弹';
             case 'druid_core':
             case 'drone_core':
               return '星落';

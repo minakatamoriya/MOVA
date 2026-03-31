@@ -74,13 +74,13 @@ export const TREE_DEFS = [
     id: 'warlock',
     name: '术士-主',
     color: resolveClassColor('warlock'),
-    core: { id: 'warlock_core', name: '初始：术士', maxLevel: 1, desc: '解锁基础技能：剧毒新星（每 2 秒在脚下留下毒圈并逐渐扩大）。' },
+    core: { id: 'warlock_core', name: '初始：术士', maxLevel: 1, desc: '解锁基础技能：腐疫沼弹（朝最近目标投出腐疫弹，落地生成持续 4 秒的毒沼）。' },
     nodes: [
       { id: 'warlock_toxicity', name: '毒性浓度', maxLevel: 3, desc: '剧毒 debuff 最大层数 +1（可叠加）。' },
-      { id: 'warlock_corrode', name: '腐蚀', maxLevel: 1, desc: '毒圈持续时间额外 +3 秒。' },
-      { id: 'warlock_spread', name: '扩散', maxLevel: 1, desc: '毒圈范围 +60%。' },
+      { id: 'warlock_corrode', name: '腐蚀', maxLevel: 1, desc: '毒沼持续时间额外 +3 秒。' },
+      { id: 'warlock_spread', name: '扩散', maxLevel: 1, desc: '毒沼范围 +60%。' },
       { id: 'warlock_infernal', name: '灵魂虹吸', maxLevel: 2, desc: '生命首次跌破30%时自动触发：1级持续5秒，50%伤害吸血，并可转化20%最大生命护盾；2级持续10秒，100%吸血，并可转化30%最大生命护盾；冷却30秒。' },
-      { id: 'warlock_malady', name: '疫病恶化', maxLevel: 1, desc: '显著提高毒圈与中毒目标的持续伤害强度。' }
+      { id: 'warlock_malady', name: '疫病恶化', maxLevel: 1, desc: '显著提高毒沼与中毒目标的持续伤害强度。' }
     ]
   },
 

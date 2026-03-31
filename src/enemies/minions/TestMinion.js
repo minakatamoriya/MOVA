@@ -1079,19 +1079,50 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     return 1;
   }
 
+  clearDeathEffects() {
+    this._burstActive = false;
+    this.stunUntil = 0;
+    this.freezeUntil = 0;
+    this.slowUntil = 0;
+    this.slowMoveMult = 1;
+
+    if (this._freezeClearTimer) {
+      try { this._freezeClearTimer.remove(); } catch (_) { /* ignore */ }
+      this._freezeClearTimer = null;
+    }
+
+    this.clearOwnedTimers();
+    this.clearEliteWalls();
+    this.clearChargeTelegraph();
+    this.clearActiveArcaneLaser();
+
+    if (Array.isArray(this._ownedObjects)) {
+      this._ownedObjects.forEach((obj) => {
+        try { obj?.destroy?.(); } catch (_) { /* ignore */ }
+      });
+      this._ownedObjects = [];
+    }
+
+    this.setFrozenVisualVisible(false);
+    if (this.sprite?.clearTint) this.sprite.clearTint();
+    if (this.body?.setStrokeStyle) this.body.setStrokeStyle(2, 0xffffff, 0.85);
+    if (this._eliteAura) this._eliteAura.setVisible(false);
+    if (this._eliteBlueAura) this._eliteBlueAura.setVisible(false);
+    if (this._eliteRedAura) this._eliteRedAura.setVisible(false);
+    if (this._eliteAffixText) this._eliteAffixText.setVisible(false);
+    if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
+    if (this.hpBarBg) this.hpBarBg.setVisible(false);
+    if (this.hpBarFill) this.hpBarFill.setVisible(false);
+  }
+
   die(reason = 'unknown') {
     if (!this.isAlive) return;
     this.isAlive = false;
     this.isInvincible = true;
-    this.setFrozenVisualVisible(false);
-    if (this._freezeClearTimer) this._freezeClearTimer.remove();
+    this.clearDeathEffects();
 
     try { this.scene?.tweens?.killTweensOf?.(this); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this.body); } catch (_) { /* ignore */ }
-
-    if (this.hpBarBg) this.hpBarBg.setVisible(false);
-    if (this.hpBarFill) this.hpBarFill.setVisible(false);
-    if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
 
     if (reason === 'killed') {
       const now = (this.scene?.time?.now ?? 0);
@@ -1141,23 +1172,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     try { this.scene?.tweens?.killTweensOf?.(this._freezeAura); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._freezeCrystal); } catch (_) { /* ignore */ }
 
-    this.clearOwnedTimers();
-    this.clearEliteWalls();
-    this.clearChargeTelegraph();
-    this.clearActiveArcaneLaser();
-
-    if (Array.isArray(this._ownedObjects)) {
-      this._ownedObjects.forEach((obj) => {
-        try { obj?.destroy?.(); } catch (_) { /* ignore */ }
-      });
-      this._ownedObjects = [];
-    }
-
-    if (this._freezeClearTimer) this._freezeClearTimer.remove();
-
-    if (this.hpBarBg) this.hpBarBg.setVisible(false);
-    if (this.hpBarFill) this.hpBarFill.setVisible(false);
-    if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
+    this.clearDeathEffects();
 
     try { this.removeAll(true); } catch (_) { /* ignore */ }
 

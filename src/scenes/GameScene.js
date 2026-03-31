@@ -1468,7 +1468,16 @@ class GameScene extends Phaser.Scene {
     }
 
     this.cooldownSkills = Object.create(null);
-    this.cooldownHud = null;
+    this.cooldownHud = new CooldownHud(this, {
+      depth: 2450,
+      slotSize: 74,
+      gap: 14,
+      leftPadding: 18,
+      rightPadding: 18,
+      bottomPadding: 8,
+      labelGap: 8,
+      rowGap: 22
+    });
   }
 
   // 场景级统一发弹入口：业务层不再直接依赖 BulletManager，

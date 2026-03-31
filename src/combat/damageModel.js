@@ -120,7 +120,7 @@ export function buildPlayerDerivedStats(player, options = {}) {
     druidStarfallRange: Math.max(80, Math.round(toNumber(player?.druidStarfallRangeBase, 310) * rangeMult)),
     mageMissileRange: Math.max(80, Math.round(toNumber(player?.mageMissileRangeBase, player?.mageMissileRange || 280) * rangeMult)),
     warlockPoisonNovaRadius: Math.max(24, Math.round(toNumber(player?.warlockPoisonNovaRadiusBase, 96) * rangeMult)),
-    warlockRange: Math.max(24, Math.round(toNumber(player?.warlockPoisonNovaRadiusBase, 96) * rangeMult))
+    warlockRange: Math.max(24, Math.round(toNumber(player?.warlockRangeBase, player?.warlockPoisonNovaRadiusBase || 96) * rangeMult))
   };
 }
 
@@ -187,6 +187,7 @@ function getTargetDamageTakenMultiplier(target, now) {
   const poisonZoneStacks = Math.max(0, Math.round(target?.debuffs?.poisonZone?.stacks || 0));
   if (poisonZoneStacks > 0) {
     multiplier *= (1 + poisonZoneStacks * 0.03);
+    multiplier *= toMultiplier(target?.debuffs?.poisonZone?.weakenMult, 1);
   }
 
   const divineJudgementLevel = Math.max(0, Math.min(3, Math.round(target?.debuffs?.divineJudgementLevel || 0)));
