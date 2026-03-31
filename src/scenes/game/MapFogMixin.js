@@ -180,10 +180,53 @@ export function applyMapFogMixin(GameScene) {
     getStartRoomSpawnPoint() {
       const cfg = this.getStartRoomConfig();
       return {
-        // 起始房间：出生点放在正中心，保证 UI/武器选择环不会出屏
+        // 起始房间：正式站位在偏下方，形成“从下往上推进”的阅读顺序
         x: Math.floor(cfg.worldW / 2),
-        y: Math.floor(cfg.worldH / 2)
+        y: Math.floor(cfg.worldH * 0.78)
       };
+    },
+
+    getStartRoomEntryPoint() {
+      const cfg = this.getStartRoomConfig();
+      return {
+        // 入场点更贴近底部，看起来像从下方踏入试炼之地
+        x: Math.floor(cfg.worldW / 2),
+        y: Math.floor(cfg.worldH * 0.93)
+      };
+    },
+
+    playStartRoomEntryIntro() {
+      if (!this.player) return;
+
+      const player = this.player;
+      const destination = this.getStartRoomSpawnPoint();
+
+      if (this._startRoomEntryTween) {
+        try { this._startRoomEntryTween.stop(); } catch (_) { /* ignore */ }
+        this._startRoomEntryTween = null;
+      }
+
+      player.clearAnalogMove?.();
+      player.canMove = false;
+      player.canFire = false;
+      player.isInvincible = true;
+      player.freezeMovementAnimation?.();
+
+      this._startRoomEntryTween = this.tweens.add({
+        targets: player,
+        x: destination.x,
+        y: destination.y,
+        duration: 520,
+        ease: 'Sine.Out',
+        onComplete: () => {
+          this._startRoomEntryTween = null;
+          if (!player || !player.active) return;
+          player.canMove = true;
+          player.canFire = true;
+          player.isInvincible = false;
+          player.freezeMovementAnimation?.();
+        }
+      });
     },
 
     cleanupStartRoomObjects() {
@@ -257,7 +300,7 @@ export function applyMapFogMixin(GameScene) {
       const cam = this.cameras.main;
       cam.setBounds(0, 0, cfg.worldW, cfg.worldH);
 
-      const spawn = this.getStartRoomSpawnPoint();
+      const spawn = this.getStartRoomEntryPoint();
       this.player.setPosition(spawn.x, spawn.y);
       cam.startFollow(this.player, true, 0.18, 0.18);
       cam.setFollowOffset(0, 0);
@@ -290,8 +333,8 @@ export function applyMapFogMixin(GameScene) {
       }
 
       this.spawnStartRoomTutorialTarget();
-
       this.showSceneEntryPresentation?.(this.currentMapInfo, { durationMs: 2000 });
+      this.playStartRoomEntryIntro();
 
       console.log('[StartRoom] entered. weaponSelected=', this.weaponSelected);
     },
@@ -303,17 +346,21 @@ export function applyMapFogMixin(GameScene) {
       const neededExp = Math.max(1, Math.ceil((this.playerData?.maxExp || 120) - (this.playerData?.exp || 0)));
       const target = new TestMinion(this, {
         x: Math.floor(cfg.worldW * 0.5),
-        y: Math.floor(cfg.worldH * 0.40),
+        y: Math.floor(cfg.worldH * 0.14),
         name: '试炼傀儡',
         hp: 20,
         expReward: neededExp,
         size: 24,
         color: 0x9bd7ff,
-        type: 'static',
-        moveSpeed: 0,
-        aggroRadius: 0,
-        shootRange: 0,
-        shootCdMs: 999999,
+        type: 'shooter',
+        moveSpeed: 44,
+        aggroRadius: Math.floor(cfg.worldH),
+        shootRange: 180,
+        shootCdMs: 1650,
+        shootBurstCount: 1,
+        shootBulletCount: 1,
+        shootBulletSpeed: 150,
+        shootBulletDamage: 4,
         contactDamage: 0,
         spawnProtectedUntilVisible: false
       });
@@ -339,8 +386,8 @@ export function applyMapFogMixin(GameScene) {
 
       const cfg = this.getStartRoomConfig();
       const x = Math.floor(cfg.worldW / 2);
-      // 不贴最顶端：留出顶部空间
-      const y = Math.floor(cfg.worldH * 0.20);
+      // 试炼结束后，裂隙出现在最上方区域
+      const y = Math.floor(cfg.worldH * 0.12);
 
       this.startRoomDoorZone = this.add.zone(x, y, cfg.cellSize * 2.0, cfg.cellSize * 1.0);
       this.startRoomDoorActive = true;
