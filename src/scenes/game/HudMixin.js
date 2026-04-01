@@ -9,11 +9,30 @@ export function applyHudMixin(GameScene) {
     createInfoPanel() {
       const panelX = 10;
       const panelY = 10;
+      const hideLegacyHud = true;
+
+      const createHiddenText = (x, y, text, style = {}) => {
+        const node = this.add.text(x, y, text, style);
+        node.setScrollFactor?.(0);
+        node.setVisible?.(!hideLegacyHud);
+        node.setAlpha?.(hideLegacyHud ? 0 : 1);
+        return node;
+      };
 
       this.infoTexts = {
-        coins: this.add.text(panelX, panelY, '金币: 0', {
+        coins: createHiddenText(panelX, panelY, '金币: 0', {
           fontSize: '16px',
           color: '#ffd700',
+          fontStyle: 'bold'
+        }),
+        boss: createHiddenText(panelX, panelY + 22, '', {
+          fontSize: '16px',
+          color: '#ffffff',
+          fontStyle: 'bold'
+        }),
+        bossHp: createHiddenText(panelX, panelY + 42, '', {
+          fontSize: '14px',
+          color: '#ffd6a5',
           fontStyle: 'bold'
         })
       };
@@ -150,6 +169,9 @@ export function applyHudMixin(GameScene) {
           ? (this.playerData.exp / this.playerData.maxExp)
           : 0;
         this.updateExpProgressBar(expPercent);
+        if (this.expBarText?.setText) {
+          this.expBarText.setText(`Lv.${Math.max(1, Number(this.playerData.level || this.currentLevel || 1))}`);
+        }
       }
 
       this.updateSessionCoinHud();
@@ -179,10 +201,9 @@ export function applyHudMixin(GameScene) {
     },
 
     updateSessionCoinHud() {
-      const iconBg = this.sessionCoinIconBg;
-      const iconText = this.sessionCoinIconText;
+      const labelText = this.sessionCoinLabelText;
       const valueText = this.sessionCoinValueText;
-      if (!iconBg || !iconText || !valueText) return;
+      if (!valueText) return;
 
       const target = Math.max(0, Math.round(Number(this.sessionCoins || 0)));
       const displayed = Math.max(0, Math.round(Number(this._displayedSessionCoins ?? target)));
@@ -223,16 +244,15 @@ export function applyHudMixin(GameScene) {
 
     showSessionCoinGain(amount) {
       const resolvedAmount = Math.max(0, Math.round(Number(amount || 0)));
-      if (resolvedAmount <= 0 || !this.sessionCoinIconBg || !this.sessionCoinValueText) return;
+      if (resolvedAmount <= 0 || !this.sessionCoinValueText) return;
 
-      const iconBg = this.sessionCoinIconBg;
-      const iconText = this.sessionCoinIconText;
+      const labelText = this.sessionCoinLabelText;
       const valueText = this.sessionCoinValueText;
       const startX = valueText.x + Math.max(36, valueText.width * 0.5 + 12);
       const startY = valueText.y - 2;
 
       this.tweens.add({
-        targets: [iconBg, iconText, valueText],
+        targets: labelText ? [labelText, valueText] : [valueText],
         scaleX: 1.12,
         scaleY: 1.12,
         duration: 90,
@@ -487,23 +507,20 @@ export function applyHudMixin(GameScene) {
     createTopLeftHud() {
       const x = 14;
       const y = 10;
-      const iconCenterX = x + 10;
-      const iconFontSize = '20px';
+      this.hpLabelText = this.add.text(x, 20, '生命', {
+        fontSize: '15px',
+        color: '#8ff5b5',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(0, 0.5);
+      this.hpLabelText.setScrollFactor(0);
+      this.hpLabelText.setDepth(920);
 
-      const heart = this.add.text(iconCenterX, 0, '❤️', {
-        fontSize: iconFontSize,
-        color: '#ffffff'
-      }).setOrigin(0.5);
-      heart.setScrollFactor(0);
-      heart.setDepth(920);
-      this.hpHeartText = heart;
-
-      const barX = x + 24;
+      const barX = x + 42;
       const barY = y + 10;
       const barWidth = Math.min(360, Math.max(220, Math.floor(this.cameras.main.width * 0.28)));
       const barHeight = 12;
-
-      heart.setPosition(iconCenterX, barY);
 
       this.hpBarWidth = barWidth - 4;
       this.hpBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x0b0b18, 0.92).setOrigin(0, 0.5);
@@ -524,14 +541,15 @@ export function applyHudMixin(GameScene) {
       this.hpBarText.setDepth(922);
 
       const expBarX = Math.max(barX + barWidth + 44, Math.floor(this.cameras.main.width * 0.5));
-      const expIconCenterX = expBarX - 20;
-      const expIcon = this.add.text(expIconCenterX, barY, '⭐', {
-        fontSize: iconFontSize,
-        color: '#ffffff'
-      }).setOrigin(0.5);
-      expIcon.setScrollFactor(0);
-      expIcon.setDepth(920);
-      this.expIconText = expIcon;
+      this.expLabelText = this.add.text(expBarX - 10, barY, '等级', {
+        fontSize: '14px',
+        color: '#9be7ff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
+      }).setOrigin(1, 0.5);
+      this.expLabelText.setScrollFactor(0);
+      this.expLabelText.setDepth(922);
 
       const expBarY = barY;
       const expBarWidth = barWidth;
@@ -549,27 +567,25 @@ export function applyHudMixin(GameScene) {
 
       this.expBarText = this.add.text(expBarX + expBarWidth + 10, expBarY, '', {
         fontSize: '14px',
-        color: '#ffffff'
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 3
       }).setOrigin(0, 0.5);
       this.expBarText.setScrollFactor(0);
       this.expBarText.setDepth(922);
-      this.expBarText.setVisible(false);
+      this.expBarText.setVisible(true);
 
       const coinY = barY + 30;
-      this.sessionCoinIconBg = this.add.circle(iconCenterX, coinY, 10, 0xf59e0b, 0.96);
-      this.sessionCoinIconBg.setStrokeStyle(2, 0xfff0a6, 0.96);
-      this.sessionCoinIconBg.setScrollFactor(0);
-      this.sessionCoinIconBg.setDepth(924);
-
-      this.sessionCoinIconText = this.add.text(iconCenterX, coinY, 'G', {
-        fontSize: '12px',
-        color: '#4a2a00',
+      this.sessionCoinLabelText = this.add.text(x, coinY, '金币', {
+        fontSize: '15px',
+        color: '#ffd76b',
         fontStyle: 'bold'
-      }).setOrigin(0.5);
-      this.sessionCoinIconText.setScrollFactor(0);
-      this.sessionCoinIconText.setDepth(925);
+      }).setOrigin(0, 0.5);
+      this.sessionCoinLabelText.setScrollFactor(0);
+      this.sessionCoinLabelText.setDepth(925);
 
-      this.sessionCoinValueText = this.add.text(x + 24, coinY, '0', {
+      this.sessionCoinValueText = this.add.text(x + 42, coinY, '0', {
         fontSize: '18px',
         color: '#ffd76b',
         fontStyle: 'bold',
@@ -636,9 +652,9 @@ export function applyHudMixin(GameScene) {
     rebuildTopLeftHud() {
       // 销毁旧的 HUD 元素
       const oldElements = [
-        this.hpHeartText, this.hpBarBg, this.hpBarFill, this.hpBarText,
-        this.expIconText, this.expBarBg, this.expBarFill, this.expBarText,
-        this.sessionCoinIconBg, this.sessionCoinIconText, this.sessionCoinValueText,
+        this.hpLabelText, this.hpBarBg, this.hpBarFill, this.hpBarText,
+        this.expLabelText, this.expBarBg, this.expBarFill, this.expBarText,
+        this.sessionCoinLabelText, this.sessionCoinValueText,
         this.topRightMenuButtonBg, this.topRightMenuButtonText, this.topRightMenuButton
       ];
       oldElements.forEach(el => { if (el && el.destroy) el.destroy(); });

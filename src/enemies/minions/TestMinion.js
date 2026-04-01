@@ -228,6 +228,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     // 第一关首波：进入视野后才开始追玩家
     this.aggroOnSeen = !!config.aggroOnSeen;
     this.aggroActive = !this.aggroOnSeen;
+    this.forceChasePlayerAfterBoss = !!config.forceChasePlayerAfterBoss;
 
     // “检测到后缓缓移动”：速度爬升时间（毫秒）
     this.aggroRampMs = (config.aggroRampMs != null) ? Math.max(0, Math.floor(config.aggroRampMs)) : 650;
@@ -529,18 +530,62 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     this.updateHpBar();
 
-    this.scene.tweens.add({
-      targets: this.body,
-      alpha: 0.3,
-      duration: 90,
-      yoyo: true
-    });
+    // ── 受击白闪（吸血鬼幸存者风格） ──
+    this.playHitFlash();
+
+    // ── 微击退：从子弹/攻击者方向推开几像素 ──
+    this.applyMicroKnockback(context);
 
     if (this.currentHp <= 0) {
-      this.die('killed');
+      this.die('killed', context);
       return true;
     }
     return false;
+  }
+
+  playHitFlash() {
+    if (!this.scene || !this.active) return;
+    const now = this.scene.time?.now ?? 0;
+    if (now - (this._lastFlashAt || 0) < 50) return;
+    this._lastFlashAt = now;
+
+    // 整体容器内所有图形节点 tint 白
+    const nodes = this.list || [];
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n && typeof n.setTint === 'function' && n !== this.hpBarBg && n !== this.hpBarFill && !n._isDebuffUi) {
+        n.setTint(0xffffff);
+      }
+    }
+    this.scene.time.delayedCall(60, () => {
+      if (!this.active) return;
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n && n.active && typeof n.clearTint === 'function' && n !== this.hpBarBg && n !== this.hpBarFill && !n._isDebuffUi) {
+          n.clearTint();
+        }
+      }
+    });
+  }
+
+  applyMicroKnockback(context = {}) {
+    if (!this.scene || !this.active || !this.isAlive) return;
+    const bullet = context.bullet;
+    const attacker = context.attacker;
+    let pushAngle;
+    if (bullet) {
+      pushAngle = Phaser.Math.Angle.Between(bullet.x, bullet.y, this.x, this.y);
+    } else if (attacker) {
+      pushAngle = Phaser.Math.Angle.Between(attacker.x, attacker.y, this.x, this.y);
+    } else {
+      return;
+    }
+    const dist = this.isElite ? 2 : Phaser.Math.Between(3, 5);
+    const nx = this.x + Math.cos(pushAngle) * dist;
+    const ny = this.y + Math.sin(pushAngle) * dist;
+    const clamped = clampWorldPoint(this.scene, nx, ny, 18);
+    this.x = clamped.x;
+    this.y = clamped.y;
   }
 
   triggerHitReaction(ctx = {}) {
@@ -591,11 +636,14 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         angle: a,
         speed,
         color,
-        radius: 6,
+        radius: isShooter ? 8 : 9,
         damage,
         options: {
           hasTrail: true,
-          type
+          type,
+          hasGlow: true,
+          glowRadius: isShooter ? 16 : 18,
+          trailColor: isShooter ? 0xe3d6ff : 0xffddba
         }
       });
     }
@@ -723,8 +771,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         y: this.y,
         shape: 'line',
         angle: baseAngle + offset,
-        telegraphWidth: 16,
-        telegraphLength: 250,
+        telegraphWidth: 20,
+        telegraphLength: 125,
         telegraphColor: 0xb18cff,
         durationMs: 520
       });
@@ -733,8 +781,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         y: this.y,
         shape: 'line',
         angle: baseAngle + offset + Math.PI,
-        telegraphWidth: 16,
-        telegraphLength: 250,
+        telegraphWidth: 20,
+        telegraphLength: 125,
         telegraphColor: 0xb18cff,
         durationMs: 520
       });
@@ -747,9 +795,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
       const visuals = [];
       for (let i = 0; i < 4; i += 1) {
-        const beam = this.scene.add.rectangle(this.x, this.y, 250, 10, 0xc8a5ff, 0.42).setDepth(9);
+        const beam = this.scene.add.rectangle(this.x, this.y, 125, 14, 0xc8a5ff, 0.50).setDepth(9);
         beam.setBlendMode(Phaser.BlendModes.ADD);
-        const core = this.scene.add.rectangle(this.x, this.y, 250, 4, 0xf4eaff, 0.92).setDepth(10);
+        const core = this.scene.add.rectangle(this.x, this.y, 125, 6, 0xf4eaff, 0.96).setDepth(10);
         core.setBlendMode(Phaser.BlendModes.ADD);
         visuals.push({ beam, core, angleOffset: i * (Math.PI * 0.5) });
       }
@@ -757,8 +805,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       this._eliteAffixState.activeArcane = {
         startedAt: this.scene?.time?.now ?? now,
         durationMs: 1700,
-        length: 250,
-        width: 10,
+        length: 125,
+        width: 14,
         angle: baseAngle,
         rotateSpeed: Phaser.Math.DegToRad(115),
         visuals
@@ -870,15 +918,19 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         count: 10,
         speed: 126,
         color: 0x8fe7ff,
-        radius: 7,
+        radius: 10,
         damage: Math.max(1, Math.round((this.contactDamage || 8) * 0.85)),
         tags: ['elite_affix_frozen_burst'],
         options: {
-          type: 'circle',
+          type: 'ring',
           hasTrail: true,
           trailColor: 0xd9fbff,
           hasGlow: true,
-          glowRadius: 12
+          glowRadius: 18,
+          ringStrokeWidth: 3,
+          ringFillAlpha: 0.24,
+          onHitMoveSlowPercent: 0.82,
+          onHitMoveSlowDurationMs: 2200
         }
       });
 
@@ -890,7 +942,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
           radius: 10,
           durationMs: 130
         });
-        player.applyMoveSpeedSlow?.(0.28, 1400);
+        player.applyMoveSpeedSlow?.(0.82, 2200);
         player.takeDamage(Math.max(1, Math.round((this.contactDamage || 8) * 0.95)));
       }
     });
@@ -1115,7 +1167,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     if (this.hpBarFill) this.hpBarFill.setVisible(false);
   }
 
-  die(reason = 'unknown') {
+  die(reason = 'unknown', deathCtx = {}) {
     if (!this.isAlive) return;
     this.isAlive = false;
     this.isInvincible = true;
@@ -1145,16 +1197,64 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       });
     }
 
+    // ── 死亡爆裂粒子（割草向反馈） ──
+    this.playDeathBurst(reason, deathCtx);
+
     this.scene.tweens.add({
       targets: this,
       alpha: 0,
       scale: 0,
-      duration: 220,
+      duration: 160,
       ease: 'Cubic.In',
       onComplete: () => {
         if (!this.active) return;
         this.destroy();
       }
+    });
+  }
+
+  playDeathBurst(reason, ctx = {}) {
+    if (!this.scene) return;
+    const x = this.x;
+    const y = this.y;
+    const scene = this.scene;
+    const isElite = !!this.isElite;
+    const baseColor = this.isElite ? (this.getPrimaryEliteAffixColor?.() || 0xff5b6e) : 0xb8e8c0;
+    const count = isElite ? Phaser.Math.Between(10, 14) : Phaser.Math.Between(5, 8);
+
+    // 碎片粒子
+    for (let i = 0; i < count; i++) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = Phaser.Math.Between(isElite ? 120 : 80, isElite ? 260 : 180);
+      const size = isElite ? Phaser.Math.Between(3, 6) : Phaser.Math.Between(2, 4);
+      const color = Phaser.Math.RND.pick([baseColor, 0xffffff, 0xffe8a0]);
+      const frag = scene.add.circle(x, y, size, color, Phaser.Math.FloatBetween(0.7, 1.0));
+      frag.setDepth(20);
+      frag.setBlendMode(Phaser.BlendModes.ADD);
+      scene.tweens.add({
+        targets: frag,
+        x: x + Math.cos(angle) * speed * Phaser.Math.FloatBetween(0.3, 0.5),
+        y: y + Math.sin(angle) * speed * Phaser.Math.FloatBetween(0.3, 0.5),
+        alpha: 0,
+        scale: { from: 1, to: Phaser.Math.FloatBetween(0.1, 0.4) },
+        duration: Phaser.Math.Between(isElite ? 260 : 180, isElite ? 420 : 320),
+        ease: 'Quad.Out',
+        onComplete: () => frag.destroy()
+      });
+    }
+
+    // 扩散冲击环
+    const ring = scene.add.circle(x, y, this.radius || 14, 0xffffff, isElite ? 0.30 : 0.18);
+    ring.setDepth(19);
+    ring.setStrokeStyle(isElite ? 3 : 2, baseColor, 0.9);
+    ring.setBlendMode(Phaser.BlendModes.ADD);
+    scene.tweens.add({
+      targets: ring,
+      scale: isElite ? 3.0 : 2.2,
+      alpha: 0,
+      duration: isElite ? 280 : 200,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy()
     });
   }
 
@@ -1214,13 +1314,13 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const inView = !!(view && Phaser.Geom.Rectangle.Contains(view, this.x, this.y));
       if (!inView) {
         this.isInvincible = true;
-        return;
+      } else {
+        this._spawnProtectionCleared = true;
+        this.spawnProtectedUntilVisible = false;
+        this.isInvincible = false;
+        this.aggroActive = true;
+        this._aggroStartAt = (this.scene?.time?.now ?? time ?? 0);
       }
-      this._spawnProtectionCleared = true;
-      this.spawnProtectedUntilVisible = false;
-      this.isInvincible = false;
-      this.aggroActive = true;
-      this._aggroStartAt = (this.scene?.time?.now ?? time ?? 0);
     }
 
     // 若绑定 Boss 且 Boss 已死：脱离 Boss，作为普通留场单位继续存在
@@ -1299,9 +1399,46 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const t = Math.max(0, now - (this._aggroStartAt || 0));
       // 0.35 起步，避免完全不动；随后线性爬到 1
       const pct = Phaser.Math.Clamp(t / this.aggroRampMs, 0, 1);
-      speedMult = 0.35 + 0.65 * pct;
+      speedMult = 0.55 + 0.45 * pct;
     }
     speedMult *= this.getSlowMoveMultiplier(now);
+
+    const hiddenSpawnProtected = this.spawnProtectedUntilVisible && !this._spawnProtectionCleared;
+    if (hiddenSpawnProtected && target && target.active !== false && target.isAlive !== false && targetHitbox) {
+      const dx = targetHitbox.x - this.x;
+      const dy = targetHitbox.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+      const chaseSpeed = this.moveSpeed * Math.max(0.95, speedMult * 1.08);
+      const step = Math.min(dist, chaseSpeed * dt);
+      this.x += (dx / dist) * step;
+      this.y += (dy / dist) * step;
+      return;
+    }
+
+    if (this.forceChasePlayerAfterBoss && target && target.active !== false && target.isAlive !== false && targetHitbox) {
+      const dx = targetHitbox.x - this.x;
+      const dy = targetHitbox.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+      const chaseSpeed = this.moveSpeed * Math.max(1.15, speedMult * 1.2);
+      const step = Math.min(dist, chaseSpeed * dt);
+      this.x += (dx / dist) * step;
+      this.y += (dy / dist) * step;
+
+      this.tryContact(time, target);
+
+      const pr = targetHitbox.radius || 16;
+      const ddx = this.x - targetHitbox.x;
+      const ddy = this.y - targetHitbox.y;
+      const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
+      const minDist = (this.radius || 16) + pr + 4;
+      if (d < minDist) {
+        const nx = ddx / d;
+        const ny = ddy / d;
+        this.x = targetHitbox.x + nx * minDist;
+        this.y = targetHitbox.y + ny * minDist;
+      }
+      return;
+    }
 
     if (this.minionType === 'shooter' && this.followBoss) {
       const targetX = this.followBoss.x + (this.followOffset?.x || 0);
@@ -1406,6 +1543,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   tryContact(time, player) {
     if (!player || player.isAlive === false || player.active === false) return;
     if (this.contactDamage <= 0) return;
+    if (this.spawnProtectedUntilVisible && !this._spawnProtectionCleared) return;
 
     const now = time || (this.scene.time?.now ?? 0);
     if (this._lastContactAt && now - this._lastContactAt < this.contactCdMs) return;
@@ -1424,6 +1562,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
   tryShoot(time, player) {
     if (!player || player.isAlive === false || player.active === false) return;
+    if (this.spawnProtectedUntilVisible && !this._spawnProtectionCleared) return;
     const hitbox = getTargetHitbox(player);
     if (!hitbox) return;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, hitbox.x, hitbox.y);
@@ -1452,12 +1591,15 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         angle: a,
         speed,
         color: 0xaa66ff,
-        radius: 6,
+        radius: 9,
         damage,
         tags: ['minion_shot'],
         options: {
           hasTrail: true,
-          type: i % 2 === 0 ? 'diamond' : 'circle'
+          type: i % 2 === 0 ? 'diamond' : 'circle',
+          hasGlow: true,
+          glowRadius: 18,
+          trailColor: 0xe4daff
         }
       });
     }
@@ -1521,14 +1663,17 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       angle,
       speed,
       color,
-      radius: 11,
+      radius: 15,
       damage,
       tags: ['minion_ring_shot'],
       options: {
-        type: 'circle',
-        hasTrail: false,
+        type: 'ring',
+        hasTrail: true,
+        trailColor: 0xffd0f0,
         hasGlow: true,
-        glowRadius: 16
+        glowRadius: 22,
+        ringStrokeWidth: 4,
+        ringFillAlpha: 0.30
       }
     });
 

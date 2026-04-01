@@ -3,6 +3,7 @@ import { uiBus } from '../ui/bus';
 import BossManager from '../managers/BossManager';
 import CollisionManager from '../managers/CollisionManager';
 import BulletManager from '../managers/BulletManager';
+import SpawnDirector from '../managers/SpawnDirector';
 import Player from '../player/Player';
 import { ITEM_DEFS, getItemById, getOwnedItemIds, normalizeEquippedItems } from '../data/items';
 import PetManager from '../classes/pets/PetManager';
@@ -243,6 +244,7 @@ class GameScene extends Phaser.Scene {
     // 通用 CD 技能槽：用于后续各职业主动技能的统一注册与管理
     this.cooldownSkills = Object.create(null);
     this.cooldownHud = null;
+    this.spawnDirector = null;
 
     // ── 地图分支系统 ──
     this.currentMapInfo = null;        // 当前地图 { id, name, subtitle, line }
@@ -287,6 +289,8 @@ class GameScene extends Phaser.Scene {
     // 战斗行为暂停：用于升级演出/三选一路径时停止自动攻击与战斗推进
     this._combatBehaviorPauseApplied = false;
     this._combatBehaviorPauseRestore = null;
+
+    this.enemyHpMode = 'normal';
   }
 
   init(data = {}) {
@@ -396,6 +400,9 @@ class GameScene extends Phaser.Scene {
     this._combatBehaviorPauseApplied = false;
     this._combatBehaviorPauseRestore = null;
     this.clearSceneEntryPresentation({ immediate: true, restoreControls: false });
+
+    const enemyHpMode = this.registry?.get?.('enemyHpMode');
+    this.enemyHpMode = enemyHpMode === 'low' ? 'low' : 'normal';
 
     // 范围圈全局开关（可由 UI/调试统一控制）
     const v = this.registry?.get?.('showRangeIndicators');
@@ -1686,6 +1693,20 @@ class GameScene extends Phaser.Scene {
 
     this.collisionManager.stats.playerHits += 1;
 
+    const bulletTags = Array.isArray(bullet.bulletCoreTags)
+      ? bullet.bulletCoreTags
+      : (Array.isArray(bullet.bulletDescriptor?.tags) ? bullet.bulletDescriptor.tags : []);
+    const onHitMoveSlowPercent = Number.isFinite(Number(bullet.onHitMoveSlowPercent))
+      ? Number(bullet.onHitMoveSlowPercent)
+      : (bulletTags.includes('elite_affix_frozen_burst') ? 0.82 : 0);
+    const onHitMoveSlowDurationMs = Number.isFinite(Number(bullet.onHitMoveSlowDurationMs))
+      ? Number(bullet.onHitMoveSlowDurationMs)
+      : (bulletTags.includes('elite_affix_frozen_burst') ? 2200 : 0);
+
+    if (onHitMoveSlowPercent > 0 && onHitMoveSlowDurationMs > 0) {
+      this.player?.applyMoveSpeedSlow?.(onHitMoveSlowPercent, onHitMoveSlowDurationMs);
+    }
+
     if (this.player?.counterOnBlock && this.player?.lastDamageEvent?.blocked) {
       const currentBoss = this.bossManager?.getCurrentBoss?.();
       if (currentBoss && currentBoss.isAlive && !currentBoss.isInvincible) {
@@ -2806,6 +2827,7 @@ class GameScene extends Phaser.Scene {
 
     // 初始化弹幕管理器（必须在玩家和Boss管理器之前）
     this.bulletManager = new BulletManager(this);
+    this.spawnDirector = new SpawnDirector(this);
     
     // 初始化玩家
     const spawnX = this.gameArea.x + this.gameArea.width / 2;
@@ -3363,6 +3385,10 @@ class GameScene extends Phaser.Scene {
     // 更新碰撞检测
     if (this.collisionManager) {
       this.collisionManager.update();
+    }
+
+    if (this.spawnDirector?.update) {
+      this.spawnDirector.update(time, delta);
     }
 
     // 可能在 collisionManager.update() 中触发死亡：同帧立即停机

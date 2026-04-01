@@ -39,7 +39,7 @@ export const UPGRADE_POOLS = {
   // 🟢 猎人·散射（主职业输出）
   archer: [
     { id: 'archer_range', category: 'build', name: '射程', desc: '基础射击射程直接提升到 +36%。', icon: '猎主', maxLevel: 1 },
-    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '箭列数：3 -> 5 -> 5 -> 7；第 2 级额外收束散射角并强化锁定。', icon: '猎主', maxLevel: 3 },
+    { id: 'archer_volley', category: 'build', name: '箭矢齐射', desc: '箭列数：3 -> 5 -> 7 -> 9；每级都会收束散射角并强化锁定。', icon: '猎主', maxLevel: 3 },
     { id: 'archer_nimble_evade', category: 'build', name: '灵巧回避', desc: 'Lv1 低血自动闪避 60%，持续 8 秒；Lv2 提升至 80%，持续 10 秒。冷却 30 秒。', icon: '猎主', maxLevel: 2 },
     { id: 'archer_rapidfire', category: 'build', name: '疾风连射', desc: '解锁连射追击：基础射击有概率立刻追加一轮追射。', icon: '猎主', maxLevel: 1, requiredSkillId: 'archer_volley', requiredSkillLevel: 1 },
     { id: 'archer_arrowrain', category: 'build', name: '箭雨蓄势', desc: '每 5 秒蓄满一次坠落箭雨，对目标区域进行额外压制。', icon: '猎主', maxLevel: 1, requiredSkillId: 'archer_volley', requiredSkillLevel: 1 },

@@ -215,6 +215,12 @@ export function applyBuildClassMixin(GameScene) {
           this.player.mageFrostDomainLevel = this.player.mageFrostNovaLevel;
           break;
 
+        case 'archer_range':
+          this.player.upgradeArcherRange?.();
+          break;
+        case 'archer_volley':
+          this.player.upgradeArcherVolley?.();
+          break;
         case 'archer_bounce':
           this.player.archerArrowBounce = Math.min(3, (this.player.archerArrowBounce || 0) + 1);
           break;

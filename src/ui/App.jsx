@@ -366,6 +366,8 @@ export default function App() {
   const setShowDamage = useUiStore((s) => s.setShowDamage);
   const showEnemyOverlays = useUiStore((s) => s.showEnemyOverlays);
   const setShowEnemyOverlays = useUiStore((s) => s.setShowEnemyOverlays);
+  const enemyHpMode = useUiStore((s) => s.enemyHpMode);
+  const setEnemyHpMode = useUiStore((s) => s.setEnemyHpMode);
 
   const viewOpen = useUiStore((s) => s.viewOpen);
   const setViewOpen = useUiStore((s) => s.setViewOpen);
@@ -464,6 +466,7 @@ export default function App() {
     const onSettingsChanged = (settings) => {
       setShowDamage(settings?.showDamage !== false);
       setShowEnemyOverlays(settings?.showEnemyOverlays === true);
+      setEnemyHpMode(settings?.enemyHpMode === 'low' ? 'low' : 'normal');
     };
     uiBus.on('phaser:settingsChanged', onSettingsChanged);
     // 拉取一次当前设置（main.js 也会初始推送，但这里确保不漏）
@@ -471,7 +474,7 @@ export default function App() {
     return () => {
       uiBus.off('phaser:settingsChanged', onSettingsChanged);
     };
-  }, [setShowDamage, setShowEnemyOverlays]);
+  }, [setShowDamage, setShowEnemyOverlays, setEnemyHpMode]);
 
   useEffect(() => {
     if (!viewOpen) return;
@@ -2078,6 +2081,34 @@ export default function App() {
                     const v = !!e.target.checked;
                     setShowEnemyOverlays(v);
                     uiBus.emit('ui:settings:setShowEnemyOverlays', v);
+                  }}
+                  style={{ width: 20, height: 20 }}
+                />
+              </label>
+
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 12,
+                  border: '2px solid rgba(42,42,58,1)',
+                  background: 'rgba(11, 11, 24, 0.62)'
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 20 }}>爽刷模式敌人血量</div>
+                  <div style={{ opacity: 0.75, fontSize: 16, marginTop: 4 }}>开启后普通敌人与精英生命降到 70%，更偏清怪爽感</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={enemyHpMode === 'low'}
+                  onChange={(e) => {
+                    const mode = e.target.checked ? 'low' : 'normal';
+                    setEnemyHpMode(mode);
+                    uiBus.emit('ui:settings:setEnemyHpMode', mode);
                   }}
                   style={{ width: 20, height: 20 }}
                 />

@@ -381,7 +381,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerVolleyCount = 3;
     this.archerVolleyMode = 'fan'; // fan | ring
     this.archerVolleyRingCount = 10;
-    this.archerVolleyDamageMult = 0.55;
+    this.archerVolleyDamageMult = 0.64;
     this.archerVolleyHoming = false;
     this.archerVolleyHomingTurn = 0.04;
     this.archerVolleyExplode = false;
@@ -1157,27 +1157,27 @@ export default class Player extends Phaser.GameObjects.Container {
       spawnY,
       coreColor,
       {
-        radius: isArcher ? 5 : 5,
+        radius: isArcher ? 6 : 7,
         speed: this.bulletSpeed,
         damage: Math.max(1, Math.round(this.bulletDamage * this.archerVolleyDamageMult * (isArcher ? (this.archerArrowDamageMult || 1) : 1))),
         angleOffset: angleOffset,
         isAbsoluteAngle: isAbsoluteAngle,
         type: isArcher ? 'arrow' : 'circle',
-        arrowLenMult: isArcher ? 1.92 : 1,
-        arrowThickMult: isArcher ? 2.05 : 1,
+        arrowLenMult: isArcher ? 2.18 : 1,
+        arrowThickMult: isArcher ? 2.28 : 1,
         hasGlow: true,
         hasTrail: true,
-        glowRadius: isArcher ? 12 : 9,
+        glowRadius: isArcher ? 14 : 11,
         glowColor: isArcher ? 0x38ff5f : coreColor,
         strokeColor: accent,
         trailColor: isArcher ? 0x2fd24f : undefined,
-        trailIntervalMs: isArcher ? 32 : undefined,
-        trailLifeMs: isArcher ? 180 : undefined,
-        trailAlpha: isArcher ? 0.7 : undefined,
-        trailScale: isArcher ? 1 : undefined,
+        trailIntervalMs: isArcher ? 28 : undefined,
+        trailLifeMs: isArcher ? 210 : undefined,
+        trailAlpha: isArcher ? 0.78 : undefined,
+        trailScale: isArcher ? 1.08 : undefined,
         trailMode: isArcher ? 'streak' : undefined,
-        trailScaleX: isArcher ? 5.4 : undefined,
-        trailScaleY: isArcher ? 0.18 : undefined,
+        trailScaleX: isArcher ? 6.2 : undefined,
+        trailScaleY: isArcher ? 0.22 : undefined,
         arrowHighlightColor: isArcher ? 0x54ff68 : undefined,
         arrowFeatherColor: isArcher ? 0x25c944 : undefined,
         speedStartMult: isArcher ? 0.32 : undefined,
@@ -2213,7 +2213,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.archerEnabled = true;
     this.weaponType = 'archer_arrow';
     this.baseFireRate = this.baseFireRateArcher;
-    this.archerVolleyDamageMult = 0.55;
+    this.archerVolleyDamageMult = 0.64;
     this.archerVolleyCount = 3;
     this.archerVolleySpread = Phaser.Math.DegToRad(8.6);
     this.archerVolleyLockAim = true;
@@ -2238,25 +2238,25 @@ export default class Player extends Phaser.GameObjects.Container {
 
   upgradeArcherDamage() {
     this.archerArrowDamageLevel = Math.min(3, (this.archerArrowDamageLevel || 0) + 1);
-    // 每级 +12% 基础技能伤害
-    this.archerArrowDamageMult = 1 + 0.12 * (this.archerArrowDamageLevel || 0);
+    // 每级 +15% 基础技能伤害
+    this.archerArrowDamageMult = 1 + 0.15 * (this.archerArrowDamageLevel || 0);
   }
 
   upgradeArcherVolley() {
 
     this.archerArrowScatterLevel = Math.min(3, (this.archerArrowScatterLevel || 0) + 1);
-    // 基础：3 列；L1: 5 列；L2: 强化弹道质量；L3: 7 列。
+    // 基础：3 列；L1: 5 列；L2: 7 列；L3: 9 列。
     if (this.archerArrowScatterLevel === 1) {
       this.archerVolleyCount = 5;
       this.archerVolleySpread = Phaser.Math.DegToRad(5.6);
     } else if (this.archerArrowScatterLevel === 2) {
-      this.archerVolleyCount = 5;
+      this.archerVolleyCount = 7;
       this.archerVolleySpread = Phaser.Math.DegToRad(4.7);
       this.archerVolleyLockTurn = Phaser.Math.DegToRad(420);
     } else {
-      this.archerVolleyCount = 7;
-      this.archerVolleySpread = Phaser.Math.DegToRad(4.2);
-      this.archerVolleyLockTurn = Phaser.Math.DegToRad(480);
+      this.archerVolleyCount = 9;
+      this.archerVolleySpread = Phaser.Math.DegToRad(4.0);
+      this.archerVolleyLockTurn = Phaser.Math.DegToRad(540);
     }
   }
 
@@ -2335,8 +2335,10 @@ export default class Player extends Phaser.GameObjects.Container {
   upgradeArcherVolleyCount() {
     if (this.archerVolleyCount <= 3) {
       this.archerVolleyCount = 5;
-    } else {
+    } else if (this.archerVolleyCount <= 5) {
       this.archerVolleyCount = 7;
+    } else {
+      this.archerVolleyCount = 9;
     }
   }
 

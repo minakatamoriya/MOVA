@@ -485,8 +485,18 @@ export default class BossManager {
     return bossName;
   }
 
+  clearBossInfo() {
+    const bossText = this.scene?.infoTexts?.boss;
+    const bossHpText = this.scene?.infoTexts?.bossHp;
+    if (bossText?.setText) bossText.setText('');
+    if (bossHpText?.setText) bossHpText.setText('');
+  }
+
   updateBossInfo() {
-    if (!this.currentBoss) return;
+    if (!this.currentBoss) {
+      this.clearBossInfo();
+      return;
+    }
 
     const bossText = this.scene?.infoTexts?.boss;
     const bossHpText = this.scene?.infoTexts?.bossHp;
@@ -525,6 +535,8 @@ export default class BossManager {
       if (typeof this.currentBoss.update === 'function') {
         this.currentBoss.update(time, delta);
       }
+    } else {
+      this.clearBossInfo();
     }
 
     if (Array.isArray(this.minions) && this.minions.length > 0) {

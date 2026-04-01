@@ -153,10 +153,12 @@ export function applyDropsInventoryMixin(GameScene) {
           rarityId: 'legendary'
         });
         if (guaranteedLegendary) {
+          const burst = this.createBossDropBurstProfile(0, Math.max(1, count + 1), { speedMin: 300, speedMax: 420, scatterRadius: 86 });
           this.spawnItemDrop(
-            x + Phaser.Math.Between(-110, 110),
-            y + Phaser.Math.Between(-32, 30),
-            guaranteedLegendary
+            x + burst.offsetX,
+            y + burst.offsetY,
+            guaranteedLegendary,
+            { source, launchAngle: burst.angle, launchSpeed: burst.speed }
           );
           spawned += 1;
         }
@@ -171,11 +173,22 @@ export function applyDropsInventoryMixin(GameScene) {
           rarityId: pickRarityId() || undefined
         });
         if (!item) continue;
-        this.spawnItemDrop(
-          x + Phaser.Math.Between(source === 'boss' ? -120 : -48, source === 'boss' ? 120 : 48),
-          y + Phaser.Math.Between(source === 'boss' ? -36 : -18, source === 'boss' ? 36 : 28),
-          item
-        );
+        if (source === 'boss') {
+          const burst = this.createBossDropBurstProfile(index + 1, Math.max(2, count + 1), { speedMin: 260, speedMax: 380, scatterRadius: 104 });
+          this.spawnItemDrop(
+            x + burst.offsetX,
+            y + burst.offsetY,
+            item,
+            { source, launchAngle: burst.angle, launchSpeed: burst.speed }
+          );
+        } else {
+          this.spawnItemDrop(
+            x + Phaser.Math.Between(-68, 68),
+            y + Phaser.Math.Between(-28, 40),
+            item,
+            { source }
+          );
+        }
         spawned += 1;
       }
 
@@ -203,27 +216,32 @@ export function applyDropsInventoryMixin(GameScene) {
       const dropY = boss.y + 20;
 
       const bossCoinDrops = rollBossCoinDrops({ stage: this.currentStage || 1, rng: Math.random });
+      const totalBossDrops = bossCoinDrops.coins.length + bossCoinDrops.bags.length + Phaser.Math.Between(2, 3);
       bossCoinDrops.coins.forEach((amount, index) => {
+        const burst = this.createBossDropBurstProfile(index, Math.max(1, totalBossDrops), { speedMin: 170, speedMax: 230, scatterRadius: 26 });
         this.spawnCoinDrop(
-          dropX + Phaser.Math.Between(-54, 54) + index * 4,
-          dropY + Phaser.Math.Between(-26, 26),
-          amount
+          dropX + burst.offsetX,
+          dropY + burst.offsetY,
+          amount,
+          { launchAngle: burst.angle, launchSpeed: burst.speed }
         );
       });
       bossCoinDrops.bags.forEach((amount, index) => {
+        const burst = this.createBossDropBurstProfile(index + bossCoinDrops.coins.length, Math.max(1, totalBossDrops), { speedMin: 120, speedMax: 180, scatterRadius: 22 });
         this.spawnCoinBagDrop(
-          dropX + Phaser.Math.Between(-30, 30) + index * 22,
-          dropY + Phaser.Math.Between(-18, 18),
-          amount
+          dropX + burst.offsetX,
+          dropY + burst.offsetY,
+          amount,
+          { launchAngle: burst.angle, launchSpeed: burst.speed }
         );
       });
 
       this.rollAndSpawnEquipmentDrops('boss', dropX, dropY, {
-        count: Phaser.Math.Between(2, 3)
+        count: totalBossDrops - bossCoinDrops.coins.length - bossCoinDrops.bags.length
       });
     },
 
-    spawnCoinDrop(x, y, amount) {
+    spawnCoinDrop(x, y, amount, options = {}) {
       const glow = this.add.circle(0, 0, 18, 0xffd766, 0.16);
       const outer = this.add.circle(0, 0, 11, 0xffd54f, 1);
       outer.setStrokeStyle(2, 0xfff8d6, 0.9);
@@ -238,6 +256,7 @@ export function applyDropsInventoryMixin(GameScene) {
       const sparkB = this.add.circle(12, -6, 1.6, 0xffffff, 0.75);
 
       const coin = this.add.container(x, y, [glow, sparkA, sparkB, outer, inner, shine, mark]);
+      const shadow = this.createDropShadow(x, y + 10, 'coin');
 
       coin.setScale(0.6);
       this.tweens.add({ targets: coin, scale: 1, duration: 220, ease: 'Back.Out' });
@@ -245,8 +264,8 @@ export function applyDropsInventoryMixin(GameScene) {
       this.tweens.add({ targets: [sparkA, sparkB], alpha: { from: 0.25, to: 1 }, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
       this.tweens.add({ targets: coin, angle: { from: -5, to: 5 }, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
 
-      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const sp = Phaser.Math.Between(70, 150);
+      const a = Number.isFinite(options.launchAngle) ? Number(options.launchAngle) : Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const sp = Number.isFinite(options.launchSpeed) ? Number(options.launchSpeed) : Phaser.Math.Between(70, 150);
       const vx = Math.cos(a) * sp;
       const vy = Math.sin(a) * sp;
 
@@ -255,16 +274,18 @@ export function applyDropsInventoryMixin(GameScene) {
         amount,
         sprite: coin,
         velocity: { x: vx, y: vy },
+        shadow,
         spawnX: x,
         spawnY: y,
         bornAt: this.time?.now ?? 0,
-        maxDrift: 110
+        maxDrift: 110,
+        launch: this.createDropLaunchProfile(x, y, { x: vx, y: vy }, { maxDrift: 110, isBossDrop: false })
       };
 
       this.drops.push(spawnData);
     },
 
-    spawnCoinBagDrop(x, y, amount) {
+    spawnCoinBagDrop(x, y, amount, options = {}) {
       const glow = this.add.circle(0, 8, 28, 0xffb84d, 0.14);
       const body = this.add.ellipse(0, 2, 34, 38, 0x7a4a1b, 0.98);
       body.setStrokeStyle(3, 0xf3cd7b, 0.95);
@@ -281,24 +302,28 @@ export function applyDropsInventoryMixin(GameScene) {
       const sparkleB = this.add.circle(14, -12, 2, 0xffffff, 0.75);
 
       const bag = this.add.container(x, y, [glow, sparkleA, sparkleB, body, tie, tieKnot, emblem]);
+      const shadow = this.createDropShadow(x, y + 12, 'bag');
       bag.setScale(0.72);
       bag.setDepth(18);
 
       this.tweens.add({ targets: bag, scale: 1, duration: 260, ease: 'Back.Out' });
-      this.tweens.add({ targets: bag, y: y - 7, duration: 920, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      const hoverTween = this.tweens.add({ targets: bag, y: y - 7, duration: 920, yoyo: true, repeat: -1, ease: 'Sine.InOut', paused: true });
       this.tweens.add({ targets: glow, alpha: { from: 0.12, to: 0.30 }, duration: 620, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
 
-      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const sp = Phaser.Math.Between(50, 90);
+      const a = Number.isFinite(options.launchAngle) ? Number(options.launchAngle) : Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const sp = Number.isFinite(options.launchSpeed) ? Number(options.launchSpeed) : Phaser.Math.Between(50, 90);
       const spawnData = {
         type: 'coin_bag',
         amount,
         sprite: bag,
         velocity: { x: Math.cos(a) * sp, y: Math.sin(a) * sp },
+        shadow,
         spawnX: x,
         spawnY: y,
         bornAt: this.time?.now ?? 0,
-        maxDrift: 120
+        maxDrift: 120,
+        launch: this.createDropLaunchProfile(x, y, { x: Math.cos(a) * sp, y: Math.sin(a) * sp }, { maxDrift: 120, isBossDrop: false }),
+        hoverTween
       };
 
       this.drops.push(spawnData);
@@ -335,32 +360,119 @@ export function applyDropsInventoryMixin(GameScene) {
       });
     },
 
-    spawnItemDrop(x, y, item) {
+    createBossDropBurstProfile(index, total, options = {}) {
+      const count = Math.max(1, Number(total || 1));
+      const speedMin = Number(options.speedMin || 160);
+      const speedMax = Math.max(speedMin, Number(options.speedMax || speedMin + 40));
+      const scatterRadius = Math.max(0, Number(options.scatterRadius || 18));
+      const baseAngle = (Math.PI * 2 * index) / count;
+      const jitter = Phaser.Math.FloatBetween(-0.18, 0.18);
+      const radius = Phaser.Math.Between(0, scatterRadius);
+      return {
+        angle: baseAngle + jitter,
+        speed: Phaser.Math.Between(speedMin, speedMax),
+        offsetX: Math.cos(baseAngle) * radius,
+        offsetY: Math.sin(baseAngle) * radius * 0.6
+      };
+    },
+
+    createDropShadow(x, y, type = 'coin') {
+      const size = type === 'item' ? { w: 34, h: 13, alpha: 0.24 } : (type === 'bag' ? { w: 26, h: 10, alpha: 0.16 } : { w: 18, h: 8, alpha: 0.14 });
+      const shadow = this.add.ellipse(x, y, size.w, size.h, 0x000000, size.alpha);
+      shadow.setDepth(12);
+      return shadow;
+    },
+
+    playDropLandFx(x, y, type = 'coin', rarity = null) {
+      const color = type === 'item'
+        ? (rarity?.beamColor || 0xb56cff)
+        : (type === 'coin_bag' ? 0xffc35e : 0xffe08a);
+      const ring = this.add.ellipse(x, y + 3, type === 'item' ? 28 : 18, type === 'item' ? 12 : 8, color, 0.14).setDepth(14);
+      ring.setStrokeStyle(type === 'item' ? 2 : 1.5, 0xffffff, 0.7);
+      this.tweens.add({
+        targets: ring,
+        scaleX: type === 'item' ? 2.1 : 1.8,
+        scaleY: type === 'item' ? 1.9 : 1.5,
+        alpha: 0,
+        duration: type === 'item' ? 240 : 180,
+        ease: 'Quad.Out',
+        onComplete: () => ring.destroy()
+      });
+    },
+
+    createDropLaunchProfile(x, y, velocity, options = {}) {
+      const maxDrift = Math.max(24, Number(options.maxDrift || 100));
+      const isBossDrop = options.isBossDrop === true;
+      const vx = Number(velocity?.x || 0);
+      const vy = Number(velocity?.y || 0);
+      const speed = Math.sqrt(vx * vx + vy * vy) || 1;
+      const nx = vx / speed;
+      const ny = vy / speed;
+      const travel = Math.min(maxDrift * 0.78, Math.max(30, speed * (isBossDrop ? 0.34 : 0.26)));
+
+      return {
+        active: true,
+        elapsedMs: 0,
+        durationMs: isBossDrop ? Phaser.Math.Between(460, 620) : Phaser.Math.Between(320, 460),
+        startX: x,
+        startY: y,
+        endX: x + nx * travel,
+        endY: y + ny * travel,
+        peakHeight: isBossDrop ? Phaser.Math.Between(54, 82) : Phaser.Math.Between(26, 44)
+      };
+    },
+
+    playItemDropSpawnFx(x, y, rarity, options = {}) {
+      const source = options?.source || 'minion';
+      const isBossDrop = source === 'boss';
+      const burstColor = rarity?.beamColor || rarity?.color || 0xffffff;
+      const ring = this.add.circle(x, y, isBossDrop ? 18 : 14, burstColor, isBossDrop ? 0.22 : 0.16).setDepth(24);
+      ring.setStrokeStyle(isBossDrop ? 4 : 3, 0xffffff, 0.9);
+      this.tweens.add({
+        targets: ring,
+        scale: isBossDrop ? 4.6 : 3.2,
+        alpha: 0,
+        duration: isBossDrop ? 440 : 320,
+        ease: 'Cubic.Out',
+        onComplete: () => ring.destroy()
+      });
+
+      const rayCount = isBossDrop ? 8 : 5;
+      for (let index = 0; index < rayCount; index += 1) {
+        const angle = (Math.PI * 2 * index) / rayCount + Phaser.Math.FloatBetween(-0.16, 0.16);
+        const len = isBossDrop ? Phaser.Math.Between(68, 126) : Phaser.Math.Between(38, 78);
+        const ray = this.add.rectangle(x, y, 3, len, burstColor, isBossDrop ? 0.34 : 0.24).setDepth(24);
+        ray.setAngle(Phaser.Math.RadToDeg(angle));
+        ray.setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({
+          targets: ray,
+          alpha: 0,
+          scaleY: { from: 0.3, to: 1.25 },
+          duration: isBossDrop ? 360 : 260,
+          ease: 'Cubic.Out',
+          onComplete: () => ray.destroy()
+        });
+      }
+    },
+
+    spawnItemDrop(x, y, item, options = {}) {
       const rarity = getLootRarity(item?.rarityId || 'common');
+      const source = options?.source || item?.source || 'minion';
       let container = null;
 
       if (item?.kind === 'run_loot_equipment') {
         const beamColor = rarity.id === 'legendary' ? 0xff9f2e : (rarity.id === 'epic' ? 0xb56cff : rarity.beamColor);
-        const beam = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.rectangle(0, -82, rarity.id === 'legendary' ? 26 : 18, rarity.id === 'legendary' ? 156 : 128, beamColor, rarity.id === 'legendary' ? 0.18 : 0.14)
-          : null;
-        const beamHalo = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.ellipse(0, -84, rarity.id === 'legendary' ? 62 : 44, rarity.id === 'legendary' ? 176 : 148, beamColor, rarity.id === 'legendary' ? 0.10 : 0.08)
-          : null;
-        const beamCap = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.circle(0, -148, rarity.id === 'legendary' ? 12 : 8, beamColor, rarity.id === 'legendary' ? 0.26 : 0.20)
-          : null;
         const groundRing = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 54 : 44, rarity.id === 'legendary' ? 18 : 14, beamColor, rarity.id === 'legendary' ? 0.24 : 0.18)
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 72 : 58, rarity.id === 'legendary' ? 24 : 18, beamColor, rarity.id === 'legendary' ? 0.28 : 0.22)
           : null;
         const groundGlow = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 84 : 60, rarity.id === 'legendary' ? 28 : 20, beamColor, rarity.id === 'legendary' ? 0.10 : 0.08)
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 118 : 88, rarity.id === 'legendary' ? 34 : 26, beamColor, rarity.id === 'legendary' ? 0.14 : 0.10)
           : null;
         const runeOuter = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 68 : 52, rarity.id === 'legendary' ? 24 : 18, beamColor, 0)
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 82 : 64, rarity.id === 'legendary' ? 28 : 22, beamColor, 0)
           : null;
         const runeInner = (rarity.id === 'epic' || rarity.id === 'legendary')
-          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 40 : 30, rarity.id === 'legendary' ? 12 : 10, beamColor, 0)
+          ? this.add.ellipse(0, 18, rarity.id === 'legendary' ? 48 : 36, rarity.id === 'legendary' ? 15 : 11, beamColor, 0)
           : null;
         const flareH = rarity.id === 'legendary'
           ? this.add.rectangle(0, 18, 76, 3, 0xffe1a3, 0.20)
@@ -374,9 +486,6 @@ export function applyDropsInventoryMixin(GameScene) {
         if (runeOuter?.setStrokeStyle) runeOuter.setStrokeStyle(rarity.id === 'legendary' ? 2 : 1, rarity.borderColor, rarity.id === 'legendary' ? 0.55 : 0.42);
         if (runeInner?.setStrokeStyle) runeInner.setStrokeStyle(1, rarity.borderColor, rarity.id === 'legendary' ? 0.42 : 0.34);
 
-        if (beam) beam.setBlendMode(Phaser.BlendModes.ADD);
-        if (beamHalo) beamHalo.setBlendMode(Phaser.BlendModes.ADD);
-        if (beamCap) beamCap.setBlendMode(Phaser.BlendModes.ADD);
         if (groundRing) groundRing.setBlendMode(Phaser.BlendModes.ADD);
         if (groundGlow) groundGlow.setBlendMode(Phaser.BlendModes.ADD);
         if (runeOuter) runeOuter.setBlendMode(Phaser.BlendModes.ADD);
@@ -408,11 +517,11 @@ export function applyDropsInventoryMixin(GameScene) {
         name.setAlpha(showGroundName ? 0.92 : 0);
         name.setVisible(showGroundName);
 
-        const shimmerA = rarity.id === 'legendary'
-          ? this.add.rectangle(-14, -42, 3, 92, 0xffd26e, 0.30).setAngle(-16)
+        const shimmerA = (rarity.id === 'legendary' || rarity.id === 'epic')
+          ? this.add.rectangle(-10, -34, 2, rarity.id === 'legendary' ? 88 : 72, rarity.id === 'legendary' ? 0xffd26e : 0xd5a9ff, rarity.id === 'legendary' ? 0.24 : 0.20).setAngle(-12)
           : null;
-        const shimmerB = rarity.id === 'legendary'
-          ? this.add.rectangle(14, -38, 3, 84, 0xfff0a0, 0.24).setAngle(18)
+        const shimmerB = (rarity.id === 'legendary' || rarity.id === 'epic')
+          ? this.add.rectangle(10, -32, 2, rarity.id === 'legendary' ? 80 : 64, rarity.id === 'legendary' ? 0xfff0a0 : 0xf0d6ff, rarity.id === 'legendary' ? 0.20 : 0.18).setAngle(14)
           : null;
         const moteCount = rarity.id === 'legendary' ? 4 : (rarity.id === 'epic' ? 3 : 0);
         const motes = new Array(moteCount).fill(null).map((_, index) => {
@@ -424,57 +533,14 @@ export function applyDropsInventoryMixin(GameScene) {
           return mote;
         });
 
-        container = this.add.container(x, y, [groundGlow, flareH, flareV, runeOuter, runeInner, groundRing, beamHalo, beam, beamCap, aura, shimmerA, shimmerB, ...motes, base, lid, clasp, icon, name].filter(Boolean));
+        container = this.add.container(x, y, [groundGlow, flareH, flareV, runeOuter, runeInner, groundRing, aura, shimmerA, shimmerB, ...motes, base, lid, clasp, icon, name].filter(Boolean));
         aura.setBlendMode(Phaser.BlendModes.ADD);
-
-        this.tweens.add({
-          targets: lid,
-          angle: { from: -4, to: 4 },
-          duration: rarity.id === 'legendary' ? 820 : 1200,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.InOut'
-        });
 
         if (rarity.id !== 'common') {
           this.tweens.add({
             targets: aura,
             alpha: { from: 0.12, to: rarity.id === 'legendary' ? 0.35 : 0.22 },
             duration: rarity.id === 'legendary' ? 560 : 880,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut'
-          });
-        }
-
-        if (beam) {
-          this.tweens.add({
-            targets: beam,
-            alpha: { from: rarity.id === 'legendary' ? 0.16 : 0.12, to: rarity.id === 'legendary' ? 0.30 : 0.22 },
-            scaleY: { from: 0.92, to: 1.08 },
-            duration: rarity.id === 'legendary' ? 460 : 720,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut'
-          });
-        }
-        if (beamHalo) {
-          this.tweens.add({
-            targets: beamHalo,
-            alpha: { from: 0.06, to: rarity.id === 'legendary' ? 0.16 : 0.11 },
-            scaleX: { from: 0.94, to: 1.08 },
-            duration: rarity.id === 'legendary' ? 520 : 760,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.InOut'
-          });
-        }
-        if (beamCap) {
-          this.tweens.add({
-            targets: beamCap,
-            alpha: { from: 0.12, to: rarity.id === 'legendary' ? 0.34 : 0.24 },
-            scale: { from: 0.88, to: 1.18 },
-            duration: rarity.id === 'legendary' ? 420 : 660,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.InOut'
@@ -594,35 +660,38 @@ export function applyDropsInventoryMixin(GameScene) {
         container = this.add.container(x, y, [crystal, shard, label]);
       }
 
+      const shadow = this.createDropShadow(x, y + 14, 'item');
       container.setScale(0.7);
       container.setDepth(18);
-      this.tweens.add({ targets: container, scale: 1, duration: 200, ease: 'Back.Out' });
-      this.tweens.add({
-        targets: container,
-        y: y - 5,
-        duration: 820,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.InOut'
-      });
+      this.tweens.add({ targets: container, scale: 1, duration: 240, ease: 'Back.Out' });
 
-      const source = item?.source || 'minion';
-      const isBossDrop = source === 'boss';
-      const a = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const sp = isBossDrop ? Phaser.Math.Between(160, 240) : Phaser.Math.Between(60, 120);
-      const vx = Math.cos(a) * sp;
-      const vy = Math.sin(a) * sp;
+      this.playItemDropSpawnFx(x, y, rarity, { source });
+
+      const launchAngle = Number.isFinite(options.launchAngle) ? Number(options.launchAngle) : Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const launchSpeed = Number.isFinite(options.launchSpeed)
+        ? Number(options.launchSpeed)
+        : (source === 'boss' ? Phaser.Math.Between(220, 320) : Phaser.Math.Between(90, 150));
+      const velocity = {
+        x: Math.cos(launchAngle) * launchSpeed,
+        y: Math.sin(launchAngle) * launchSpeed
+      };
+      const launch = this.createDropLaunchProfile(x, y, velocity, {
+        maxDrift: source === 'boss' ? 240 : 116,
+        isBossDrop: source === 'boss'
+      });
 
       const spawnData = {
         type: 'item',
         item,
         rarity,
         sprite: container,
-        velocity: { x: vx, y: vy },
+        velocity,
+        shadow,
         spawnX: x,
         spawnY: y,
         bornAt: this.time?.now ?? 0,
-        maxDrift: isBossDrop ? 188 : 95
+        maxDrift: source === 'boss' ? 240 : 116,
+        launch
       };
       this.drops.push(spawnData);
     },
@@ -650,12 +719,61 @@ export function applyDropsInventoryMixin(GameScene) {
 
         const dt = (delta || 0) / 1000;
 
+        if (drop.launch?.active) {
+          drop.launch.elapsedMs += delta || 0;
+          const progress = Phaser.Math.Clamp(drop.launch.elapsedMs / Math.max(1, drop.launch.durationMs || 1), 0, 1);
+          const groundX = Phaser.Math.Linear(drop.launch.startX, drop.launch.endX, progress);
+          const groundY = Phaser.Math.Linear(drop.launch.startY, drop.launch.endY, progress);
+          const lift = 4 * Number(drop.launch.peakHeight || 0) * progress * (1 - progress);
+
+          drop.sprite.x = groundX;
+          drop.sprite.y = groundY - lift;
+          if (drop.shadow?.active) {
+            const squash = 0.68 + progress * 0.42;
+            drop.shadow.x = groundX;
+            drop.shadow.y = groundY + (drop.type === 'item' ? 12 : 10);
+            drop.shadow.setScale(squash, squash);
+            drop.shadow.setAlpha(Phaser.Math.Linear(0.06, drop.type === 'item' ? 0.20 : 0.16, progress));
+          }
+
+          if (worldBounds) {
+            drop.sprite.x = Phaser.Math.Clamp(drop.sprite.x, worldBounds.x + 10, worldBounds.right - 10);
+            drop.sprite.y = Phaser.Math.Clamp(drop.sprite.y, worldBounds.y + 10, worldBounds.bottom - 10);
+            if (drop.shadow?.active) {
+              drop.shadow.x = Phaser.Math.Clamp(drop.shadow.x, worldBounds.x + 10, worldBounds.right - 10);
+              drop.shadow.y = Phaser.Math.Clamp(drop.shadow.y, worldBounds.y + 10, worldBounds.bottom - 10);
+            }
+          }
+
+          if (progress >= 1) {
+            drop.launch.active = false;
+            drop.spawnX = drop.launch.endX;
+            drop.spawnY = drop.launch.endY;
+            drop.sprite.x = drop.spawnX;
+            drop.sprite.y = drop.spawnY;
+            drop.velocity.x = 0;
+            drop.velocity.y = 0;
+            if (drop.shadow?.active) {
+              drop.shadow.x = drop.spawnX;
+              drop.shadow.y = drop.spawnY + (drop.type === 'item' ? 12 : 10);
+              drop.shadow.setScale(1);
+            }
+            this.playDropLandFx(drop.spawnX, drop.spawnY, drop.type, drop.rarity);
+          } else {
+            continue;
+          }
+        }
+
         const damp = 0.90;
         drop.velocity.x *= Math.pow(damp, Math.max(1, dt * 60));
         drop.velocity.y *= Math.pow(damp, Math.max(1, dt * 60));
 
         drop.sprite.x += drop.velocity.x * dt;
         drop.sprite.y += drop.velocity.y * dt;
+        if (drop.shadow?.active) {
+          drop.shadow.x = drop.sprite.x;
+          drop.shadow.y = drop.sprite.y + (drop.type === 'item' ? 12 : 10);
+        }
 
         const sx = drop.spawnX ?? drop.sprite.x;
         const sy = drop.spawnY ?? drop.sprite.y;
@@ -663,7 +781,7 @@ export function applyDropsInventoryMixin(GameScene) {
         const ddx = drop.sprite.x - sx;
         const ddy = drop.sprite.y - sy;
         const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 0;
-        if (dist > maxDrift) {
+        if (maxDrift > 0 && dist > maxDrift) {
           const nx = ddx / dist;
           const ny = ddy / dist;
           drop.sprite.x = sx + nx * maxDrift;
@@ -675,6 +793,10 @@ export function applyDropsInventoryMixin(GameScene) {
         if (worldBounds) {
           drop.sprite.x = Phaser.Math.Clamp(drop.sprite.x, worldBounds.x + 10, worldBounds.right - 10);
           drop.sprite.y = Phaser.Math.Clamp(drop.sprite.y, worldBounds.y + 10, worldBounds.bottom - 10);
+          if (drop.shadow?.active) {
+            drop.shadow.x = Phaser.Math.Clamp(drop.shadow.x, worldBounds.x + 10, worldBounds.right - 10);
+            drop.shadow.y = Phaser.Math.Clamp(drop.shadow.y, worldBounds.y + 10, worldBounds.bottom - 10);
+          }
         }
 
         const dx = drop.sprite.x - this.player.x;
@@ -689,6 +811,10 @@ export function applyDropsInventoryMixin(GameScene) {
           const speed = drop.type === 'coin_bag' ? magnetConfig.bagSpeed : magnetConfig.coinSpeed;
           drop.sprite.x -= (dx / dist) * speed * (delta / 1000);
           drop.sprite.y -= (dy / dist) * speed * (delta / 1000);
+          if (drop.shadow?.active) {
+            drop.shadow.x = drop.sprite.x;
+            drop.shadow.y = drop.sprite.y + (drop.type === 'item' ? 12 : 10);
+          }
         }
 
         if (distSq < collectRadiusSq) {
@@ -723,6 +849,10 @@ export function applyDropsInventoryMixin(GameScene) {
       if (drop.sprite) {
         drop.sprite.destroy();
       }
+      if (drop.shadow) {
+        drop.shadow.destroy();
+      }
+      drop.hoverTween?.stop?.();
     },
 
     addSessionCoins(amount) {

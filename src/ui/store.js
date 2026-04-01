@@ -14,6 +14,9 @@ export const useUiStore = create((set) => ({
   showEnemyOverlays: false,
   setShowEnemyOverlays: (v) => set({ showEnemyOverlays: !!v }),
 
+  enemyHpMode: 'normal',
+  setEnemyHpMode: (mode) => set({ enemyHpMode: mode === 'low' ? 'low' : 'normal' }),
+
   viewOpen: false,
   activeTab: 'classes',
   setViewOpen: (open) => set({ viewOpen: !!open }),

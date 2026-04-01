@@ -319,10 +319,15 @@ if (!game.registry.has('showEnemyOverlays')) {
   game.registry.set('showEnemyOverlays', false);
 }
 
+if (!game.registry.has('enemyHpMode')) {
+  game.registry.set('enemyHpMode', 'normal');
+}
+
 const emitSettings = () => {
   uiBus.emit('phaser:settingsChanged', {
     showDamage: game.registry.get('showDamage') !== false,
-    showEnemyOverlays: game.registry.get('showEnemyOverlays') === true
+    showEnemyOverlays: game.registry.get('showEnemyOverlays') === true,
+    enemyHpMode: game.registry.get('enemyHpMode') === 'low' ? 'low' : 'normal'
   });
 };
 
@@ -337,6 +342,11 @@ uiBus.on('ui:settings:setShowDamage', (v) => {
 
 uiBus.on('ui:settings:setShowEnemyOverlays', (v) => {
   game.registry.set('showEnemyOverlays', !!v);
+  emitSettings();
+});
+
+uiBus.on('ui:settings:setEnemyHpMode', (mode) => {
+  game.registry.set('enemyHpMode', mode === 'low' ? 'low' : 'normal');
   emitSettings();
 });
 

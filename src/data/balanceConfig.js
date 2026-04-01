@@ -40,18 +40,18 @@ export const TUTORIAL_EXP_REWARDS = {
 const STAGE_OVERRIDES = {
   1: {
     minions: {
-      countMin: 20,
-      countMax: 24,
+      countMin: 34,
+      countMax: 40,
       hp: 30,
       exp: 12,
       speed: { chaser: 60, shooter: 52, patrol: 40, static: 0 },
       contactDamage: 6,
       projectiles: {
         enabled: true,
-        cdMs: 1600,
+        cdMs: 2050,
         count: 1,
         spread: 0.10,
-        speed: 145,
+        speed: 126,
         damage: 5,
       },
     },
@@ -64,10 +64,10 @@ const STAGE_OVERRIDES = {
       contactDamage: 10,
       projectiles: {
         enabled: true,
-        cdMs: 1500,
+        cdMs: 1850,
         count: 1,
         spread: 0.12,
-        speed: 150,
+        speed: 138,
         damage: 6,
       },
     },
@@ -79,18 +79,18 @@ const STAGE_OVERRIDES = {
 
   2: {
     minions: {
-      countMin: 24,
-      countMax: 28,
+      countMin: 38,
+      countMax: 44,
       hp: 40,
       exp: 14,
       speed: { chaser: 66, shooter: 55, patrol: 42, static: 0 },
       contactDamage: 7,
       projectiles: {
         enabled: true,
-        cdMs: 1450,
+        cdMs: 1900,
         count: 1,
         spread: 0.12,
-        speed: 155,
+        speed: 132,
         damage: 6,
       },
     },
@@ -103,10 +103,10 @@ const STAGE_OVERRIDES = {
       contactDamage: 12,
       projectiles: {
         enabled: true,
-        cdMs: 1400,
+        cdMs: 1700,
         count: 1,
         spread: 0.14,
-        speed: 160,
+        speed: 142,
         damage: 7,
       },
     },
@@ -176,18 +176,18 @@ export function getStageBalance(stage) {
 
   const derived = {
     minions: {
-      countMin: scaleStageValue(base.minions.countMin, s, 1.03, 18),
-      countMax: scaleStageValue(base.minions.countMax, s, 1.03, 22),
+      countMin: scaleStageValue(base.minions.countMin, s, 1.04, 24),
+      countMax: scaleStageValue(base.minions.countMax, s, 1.04, 28),
       hp: scaleStageValue(base.minions.hp, s, 1.12, 40),
       exp: scaleStageValue(base.minions.exp, s, 1.08, 6),
       speed: { ...base.minions.speed },
       contactDamage: scaleStageValue(base.minions.contactDamage, s, 1.10, 1),
       projectiles: {
         enabled: true,
-        cdMs: 1200,
-        count: 2,
+        cdMs: 1700,
+        count: 1,
         spread: 0.18,
-        speed: 175,
+        speed: 146,
         damage: 8,
         ...(base.minions.projectiles || {})
       },
@@ -201,10 +201,10 @@ export function getStageBalance(stage) {
       contactDamage: scaleStageValue(base.elites.contactDamage, s, 1.10, 1),
       projectiles: {
         enabled: true,
-        cdMs: 1150,
-        count: 2,
+        cdMs: 1550,
+        count: 1,
         spread: 0.20,
-        speed: 180,
+        speed: 152,
         damage: 9,
         ...(base.elites.projectiles || {})
       },

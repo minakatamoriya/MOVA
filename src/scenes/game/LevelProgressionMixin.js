@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ALL_MAPS, NEUTRAL, getMapById } from '../../data/mapPool';
 import { getMapBoss, getMapMinions, getMapElites, getRoleSize, getRoleHp, getLayerScaling } from '../../data/mapMonsters';
-import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
+import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getBossArenaWorldRect, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { rollEliteAffixes } from '../../data/eliteAffixes';
 import { OUTRUN_ITEM_SLOT_COUNT } from '../../data/items';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
@@ -19,6 +19,16 @@ function distributeExpRewards(totalExp, count) {
   const remainder = nTotal % nCount;
 
   return Array.from({ length: nCount }, (_, index) => baseReward + (index < remainder ? 1 : 0));
+}
+
+function resolveDirectedMinionType(moveType, waveIndex = 0, stage = 1) {
+  if (moveType === 'shooter') {
+    return stage >= 4 && waveIndex % 10 === 0 ? 'ring_shooter' : 'chaser';
+  }
+  if (moveType === 'chaser') {
+    return waveIndex % 5 === 0 ? 'charger' : 'chaser';
+  }
+  return 'chaser';
 }
 
 /**
@@ -413,6 +423,8 @@ export function applyLevelProgressionMixin(GameScene) {
         if (!unit || !unit.isAlive) return;
         unit.aggroOnSeen = false;
         unit.aggroActive = true;
+        unit.forceChasePlayerAfterBoss = true;
+        unit.followBoss = null;
         unit._aggroStartAt = now;
       });
     },
@@ -670,6 +682,193 @@ export function applyLevelProgressionMixin(GameScene) {
       return this.buildArenaSpawnPointForSide(orderedSides[0] || 'top', t, options);
     },
 
+    getEnemyHpMultiplier() {
+      const mode = this.enemyHpMode || this.registry?.get?.('enemyHpMode') || 'normal';
+      return mode === 'low' ? 0.7 : 1;
+    },
+
+    buildMinionRuntimeConfig(def, stage, waveIndex, point) {
+      const balance = getStageBalance(stage);
+      const resolvedType = resolveDirectedMinionType(def?.moveType, waveIndex, stage);
+      const baseMoveSpeed = balance.minions.speed[def?.moveType] ?? balance.minions.speed.chaser;
+      const resolvedMoveSpeed = resolvedType === 'charger'
+        ? Math.max(baseMoveSpeed + 18, Math.round(balance.minions.speed.chaser * 1.55))
+        : (resolvedType === 'ring_shooter'
+          ? Math.max(baseMoveSpeed + 10, Math.round(balance.minions.speed.chaser * 1.12))
+          : Math.max(baseMoveSpeed, balance.minions.speed.chaser));
+
+      return {
+        x: point.x,
+        y: point.y,
+        type: resolvedType,
+        name: def?.name || '逼近怪群',
+        hp: Math.max(8, Math.round(balance.minions.hp * this.getEnemyHpMultiplier())),
+        size: getRoleSize('minion'),
+        color: def?.color,
+        moveSpeed: resolvedMoveSpeed,
+        contactDamage: balance.minions.contactDamage,
+        expReward: Math.max(1, Math.round(balance.minions.exp || 1)),
+        isElite: false,
+        aggroOnSeen: false,
+        spawnProtectedUntilVisible: true,
+        aggroRampMs: Math.max(180, Math.round(BALANCE_CONSTANTS.aggro.rampMs * 0.5)),
+        aggroRadius: 680,
+        shootRange: resolvedType === 'ring_shooter' ? 240 : undefined,
+        shootCdMs: resolvedType === 'ring_shooter' ? Math.max(1500, balance.minions.projectiles.cdMs + 480) : undefined,
+        shootBulletCount: resolvedType === 'ring_shooter' ? 1 : undefined,
+        shootBurstCount: resolvedType === 'ring_shooter' ? 2 : undefined,
+        shootBurstSpacingMs: resolvedType === 'ring_shooter' ? 180 : undefined,
+        shootBulletSpread: resolvedType === 'ring_shooter' ? 0 : undefined,
+        shootBulletSpeed: resolvedType === 'ring_shooter' ? Math.max(100, balance.minions.projectiles.speed - 28) : undefined,
+        shootBulletDamage: resolvedType === 'ring_shooter' ? Math.max(1, Math.round(balance.minions.projectiles.damage * 0.85)) : undefined,
+        chargeRange: resolvedType === 'charger' ? 155 : undefined,
+        chargeDamage: resolvedType === 'charger' ? Math.max(1, Math.round(balance.minions.contactDamage * 1.25)) : undefined,
+        chargeSpeed: resolvedType === 'charger' ? 380 : undefined,
+        hitReactionCdMs: Infinity,
+      };
+    },
+
+    buildEliteRuntimeConfig(def, stage, eliteIndex, point) {
+      const balance = getStageBalance(stage);
+      const hpMult = this.getEnemyHpMultiplier();
+      const resolvedEliteType = def?.moveType === 'shooter'
+        ? 'ring_shooter'
+        : (eliteIndex % 2 === 0 ? 'charger' : 'chaser');
+      const baseMoveSpeed = balance.elites.speed[def?.moveType] ?? balance.elites.speed.chaser;
+      const resolvedMoveSpeed = resolvedEliteType === 'charger'
+        ? Math.max(baseMoveSpeed + 24, Math.round(balance.elites.speed.chaser * 1.6))
+        : (resolvedEliteType === 'ring_shooter'
+          ? Math.max(baseMoveSpeed + 12, Math.round(balance.elites.speed.chaser * 1.16))
+          : Math.max(baseMoveSpeed, balance.elites.speed.chaser));
+      const eliteAffixes = rollEliteAffixes({
+        stage,
+        role: resolvedEliteType
+      });
+
+      return {
+        x: point.x,
+        y: point.y,
+        type: resolvedEliteType,
+        name: def?.name || '精英单位',
+        hp: Math.max(18, Math.round(balance.elites.hp * hpMult)),
+        size: getRoleSize('elite'),
+        color: def?.color,
+        moveSpeed: resolvedMoveSpeed,
+        contactDamage: balance.elites.contactDamage,
+        expReward: Math.max(1, Math.round(balance.elites.exp || 1)),
+        isElite: true,
+        eliteAffixes,
+        aggroOnSeen: false,
+        spawnProtectedUntilVisible: true,
+        aggroRampMs: Math.max(180, Math.round(BALANCE_CONSTANTS.aggro.rampMs * 0.45)),
+        aggroRadius: 760,
+        shootRange: def?.moveType === 'shooter' ? 260 : undefined,
+        shootCdMs: def?.moveType === 'shooter' ? Math.max(1400, balance.elites.projectiles.cdMs + 260) : undefined,
+        shootBulletCount: def?.moveType === 'shooter' ? 1 : undefined,
+        shootBurstCount: def?.moveType === 'shooter' ? 2 : undefined,
+        shootBurstSpacingMs: def?.moveType === 'shooter' ? 160 : undefined,
+        shootBulletSpread: def?.moveType === 'shooter' ? 0 : undefined,
+        shootBulletSpeed: def?.moveType === 'shooter' ? Math.max(112, balance.elites.projectiles.speed - 18) : undefined,
+        shootBulletDamage: def?.moveType === 'shooter' ? Math.max(1, Math.round(balance.elites.projectiles.damage * 0.9)) : undefined,
+        chargeRange: def?.moveType === 'chaser' ? 178 : undefined,
+        chargeDamage: def?.moveType === 'chaser' ? Math.max(1, Math.round(balance.elites.contactDamage * 1.35)) : undefined,
+        chargeSpeed: def?.moveType === 'chaser' ? 430 : undefined,
+        hitReactionCdMs: stage <= 2 ? Infinity : undefined,
+      };
+    },
+
+    spawnDirectedMinion({ mapId, stage, point, def, waveIndex } = {}) {
+      if (!mapId || !point || !def || !this.bossManager) return null;
+      const runtimeConfig = this.buildMinionRuntimeConfig(def, stage || (this.currentStage || 1), waveIndex || 0, point);
+      const minion = new TestMinion(this, runtimeConfig);
+      if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];
+      this.bossManager.minions.push(minion);
+      return minion;
+    },
+
+    spawnDirectedElite({ mapId, stage, point, def, eliteIndex } = {}) {
+      if (!mapId || !point || !def || !this.bossManager) return null;
+      const runtimeConfig = this.buildEliteRuntimeConfig(def, stage || (this.currentStage || 1), eliteIndex || 0, point);
+      const elite = new TestMinion(this, runtimeConfig);
+      elite.spawnDirectorWave = true;
+      if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];
+      this.bossManager.minions.push(elite);
+      return elite;
+    },
+
+    spawnMapElites(mapId) {
+      if (!mapId || !this.bossManager || !this.player) return [];
+
+      const elites = getMapElites(mapId);
+      if (elites.length === 0) return [];
+
+      const cfg = this.mapConfig;
+      if (!cfg) return [];
+
+      const cell = cfg.cellSize;
+      const stage = this.currentStage || 1;
+      const balance = getStageBalance(stage);
+      const eliteCount = Phaser.Math.Between(balance.elites.countMin, balance.elites.countMax);
+      const eliteExpRewards = distributeExpRewards(balance.elites.totalExp, eliteCount);
+      const hpMult = this.getEnemyHpMultiplier();
+      const spawned = [];
+
+      for (let i = 0; i < eliteCount; i++) {
+        const def = elites[i % elites.length];
+        const size = getRoleSize('elite');
+        const hp = Math.max(18, Math.round(balance.elites.hp * hpMult));
+        const spawnPt = this.getDynamicSpawnPoint(i, eliteCount, {
+          offscreenPad: Math.max(84, Math.round(cell * 0.95)),
+          edgeInset: Math.max(32, Math.round(cell * 0.35)),
+          laneInset: Math.max(48, Math.round(cell * 0.75)),
+          minPlayerDistance: Math.max(260, Math.round(cell * 2.3)),
+          jitter: Math.max(14, Math.round(cell * 0.16)),
+        });
+
+        const resolvedEliteType = def.moveType === 'shooter' ? 'ring_shooter' : (i % 2 === 0 ? 'charger' : 'chaser');
+        const eliteAffixes = rollEliteAffixes({
+          stage,
+          role: resolvedEliteType
+        });
+
+        const minion = new TestMinion(this, {
+          x: spawnPt.x,
+          y: spawnPt.y,
+          type: resolvedEliteType,
+          name: def.name,
+          hp,
+          size,
+          color: def.color,
+          moveSpeed: balance.elites.speed[def.moveType] ?? balance.elites.speed.chaser,
+          contactDamage: balance.elites.contactDamage,
+          expReward: eliteExpRewards[i] ?? 0,
+          isElite: true,
+          eliteAffixes,
+          aggroOnSeen: false,
+          spawnProtectedUntilVisible: true,
+          aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
+          aggroRadius: 460,
+          shootRange: def.moveType === 'shooter' ? 260 : undefined,
+          shootCdMs: def.moveType === 'shooter' ? Math.max(1400, balance.elites.projectiles.cdMs + 260) : undefined,
+          shootBulletCount: def.moveType === 'shooter' ? 1 : undefined,
+          shootBurstCount: def.moveType === 'shooter' ? 2 : undefined,
+          shootBurstSpacingMs: def.moveType === 'shooter' ? 160 : undefined,
+          shootBulletSpread: def.moveType === 'shooter' ? 0 : undefined,
+          shootBulletSpeed: def.moveType === 'shooter' ? Math.max(112, balance.elites.projectiles.speed - 18) : undefined,
+          shootBulletDamage: def.moveType === 'shooter' ? Math.max(1, Math.round(balance.elites.projectiles.damage * 0.9)) : undefined,
+          chargeRange: def.moveType === 'chaser' ? 178 : undefined,
+          chargeDamage: def.moveType === 'chaser' ? Math.max(1, Math.round(balance.elites.contactDamage * 1.35)) : undefined,
+          chargeSpeed: def.moveType === 'chaser' ? 430 : undefined,
+          hitReactionCdMs: stage <= 2 ? Infinity : undefined,
+        });
+        spawned.push(minion);
+      }
+
+      if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];
+      this.bossManager.minions.push(...spawned);
+      return spawned;
+    },
+
     getBossArenaEntryPoint() {
       return this.getDynamicSpawnPoint(0, 1, {
         insideView: true,
@@ -679,6 +878,35 @@ export function applyLevelProgressionMixin(GameScene) {
         minPlayerDistance: 320,
         jitter: 18,
       });
+    },
+
+    spawnDirectedBoss({ mapId, stage, def, point } = {}) {
+      if (!mapId || !def || !this.bossManager?.spawnMapBoss) return null;
+
+      const spawnPoint = point || this.getBossArenaEntryPoint();
+      const boss = this.bossManager.spawnMapBoss(def, spawnPoint, stage || (this.currentStage || 1), true);
+      if (!boss) return null;
+
+      if (typeof boss.setCombatActive === 'function') {
+        boss.setCombatActive(false);
+      } else {
+        boss.combatActive = false;
+      }
+
+      if (this.mapConfig) {
+        const arena = getBossArenaWorldRect(this.mapConfig);
+        if (typeof boss.setMoveBoundsRect === 'function') boss.setMoveBoundsRect(arena);
+        else boss.moveBoundsRect = arena;
+        if (typeof boss.clampToBounds === 'function') boss.clampToBounds();
+      }
+
+      this.levelBossTriggered = true;
+      this.systemMessage?.show?.('Boss 正在逼近战场中央。', {
+        key: 'chaos_boss_approach',
+        durationMs: 1800
+      });
+      this.bossManager.showBossWarning?.(boss.bossName || def.name || 'Boss');
+      return boss;
     },
 
     startChaosArenaRound(stage, opts = {}) {
@@ -727,6 +955,7 @@ export function applyLevelProgressionMixin(GameScene) {
         backgroundKey: 'map1',
         preservePlayerPosition,
         overrideBossSpawnPoint: bossEntryPoint,
+        suppressBossSpawn: true,
       });
       if (this._fogWorldObjects) {
         this._fogWorldObjects.forEach(o => o?.destroy?.());
@@ -1510,232 +1739,26 @@ export function applyLevelProgressionMixin(GameScene) {
 
       const minions = getMapMinions(mapId);
       const elites  = getMapElites(mapId);
-      if (minions.length === 0 && elites.length === 0) return;
+      const bossDef = getMapBoss(mapId);
+      if (minions.length === 0 && elites.length === 0 && !bossDef) return;
 
       const cfg = this.mapConfig;
       if (!cfg) return;
 
-      const worldSize = cfg.gridSize * cfg.cellSize;
-      const cell = cfg.cellSize;
       const stage = this.currentStage || 1;
       const balance = getStageBalance(stage);
 
-      const minionCount = Phaser.Math.Between(balance.minions.countMin, balance.minions.countMax);
-      const minionExpRewards = distributeExpRewards(balance.minions.totalExp, minionCount);
-      const spawned = [];
+      const directorConfig = this.spawnDirector?.buildRoundConfig?.(stage, balance) || {};
+      this.spawnDirector?.startRound?.({
+        mapId,
+        stage,
+        minionDefs: minions,
+        eliteDefs: elites,
+        bossDef,
+        ...directorConfig,
+      });
 
-      // 地图层的 moveType 仍然沿用旧数据，但在这里映射到新的展示怪类型，
-      // 这样不需要重写 mapMonsters 数据，也能逐步把小怪接入 system/bullets。
-      const resolveSpawnType = (moveType, idx, isElite = false) => {
-        if (moveType === 'shooter') return 'ring_shooter';
-        if (moveType === 'chaser') {
-          if (isElite) return (idx % 2 === 0) ? 'charger' : 'chaser';
-          return (idx % 4 === 0) ? 'charger' : 'chaser';
-        }
-        return 'chaser';
-      };
-
-      // 首关强制给两个可验证样本：一个远程弹幕怪、一个冲锋怪。
-      // 这样每次开局都能直接验证“今天接的系统”是否真正跑起来了。
-      const forceStageOneShowcaseType = (idx, fallbackType) => {
-        if (stage !== 1) return fallbackType;
-        if (idx === 0) return 'ring_shooter';
-        if (idx === 1) return 'charger';
-        return fallbackType;
-      };
-
-      const stageOneShowcaseCount = stage === 1 ? 2 : 0;
-
-      if (stageOneShowcaseCount > 0) {
-        // 这两个展示怪放在屏内可见区域，避免首关因为随机刷点导致用户误判“新怪没生成”。
-        const showcaseDefs = [
-          {
-            type: 'ring_shooter',
-            name: '示例怪·光环射手',
-            color: 0xff2ca8,
-            moveSpeed: Math.max(48, balance.minions.speed.shooter || 52),
-            shootRange: 230,
-            shootCdMs: 1850,
-            shootBulletCount: 1,
-            shootBurstCount: 3,
-            shootBurstSpacingMs: 220,
-            shootBulletSpeed: 108,
-            shootBulletDamage: Math.max(1, balance.minions.projectiles.damage || 5),
-            size: getRoleSize('minion') + 2,
-          },
-          {
-            type: 'charger',
-            name: '示例怪·冲锋者',
-            color: 0xff9a52,
-            moveSpeed: Math.max(64, balance.minions.speed.chaser || 60),
-            chargeRange: 165,
-            chargeDamage: Math.max(1, Math.round(balance.minions.contactDamage * 1.35)),
-            chargeSpeed: 760,
-            chargeSpeedStart: 260,
-            chargeAccelExponent: 2.8,
-            chargeTravelPx: 320,
-            chargeOvershootPx: 72,
-            chargeCdMs: 1650,
-            chargeWindupMs: 320,
-            size: getRoleSize('minion') + 2,
-          }
-        ];
-
-        for (let i = 0; i < showcaseDefs.length; i++) {
-          const def = showcaseDefs[i];
-          const spawnPt = this.getDynamicSpawnPoint(i, showcaseDefs.length, {
-            insideView: true,
-            offscreenPad: Math.max(80, Math.round(cell * 0.9)),
-            edgeInset: Math.max(56, Math.round(cell * 0.55)),
-            laneInset: Math.max(72, Math.round(cell * 0.7)),
-            minPlayerDistance: Math.max(180, Math.round(cell * 1.6)),
-            jitter: Math.max(8, Math.round(cell * 0.10)),
-          });
-
-          const m = new TestMinion(this, {
-            x: spawnPt.x,
-            y: spawnPt.y,
-            type: def.type,
-            name: def.name,
-            hp: Math.round(balance.minions.hp),
-            size: def.size,
-            color: def.color,
-            moveSpeed: def.moveSpeed,
-            contactDamage: balance.minions.contactDamage,
-            expReward: minionExpRewards[i] ?? 0,
-            isElite: false,
-            aggroOnSeen: false,
-            spawnProtectedUntilVisible: false,
-            aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
-            aggroRadius: 460,
-            shootRange: def.shootRange,
-            shootCdMs: def.shootCdMs,
-            shootBulletCount: def.shootBulletCount,
-            shootBurstCount: def.shootBurstCount,
-            shootBurstSpacingMs: def.shootBurstSpacingMs,
-            shootBulletSpeed: def.shootBulletSpeed,
-            shootBulletDamage: def.shootBulletDamage,
-            chargeRange: def.chargeRange,
-            chargeDamage: def.chargeDamage,
-            chargeSpeed: def.chargeSpeed,
-            chargeSpeedStart: def.chargeSpeedStart,
-            chargeAccelExponent: def.chargeAccelExponent,
-            chargeTravelPx: def.chargeTravelPx,
-            chargeOvershootPx: def.chargeOvershootPx,
-            chargeCdMs: def.chargeCdMs,
-            chargeWindupMs: def.chargeWindupMs,
-            hitReactionCdMs: Infinity,
-          });
-          m.isStageOneShowcase = true;
-          spawned.push(m);
-        }
-      }
-
-      for (let i = stageOneShowcaseCount; i < minionCount; i++) {
-        const def = minions[i % minions.length];
-        const size = getRoleSize('minion');
-        const hp   = Math.round(balance.minions.hp);
-        const spawnPt = this.getDynamicSpawnPoint(i, minionCount, {
-          offscreenPad: Math.max(72, Math.round(cell * 0.85)),
-          edgeInset: Math.max(32, Math.round(cell * 0.35)),
-          laneInset: Math.max(40, Math.round(cell * 0.65)),
-          minPlayerDistance: Math.max(220, Math.round(cell * 2.0)),
-          jitter: Math.max(12, Math.round(cell * 0.18)),
-        });
-
-        const resolvedType = forceStageOneShowcaseType(i, resolveSpawnType(def.moveType, i, false));
-        const m = new TestMinion(this, {
-          x: spawnPt.x,
-          y: spawnPt.y,
-          type: resolvedType,
-          name: def.name,
-          hp,
-          size,
-          color: def.color,
-          moveSpeed: balance.minions.speed[def.moveType] ?? balance.minions.speed.chaser,
-          contactDamage: balance.minions.contactDamage,
-          expReward: minionExpRewards[i] ?? 0,
-          isElite: false,
-          aggroOnSeen: false,
-          spawnProtectedUntilVisible: true,
-          aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
-          aggroRadius: 420,
-          // 远程展示怪的弹幕现在会优先走 scene.bulletCore.createBossBullet。
-          shootRange: (resolvedType === 'ring_shooter') ? 210 : undefined,
-          shootCdMs: (resolvedType === 'ring_shooter') ? Math.max(900, balance.minions.projectiles.cdMs + 120) : undefined,
-          shootBulletCount: (resolvedType === 'ring_shooter') ? 1 : undefined,
-          shootBurstCount: (resolvedType === 'ring_shooter') ? 3 : undefined,
-          shootBurstSpacingMs: (resolvedType === 'ring_shooter') ? 110 : undefined,
-          shootBulletSpread: (resolvedType === 'ring_shooter') ? 0 : undefined,
-          shootBulletSpeed: (resolvedType === 'ring_shooter') ? Math.max(110, balance.minions.projectiles.speed - 10) : undefined,
-          shootBulletDamage: (resolvedType === 'ring_shooter') ? balance.minions.projectiles.damage : undefined,
-          // 冲锋展示怪走“前摇 + 穿体冲刺到玩家身后”的模型。
-          chargeRange: (resolvedType === 'charger') ? 155 : undefined,
-          chargeDamage: (resolvedType === 'charger') ? Math.max(1, Math.round(balance.minions.contactDamage * 1.35)) : undefined,
-          chargeSpeed: (resolvedType === 'charger') ? 390 : undefined,
-          // 前两关显著降低弹幕：把“受击反击”基本关掉
-          hitReactionCdMs: (stage <= 2) ? Infinity : undefined,
-        });
-        spawned.push(m);
-      }
-
-      const eliteCount = Phaser.Math.Between(balance.elites.countMin, balance.elites.countMax);
-      const eliteExpRewards = distributeExpRewards(balance.elites.totalExp, eliteCount);
-      for (let i = 0; i < eliteCount; i++) {
-        const def = elites[i % elites.length];
-        const size = getRoleSize('elite');
-        const hp   = Math.round(balance.elites.hp);
-        const spawnPt = this.getDynamicSpawnPoint(i, eliteCount, {
-          offscreenPad: Math.max(84, Math.round(cell * 0.95)),
-          edgeInset: Math.max(32, Math.round(cell * 0.35)),
-          laneInset: Math.max(48, Math.round(cell * 0.75)),
-          minPlayerDistance: Math.max(260, Math.round(cell * 2.3)),
-          jitter: Math.max(14, Math.round(cell * 0.16)),
-        });
-
-        const resolvedEliteType = resolveSpawnType(def.moveType, i, true);
-        const eliteAffixes = rollEliteAffixes({
-          stage,
-          role: resolvedEliteType
-        });
-
-        const m = new TestMinion(this, {
-          x: spawnPt.x,
-          y: spawnPt.y,
-          type: resolvedEliteType,
-          name: def.name,
-          hp,
-          size,
-          color: def.color,
-          moveSpeed: balance.elites.speed[def.moveType] ?? balance.elites.speed.chaser,
-          contactDamage: balance.elites.contactDamage,
-          expReward: eliteExpRewards[i] ?? 0,
-          isElite: true,
-          eliteAffixes,
-          aggroOnSeen: false,
-          spawnProtectedUntilVisible: true,
-          aggroRampMs: BALANCE_CONSTANTS.aggro.rampMs,
-          aggroRadius: 460,
-          shootRange: (def.moveType === 'shooter') ? 240 : undefined,
-          shootCdMs: (def.moveType === 'shooter') ? Math.max(850, balance.elites.projectiles.cdMs + 80) : undefined,
-          shootBulletCount: (def.moveType === 'shooter') ? 1 : undefined,
-          shootBurstCount: (def.moveType === 'shooter') ? 3 : undefined,
-          shootBurstSpacingMs: (def.moveType === 'shooter') ? 95 : undefined,
-          shootBulletSpread: (def.moveType === 'shooter') ? 0 : undefined,
-          shootBulletSpeed: (def.moveType === 'shooter') ? Math.max(120, balance.elites.projectiles.speed - 5) : undefined,
-          shootBulletDamage: (def.moveType === 'shooter') ? balance.elites.projectiles.damage : undefined,
-          chargeRange: (def.moveType === 'chaser') ? 178 : undefined,
-          chargeDamage: (def.moveType === 'chaser') ? Math.max(1, Math.round(balance.elites.contactDamage * 1.4)) : undefined,
-          chargeSpeed: (def.moveType === 'chaser') ? 450 : undefined,
-          hitReactionCdMs: (stage <= 2) ? Infinity : undefined,
-        });
-        spawned.push(m);
-      }
-
-      if (!Array.isArray(this.bossManager.minions)) this.bossManager.minions = [];
-      this.bossManager.minions.push(...spawned);
-
-      console.log(`[MapMonsters] spawned ${spawned.length} enemies for map "${mapId}" (stage ${stage})`);
+      console.log(`[MapMonsters] spawn director armed for map "${mapId}" (stage ${stage}), elites=${elites.length}, boss=${bossDef?.name || 'none'}`);
     }
 
   });

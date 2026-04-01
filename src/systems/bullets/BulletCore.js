@@ -21,6 +21,17 @@ function cloneDescriptor(descriptor = {}) {
   };
 }
 
+function attachOptionalHitEffects(bullet, options = {}) {
+  if (!bullet || !options) return;
+
+  if (Number.isFinite(Number(options.onHitMoveSlowPercent))) {
+    bullet.onHitMoveSlowPercent = Number(options.onHitMoveSlowPercent);
+  }
+  if (Number.isFinite(Number(options.onHitMoveSlowDurationMs))) {
+    bullet.onHitMoveSlowDurationMs = Number(options.onHitMoveSlowDurationMs);
+  }
+}
+
 // BulletCore 是对现有 BulletManager/CollisionManager 的薄封装。
 // 目标不是重写底层，而是给 Pattern/Vfx/Boss 时间轴提供统一发弹入口。
 export default class BulletCore {
@@ -92,6 +103,7 @@ export default class BulletCore {
     bullet.bulletCoreSide = resolved.side;
     bullet.bulletCoreTags = resolved.tags;
     bullet.bulletDescriptor = resolved;
+    attachOptionalHitEffects(bullet, resolved.options);
 
     this.metrics.created += 1;
     this.metrics.lastSpawnAt = Number(this.scene?.time?.now || 0);

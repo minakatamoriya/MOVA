@@ -106,6 +106,7 @@ export default class CooldownHud {
       this.slots.set(id, state);
       this.order.push(id);
       state.container = this._createSlotVisual(state);
+      state.container.setVisible(state.visible !== false);
     }
 
     this._applyStaticVisuals(state);
@@ -121,6 +122,7 @@ export default class CooldownHud {
   syncSlot(id, patch = {}) {
     const slot = this.slots.get(id);
     if (!slot) return;
+    const prevVisible = slot.visible !== false;
 
     if (patch.label != null) slot.label = String(patch.label || slot.label || id);
     if (patch.description != null) slot.description = String(patch.description || '');
@@ -132,6 +134,15 @@ export default class CooldownHud {
     if (patch.accentColor != null && Number.isFinite(Number(patch.accentColor))) {
       slot.accentColor = Number(patch.accentColor);
       this._applyStaticVisuals(slot);
+    }
+    if (patch.label != null || patch.iconText != null) {
+      this._applyStaticVisuals(slot);
+    }
+
+    if ((slot.visible !== false) !== prevVisible) {
+      this.layout();
+    } else if (slot.container && slot.visible === false) {
+      slot.container.setVisible(false);
     }
 
     this._renderSlot(slot, Number(this.scene?._gameplayNowMs || 0));
@@ -161,6 +172,12 @@ export default class CooldownHud {
     const cam = this.scene.cameras?.main;
     if (!cam) return;
 
+    this.order.forEach((id) => {
+      const slot = this.slots.get(id);
+      if (!slot?.container) return;
+      slot.container.setVisible(slot.visible !== false);
+    });
+
     const visibleIds = this.order.filter((id) => this.slots.get(id)?.visible !== false);
     const count = visibleIds.length;
     if (!count) return;
@@ -173,14 +190,6 @@ export default class CooldownHud {
     const rowPitch = this.slotSize + this.labelGap + this.rowGap;
 
     const squareCenterY = cam.height - this.bottomPadding - 18 - this.slotSize * 0.5;
-
-    this.order.forEach((id) => {
-      const slot = this.slots.get(id);
-      if (!slot?.container) return;
-      if (!slot.visible) {
-        slot.container.setVisible(false);
-      }
-    });
 
     visibleIds.forEach((id, index) => {
       const slot = this.slots.get(id);
@@ -294,6 +303,7 @@ export default class CooldownHud {
 
     container.setSize(size, size);
     container.setData('isUI', true);
+    container.setVisible(state?.visible !== false);
 
     state.frameGlow = frameGlow;
     state.frame = frame;

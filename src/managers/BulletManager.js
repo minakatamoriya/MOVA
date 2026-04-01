@@ -356,9 +356,9 @@ export default class BulletManager {
    */
   createBossBullet(x, y, angle, speed, color, options = {}) {
     const {
-      radius = 7,
-      glowRadius = 10,
-      hasGlow = false,
+      radius = 9,
+      glowRadius = 16,
+      hasGlow = true,
       hasTrail = true,
       trailColor = null,
       damage = 15,
@@ -373,20 +373,20 @@ export default class BulletManager {
     let bullet;
     if (shapeType === 'square') {
       const size = Math.max(6, radius * 2);
-      bullet = this.scene.add.rectangle(x, y, size, size, color, 1);
+      bullet = this.scene.add.rectangle(x, y, size, size, color, 0.96);
       bullet.rotation = 0;
       bullet.radius = Math.round(size * 0.65);
     } else if (shapeType === 'diamond') {
       const size = Math.max(6, radius * 2);
-      bullet = this.scene.add.rectangle(x, y, size, size, color, 1);
+      bullet = this.scene.add.rectangle(x, y, size, size, color, 0.96);
       bullet.rotation = Math.PI / 4;
       bullet.radius = Math.round(size * 0.7);
     } else if (shapeType === 'cross') {
       // 4-point star reads like a cross when inner radius is small
-      bullet = this.scene.add.star(x, y, 4, Math.max(2, radius * 0.35), Math.max(4, radius * 1.05), color, 1);
+      bullet = this.scene.add.star(x, y, 4, Math.max(2, radius * 0.35), Math.max(4, radius * 1.05), color, 0.98);
       bullet.radius = Math.round(radius * 1.1);
     } else if (shapeType === 'star') {
-      bullet = this.scene.add.star(x, y, 5, Math.max(2, radius * 0.45), Math.max(5, radius * 1.2), color, 1);
+      bullet = this.scene.add.star(x, y, 5, Math.max(2, radius * 0.45), Math.max(5, radius * 1.2), color, 0.98);
       bullet.radius = Math.round(radius * 1.2);
     } else if (shapeType === 'ring') {
       // ring 类多用于“范围伤害/爆炸区”，若只画描边会出现“被打到了但看不见覆盖面积”的问题
@@ -399,17 +399,19 @@ export default class BulletManager {
       bullet.radius = Math.round(radius);
     } else if (shapeType === 'rectangle') {
       // 向后兼容：旧矩形弹
-      bullet = this.scene.add.rectangle(x, y, radius * 1.5, radius, color, 1);
+      bullet = this.scene.add.rectangle(x, y, radius * 1.5, radius, color, 0.96);
       bullet.radius = Math.round(Math.max(radius * 0.9, (radius * 1.5) / 2));
     } else {
       // circle / default
-      bullet = this.scene.add.circle(x, y, radius, color, 1);
+      bullet = this.scene.add.circle(x, y, radius, color, 0.96);
       bullet.radius = Math.round(radius);
     }
 
     // 边缘处理：硬边为主，避免外圈柔光（Arc 形状用 1px 描边强化轮廓）
-    if (bullet.type === 'Arc' && shapeType !== 'ring') {
-      bullet.setStrokeStyle(1, color, 1);
+    if (shapeType === 'ring') {
+      bullet.setStrokeStyle(Math.max(3, Math.round(radius * 0.28)), 0xfbf6ff, 0.95);
+    } else if (bullet?.setStrokeStyle) {
+      bullet.setStrokeStyle(2, 0xfbf6ff, 0.92);
     }
 
     bullet.damage = damage;
@@ -445,8 +447,8 @@ export default class BulletManager {
 
     // 可选发光（默认关闭：避免“实心+外圈”风格）
     if (hasGlow) {
-      const glow = this.scene.add.circle(x, y, glowRadius, color, 0.18);
-      glow.setStrokeStyle(1, color, 0.35);
+      const glow = this.scene.add.circle(x, y, glowRadius, color, 0.24);
+      glow.setStrokeStyle(2, 0xfbf6ff, 0.48);
       glow.depth = -1;
       bullet.glow = glow;
     } else {
