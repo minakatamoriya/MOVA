@@ -174,7 +174,7 @@ export function applyBuildClassMixin(GameScene) {
           this.upgradeWarriorThorns();
           break;
         case 'warrior_swordqi':
-          this.player.warriorSwordQiLevel = Math.min(3, (this.player.warriorSwordQiLevel || 0) + 1);
+          this.player.warriorArcLevel = Math.min(1, (this.player.warriorArcLevel || 0) + 1);
           break;
         case 'warrior_damage':
           this.player.warriorDamageLevel = Math.min(3, (this.player.warriorDamageLevel || 0) + 1);
@@ -688,6 +688,42 @@ export function applyBuildClassMixin(GameScene) {
           ? Math.max(0, maxDist + Math.max(0, er))
           : Infinity;
         const maxD2 = Number.isFinite(effectiveMax) ? (effectiveMax * effectiveMax) : Infinity;
+        const dx = e.x - px;
+        const dy = e.y - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 <= maxD2 && d2 < bestD2) {
+          best = e;
+          bestD2 = d2;
+        }
+      }
+
+      return best;
+    },
+
+    getNearestEnemyByCenter(maxDist = Infinity) {
+      if (!this.player) return null;
+
+      const hp = this.player.getHitboxPosition?.();
+      const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
+      const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+
+      const enemies = [];
+      const boss = this.bossManager?.getCurrentBoss?.();
+      if (boss && boss.isAlive) enemies.push(boss);
+
+      const minions = this.bossManager?.getMinions?.() || this.bossManager?.minions || [];
+      if (Array.isArray(minions) && minions.length > 0) {
+        for (let i = 0; i < minions.length; i++) {
+          const m = minions[i];
+          if (m && m.isAlive) enemies.push(m);
+        }
+      }
+
+      const maxD2 = Number.isFinite(maxDist) ? Math.max(0, maxDist * maxDist) : Infinity;
+      let best = null;
+      let bestD2 = Infinity;
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
         const dx = e.x - px;
         const dy = e.y - py;
         const d2 = dx * dx + dy * dy;
@@ -1707,22 +1743,21 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     upgradeWarriorRange() {
-      this.player.warriorArcLevel = Math.min(3, (this.player.warriorArcLevel || 0) + 1);
       const rangeByLevel = [220, 280, 340, 420];
-      this.player.warriorRangeBase = rangeByLevel[this.player.warriorArcLevel] || rangeByLevel[0];
+      const rangeLevel = Math.max(0, Math.min(3, Math.round((this.player.warriorRangeLevel || 0) + 1)));
+      this.player.warriorRangeLevel = rangeLevel;
+      this.player.warriorRangeBase = rangeByLevel[rangeLevel] || rangeByLevel[0];
       this.player.applyStatMultipliers?.(this.player.equipmentMods || {});
     },
 
     getWarriorArcSpanDeg() {
-      return 90;
+      const arcLevel = Math.max(0, Math.min(1, Math.round(this.player?.warriorArcLevel || 0)));
+      return [180, 360][arcLevel] || 180;
     },
 
     getWarriorSenseRange() {
       const range = this.player?.warriorRange || this.meleeRange || 150;
-      if (this.player?.warriorSpin) {
-        return Phaser.Math.Clamp(Math.round(range * 0.72), 160, 260);
-      }
-      return Phaser.Math.Clamp(Math.round(range * 0.58), 140, 230);
+      return Phaser.Math.Clamp(Math.round(range), 140, 420);
     },
 
     updateWarriorSpinState(time) {
@@ -1790,35 +1825,33 @@ export function applyBuildClassMixin(GameScene) {
     },
 
     triggerWarriorSwingHit(facingAngle, swingDir) {
-      const swordQiLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorSwordQiLevel || 0)));
       const berserkgodLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorBerserkgodLevel || 0)));
       const spinUnlocked = Math.max(0, Math.min(1, Math.round(this.player?.warriorBladestorm || 0)));
       const unyieldingLevel = Math.max(0, Math.min(3, Math.round(this.player?.warriorUnyielding || 0)));
       const lowHpRatio = (this.player?.maxHp || 0) > 0 ? ((this.player?.hp || 0) / this.player.maxHp) : 1;
+      const now = Number(this.time?.now || 0);
 
       const comboSeq = (this.warriorBladeCycleSeq || 0) + 1;
       this.warriorBladeCycleSeq = comboSeq;
-      const comboPattern = this.getWarriorBladeComboPattern(swordQiLevel);
-      const comboSign = swingDir >= 0 ? 1 : -1;
+
+      this.slashSwingStartTime = now;
+      this.slashFacingAngle = facingAngle;
+      this.slashLockedFacingAngle = facingAngle;
+      this.slashLockUntil = now + Math.max(120, Number(this.slashSwingDuration || 420));
+      this.slashArcSpan = Phaser.Math.DegToRad(this.getWarriorArcSpanDeg());
+      this.slashTailLength = this.player?.warriorSpin ? 0.5 : 0.32;
 
       this.player?.playAttackAnimation?.();
-
-      comboPattern.forEach((shot) => {
-        this.time?.delayedCall?.(shot.delayMs, () => {
-          if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
-          if (this.warriorBladeCycleSeq !== comboSeq) return;
-          const shotAngle = facingAngle + Phaser.Math.DegToRad(shot.angleDeg || 0);
-          this.spawnWarriorCrescentProjectile(shotAngle, (shot.swingDir || 1) * comboSign);
-        });
-      });
+      this.spawnWarriorMeleeHit(facingAngle);
 
       if (this.player?.warriorSpin && spinUnlocked > 0 && berserkgodLevel > 0) {
         const extraShots = Math.min(3, berserkgodLevel + (lowHpRatio <= 0.35 ? unyieldingLevel : 0));
         for (let i = 0; i < extraShots; i++) {
           this.time?.delayedCall?.(120 + i * 70, () => {
             if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
+            if (this.warriorBladeCycleSeq !== comboSeq) return;
             const offsetDeg = (i % 2 === 0 ? 1 : -1) * (18 + i * 8);
-            this.spawnWarriorCrescentProjectile(facingAngle + Phaser.Math.DegToRad(offsetDeg), swingDir);
+            this.spawnWarriorMeleeHit(facingAngle + Phaser.Math.DegToRad(offsetDeg));
           });
         }
       }
@@ -1861,46 +1894,61 @@ export function applyBuildClassMixin(GameScene) {
 
       this.updateWarriorSpinState(time);
 
-      const range = this.player?.warriorRange || this.meleeRange || 150;
       const senseRange = this.getWarriorSenseRange();
 
       const hp = this.player.getHitboxPosition?.();
       const px = (hp && Number.isFinite(hp.x)) ? hp.x : this.player.x;
       const py = (hp && Number.isFinite(hp.y)) ? hp.y : this.player.y;
+      const currentTime = Number(time || this.time?.now || 0);
+      const swingActive = Number(this.slashLockUntil || 0) > currentTime && Number(this.slashSwingDuration || 0) > 0;
+
+      if (swingActive && typeof this.slashLockedFacingAngle === 'number') {
+        const swingProgress = Phaser.Math.Clamp(
+          (currentTime - Number(this.slashSwingStartTime || 0)) / Math.max(1, Number(this.slashSwingDuration || 420)),
+          0,
+          1
+        );
+        this.displaySlashFan(px, py, senseRange, this.slashLockedFacingAngle, this.slashSwingDir, swingProgress);
+      } else {
+        this.destroySlashFan();
+        this.slashLockedFacingAngle = null;
+        this.slashLockUntil = 0;
+      }
 
       const cycleDuration = Math.max(1600, Math.round((this.player?.fireRate || 700) * 2.85));
 
-      // 近战只在较短半径内开始感知与出手，风刃本体的飞行距离独立处理。
       const acquireRange = senseRange;
-      const target = this.getNearestEnemy(acquireRange);
+      const target = this.getNearestEnemyByCenter(acquireRange);
 
       this.updateWarriorRangeRing(time);
 
       if (!target || !target.isAlive) {
-        this.destroySlashFan();
-        this.slashLockedFacingAngle = null;
-        this.slashLockUntil = 0;
+        if (!swingActive) {
+          this.destroySlashFan();
+          this.slashLockedFacingAngle = null;
+          this.slashLockUntil = 0;
+        }
         return;
       }
 
       const dist = Phaser.Math.Distance.Between(px, py, target.x, target.y);
       const attackStartRange = senseRange;
-      const targetR = Number.isFinite(target?.bossSize)
-        ? target.bossSize
-        : (Number.isFinite(target?.radius) ? target.radius : 0);
-      const inAttackRange = dist <= (attackStartRange + Math.max(0, targetR));
+      const inAttackRange = dist <= attackStartRange;
 
       if (!inAttackRange) {
-        this.destroySlashFan();
-        this.slashLockedFacingAngle = null;
-        this.slashLockUntil = 0;
+        if (!swingActive) {
+          this.destroySlashFan();
+          this.slashLockedFacingAngle = null;
+          this.slashLockUntil = 0;
+        }
         return;
       }
 
       const computedFacingAngle = Math.atan2(target.y - py, target.x - px);
-      const facingAngle = computedFacingAngle;
+      const facingAngle = swingActive && typeof this.slashLockedFacingAngle === 'number'
+        ? this.slashLockedFacingAngle
+        : computedFacingAngle;
       this.slashFacingAngle = facingAngle;
-      this.destroySlashFan();
 
       if (!Number.isFinite(this.warriorBladeNextCycleAt) || this.warriorBladeNextCycleAt <= 0) {
         this.warriorBladeNextCycleAt = time;
@@ -2588,7 +2636,7 @@ export function applyBuildClassMixin(GameScene) {
       if ((frost.expiresAt || 0) <= now) frost.stacks = 0;
 
       if (target.isAlive) target.syncOverheadUiVisibility?.();
-      frost.stacks = Math.min(5, Math.max(0, Math.round(frost.stacks || 0)) + Math.max(0, Math.round(amount || 0)));
+      frost.stacks = Math.min(3, Math.max(0, Math.round(frost.stacks || 0)) + Math.max(0, Math.round(amount || 0)));
       frost.expiresAt = now + 2600;
       target.debuffs.mageFrost = frost;
       if (target.isAlive) {
@@ -2603,7 +2651,7 @@ export function applyBuildClassMixin(GameScene) {
         });
       }
 
-      if (frost.stacks < 5) return;
+      if (frost.stacks < 3) return;
 
       frost.stacks = 0;
       frost.expiresAt = 0;

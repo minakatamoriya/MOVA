@@ -248,8 +248,8 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   const scheme = getWarriorScheme(player);
   const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
 
-  const arcDegByLevel = [90, 120, 180, 270];
-  const arcLevel = Phaser.Math.Clamp(Math.round(player.warriorArcLevel || 0), 0, 3);
+  const arcDegByLevel = [180, 360];
+  const arcLevel = Phaser.Math.Clamp(Math.round(player.warriorArcLevel || 0), 0, 1);
   const bladestormLevel = Phaser.Math.Clamp(Math.round(player.warriorBladestorm || 0), 0, 3);
   const hasBladestorm = !!player.warriorSpin && bladestormLevel > 0;
   const unyieldingLevel = Phaser.Math.Clamp(Math.round(player.warriorUnyielding || 0), 0, 3);
@@ -262,11 +262,9 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   const end = arcSpan / 2;
   const yScale = Phaser.Math.Clamp(scene.slashEllipseYScale ?? 0.78, 0.55, 0.95);
 
-  const rawRange = scene.meleeRange || 220;
-  const hitRange = (player.warriorSpin || hasBladestorm) ? rawRange : (rawRange * 0.60);
-  const spinMax = Phaser.Math.Clamp(rawRange, 90, 420);
-  const halfMoonMax = 260;
-  const hitRadius = Phaser.Math.Clamp(Math.floor(hitRange), 46, (player.warriorSpin || hasBladestorm) ? spinMax : halfMoonMax);
+  const rawRange = scene.getWarriorSenseRange?.() || scene.meleeRange || player.warriorRange || 220;
+  const hitRange = Phaser.Math.Clamp(rawRange, 46, 420);
+  const hitRadius = hitRange;
 
   // 计算弧形碰撞采样点
   const arcSamples = [];
@@ -385,7 +383,7 @@ export function spawnWarriorCrescentProjectile(scene, facingAngle, swingDir) {
   if (bullet.setFillStyle) bullet.setFillStyle(scheme.coreBright, 0.001);
   if (bullet.setStrokeStyle) bullet.setStrokeStyle(0);
 
-  // 真空刃碰撞：沿刀波中心线采样，而不是旧月牙弧边
+  // 预留的风刃碰撞：后续回旋斩若恢复外放刀波，可继续复用这条中心线采样
   bullet.hitShape = 'arcSamples';
   bullet.arcSampleRadius = collisionRadius;
   bullet.arcSamples = bladeGeom.centerPoints.map((pt) => ({ x: pt.x, y: pt.y }));

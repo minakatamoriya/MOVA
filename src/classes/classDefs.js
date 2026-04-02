@@ -43,7 +43,7 @@ export const CLASSES = [
     icon: '战主',
     coreUpgradeId: CORE_UPGRADE_IDS.warrior,
     coreKey: CORE_KEYS.warrior,
-    coreDesc: '基础攻击变为近战挥砍并外放真空刃，生命上限提升'
+    coreDesc: '基础攻击变为近战月牙斩，生命上限提升'
   },
   {
     id: CLASS_IDS.archer,
@@ -67,7 +67,7 @@ export const CLASSES = [
     icon: '法主',
     coreUpgradeId: CORE_UPGRADE_IDS.mage,
     coreKey: CORE_KEYS.mage,
-    coreDesc: '基础攻击切换为单发冰弹，命中叠加寒霜，叠满五层爆炸并传染'
+    coreDesc: '基础攻击切换为单发冰弹，命中叠加寒霜，叠满三层爆炸并传染'
   },
   {
     id: CLASS_IDS.druid,

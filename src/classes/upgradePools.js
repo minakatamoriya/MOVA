@@ -53,10 +53,10 @@ export const UPGRADE_POOLS = {
     { id: 'druid_nourish', category: 'build', name: '自然滋养', desc: 'Lv1 在 10 秒内回复 54% 生命；Lv2 在 5 秒内回复 60% 生命。冷却 30 秒。', icon: '德主', maxLevel: 2 }
   ],
 
-  // 🟠 战士·次元斩（近战挥砍驱动的多段风刃组合）
+  // 🟠 战士·月牙斩（近战大范围扇形挥斩）
   warrior: [
-    { id: 'warrior_range', category: 'build', name: '斩域展开', desc: '风刃基础射程提升：0% -> 27% -> 55% -> 91%（220 -> 280 -> 340 -> 420）。', icon: '战主', maxLevel: 3 },
-    { id: 'warrior_swordqi', category: 'build', name: '真空刃强化', desc: '每次挥砍的风刃数量与飞行速度持续提升：1 -> 3 -> 5 -> 10。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_range', category: 'build', name: '斩域展开', desc: '月牙斩范围提升：220 -> 280 -> 340 -> 420，索敌范围同步扩大。', icon: '战主', maxLevel: 3 },
+    { id: 'warrior_swordqi', category: 'build', name: '满月斩', desc: '月牙斩角度由 180 度扩展到 360 度。', icon: '战主', maxLevel: 1 },
     { id: 'warrior_damage', category: 'build', name: '破军刃势', desc: '基础技能伤害提高：0% -> 12% -> 24% -> 40%。', icon: '战主', maxLevel: 3 },
     { id: 'warrior_blood_conversion', category: 'build', name: '猩红嗜血', desc: 'Lv1 获得 150% 吸血，持续 10 秒；Lv2 提升至 200% 吸血，持续 15 秒。冷却 30 秒。', icon: '战主', maxLevel: 2 }
   ],
@@ -67,7 +67,7 @@ export const UPGRADE_POOLS = {
     { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹索敌范围额外 +135。', icon: '法主', maxLevel: 1 },
     { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害加成提升至 30%。', icon: '法主', maxLevel: 1 },
     { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: '额外冻结时长提升至 1.7 秒。', icon: '法主', maxLevel: 1 },
-    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '碎冰半径：0 -> 120 -> 150 -> 185；伤害：0% -> 70% -> 100% -> 135%；传染层数：0 -> 1 -> 1 -> 2。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '寒霜改为 3 层触发碎冰；碎冰半径：0 -> 120 -> 150 -> 185；伤害：45% -> 70% -> 100% -> 135%；传染层数：1 -> 1 -> 1 -> 2。', icon: '法主', maxLevel: 3 },
     { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: 'Lv1 冻结 5 秒，范围 380；Lv2 冻结 10 秒，范围 480。冷却 30 秒。', icon: '法主', maxLevel: 2 }
   ],
 
@@ -181,8 +181,8 @@ export const DEPTH_SPEC_POOLS = {
   ],
   warrior: [
     { id: 'warrior_spin', category: 'third_depth', name: '回旋斩', desc: '终极技能：每 30 秒自动启动一次回旋斩，持续 10 秒。', icon: '战深', maxLevel: 1 },
-    { id: 'warrior_berserkgod', category: 'third_depth', name: '破风利刃', desc: '持续旋转期间周期性向外发射剑刃，补足远端压制与追击', icon: '战深', maxLevel: 3 },
-    { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '低血时持续提高旋转速度、伤害与追击风刃数量', icon: '战深', maxLevel: 3 }
+    { id: 'warrior_berserkgod', category: 'third_depth', name: '破风利刃', desc: '持续旋转期间追加延迟追斩，补足连段压制', icon: '战深', maxLevel: 3 },
+    { id: 'warrior_unyielding', category: 'third_depth', name: '暴走战躯', desc: '低血时持续提高旋转速度、伤害与追加追斩次数', icon: '战深', maxLevel: 3 }
   ],
   warlock: [
     { id: 'warlock_autoseek', category: 'third_depth', name: '瘟疫疆域', desc: '毒圈会主动索敌漂移，逐级提升移动速度、持续与覆盖范围', icon: '术深', maxLevel: 3 },

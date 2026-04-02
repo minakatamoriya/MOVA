@@ -163,6 +163,7 @@ export default class Player extends Phaser.GameObjects.Container {
     this.moveSpeed = this.baseMoveSpeed; // 移动速度
     this.controlMoveSpeedMult = 1;
     this._controlMoveSlowUntil = 0;
+    this._controlRootUntil = 0;
     this.canMove = true;
     this.hitboxRadius = 8; // 核心判定半径（小型圆形）
     this.visualRadius = 15; // 视觉大小
@@ -2122,15 +2123,38 @@ export default class Player extends Phaser.GameObjects.Container {
     this.applyStatMultipliers(this.equipmentMods);
   }
 
+  applyRoot(durationMs = 0) {
+    const now = this.scene?._gameplayNowMs ?? this.scene?.time?.now ?? 0;
+    const until = now + Math.max(0, Math.round(Number(durationMs || 0)));
+    if (until <= now) return;
+
+    this._controlRootUntil = Math.max(Number(this._controlRootUntil || 0), until);
+    this.canMove = false;
+  }
+
   clearMoveSpeedSlow() {
-    if (Number(this.controlMoveSpeedMult || 1) >= 0.999 && Number(this._controlMoveSlowUntil || 0) <= 0) return;
+    if (
+      Number(this.controlMoveSpeedMult || 1) >= 0.999
+      && Number(this._controlMoveSlowUntil || 0) <= 0
+      && Number(this._controlRootUntil || 0) <= 0
+    ) return;
     this.controlMoveSpeedMult = 1;
     this._controlMoveSlowUntil = 0;
+    this._controlRootUntil = 0;
+    this.canMove = true;
     this.applyStatMultipliers(this.equipmentMods);
   }
 
   updateExternalSpeedModifiers(now) {
     const current = Number(now || 0);
+    if (Number(this._controlRootUntil || 0) > current) {
+      this.canMove = false;
+      return;
+    }
+    if (Number(this._controlRootUntil || 0) > 0) {
+      this._controlRootUntil = 0;
+      this.canMove = true;
+    }
     if (Number(this._controlMoveSlowUntil || 0) > current) return;
     if (Number(this.controlMoveSpeedMult || 1) >= 0.999) return;
     this.clearMoveSpeedSlow();
@@ -2270,7 +2294,7 @@ export default class Player extends Phaser.GameObjects.Container {
 
     // 主职业锁定普攻形态
     if (coreKey === 'warrior') {
-      // 战士主普攻：近战挥砍 + 真空刃（在 GameScene.updateMelee 里统一渲染/结算）
+      // 战士主普攻：近战月牙斩（在 GameScene.updateMelee 里统一渲染/结算）
       this.weaponType = 'warrior_melee';
       this.baseFireRate = 999999;
     } else if (coreKey === 'paladin') {

@@ -691,6 +691,14 @@ export default class BulletManager {
       // 累计时间（用于动画）
       bullet.elapsedMs = (bullet.elapsedMs || 0) + delta;
 
+      if (bullet.maxLifeMs) {
+        bullet.lifeMs = (bullet.lifeMs || 0) + delta;
+        if (bullet.lifeMs >= bullet.maxLifeMs) {
+          this.destroyBullet(bullet, false);
+          continue;
+        }
+      }
+
       // 旋转：菱形/星形/十字每帧 5~10°（按 delta 折算）
       if (bullet.spinDegPerFrame) {
         const frames = delta / 16.666;
@@ -715,6 +723,20 @@ export default class BulletManager {
         bullet.glow.x = bullet.x;
         bullet.glow.y = bullet.y;
         bullet.glow.rotation = bullet.rotation || 0;
+      }
+
+      if (bullet.homing) {
+        const player = this.scene?.player;
+        if (player?.isAlive && player.active !== false) {
+          const targetX = Number(player.x || 0);
+          const targetY = Number(player.y || 0);
+          const targetAngle = Phaser.Math.Angle.Between(bullet.x, bullet.y, targetX, targetY);
+          const currentAngle = Number.isFinite(bullet.angleRad) ? bullet.angleRad : Number(bullet.angleOffset || 0);
+          const turn = Math.max(0.005, Number(bullet.homingTurn || 0.018));
+          const newAngle = Phaser.Math.Angle.RotateTo(currentAngle, targetAngle, turn);
+          bullet.angleRad = newAngle;
+          bullet.angleOffset = newAngle;
+        }
       }
 
       // 检测超屏（提前一点销毁以避免看到边界）

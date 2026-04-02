@@ -2890,6 +2890,7 @@ class GameScene extends Phaser.Scene {
     }
     this._minionKilledHandler = (payload) => {
       const isStartRoomTutorialTarget = !!payload?.isStartRoomTutorialTarget;
+      const noKillRewards = !!payload?.noKillRewards || !!payload?.isSummon;
 
       this.triggerWarlockSouleaterBurst?.(payload?.x ?? 0, payload?.y ?? 0);
 
@@ -2909,21 +2910,20 @@ class GameScene extends Phaser.Scene {
         return;
       }
 
-      const coinDrops = rollMinionCoinDrops({
-        isElite: !!payload?.isElite,
-        stage: this.currentStage || 1,
-        rng: Math.random
-      });
-      coinDrops.forEach((drop, index) => {
-        this.spawnCoinDrop(
-          (payload?.x ?? 0) + Phaser.Math.Between(-20, 20) + index * 6,
-          (payload?.y ?? 0) + Phaser.Math.Between(-16, 16),
-          drop.amount
-        );
-      });
+      if (!noKillRewards) {
+        const coinDrops = rollMinionCoinDrops({
+          isElite: !!payload?.isElite,
+          stage: this.currentStage || 1,
+          rng: Math.random
+        });
+        coinDrops.forEach((drop, index) => {
+          this.spawnCoinDrop(
+            (payload?.x ?? 0) + Phaser.Math.Between(-20, 20) + index * 6,
+            (payload?.y ?? 0) + Phaser.Math.Between(-16, 16),
+            drop.amount
+          );
+        });
 
-      // 小怪/精英：掉落局内装备
-      {
         const equipmentSource = payload?.isElite ? 'elite' : 'minion';
         this.rollAndSpawnEquipmentDrops?.(
           equipmentSource,

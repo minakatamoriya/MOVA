@@ -209,8 +209,9 @@ function castSummon(boss) {
           moveSpeed: SUMMON_SPEED,
           contactDamage: SUMMON_CONTACT_DAMAGE,
           color: 0x556688,
-          expReward: 5,
+          expReward: 0,
           isSummon: true,
+          noKillRewards: true,
         });
 
         // 生成特效

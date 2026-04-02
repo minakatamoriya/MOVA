@@ -117,6 +117,7 @@ export function fireMageIceBolt(player, options = {}) {
   bullet.lockTarget = target;
   bullet.homingMode = 'fan_lock';
   bullet.homingTurnRadPerSec = Phaser.Math.DegToRad(280);
+  bullet.ignoreNonTargetCollision = true;
   bullet.hitEffectColor = 0xdaf7ff;
   bullet.damageNumberAtTarget = true;
   bullet.visualAccentColor = iceStroke;

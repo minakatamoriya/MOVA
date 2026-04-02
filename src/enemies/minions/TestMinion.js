@@ -95,6 +95,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.isMinion = true;
     this.isEnemy = true;
     this.isElite = !!config.isElite;
+    this.isSummon = !!config.isSummon;
+    this.noKillRewards = !!config.noKillRewards;
     this._destroying = false;
 
     this.minionType = config.type || 'chaser'; // chaser | shooter | ring_shooter | charger
@@ -186,6 +188,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this._chargeTrailAt = 0;
     this._chargeVisualSpeed = this.chargeSpeedStart;
     this._chargeTelegraph = null;
+    this._chargeTelegraphMarker = null;
     this._chargeTelegraphLength = Math.max(120, Math.round(this.chargeTravelPx * 0.92));
     this._chargeTurnRadPerSec = (config.chargeTurnRadPerSec != null)
       ? Math.max(0, Number(config.chargeTurnRadPerSec))
@@ -198,16 +201,33 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       lastArcaneAt: -999999,
       lastFrozenAt: -999999,
       lastWallAt: -999999,
+      lastEmberAt: -999999,
+      lastBombardAt: -999999,
+      lastPoisonAt: -999999,
+      lastSummonAt: -999999,
+      lastTrapAt: -999999,
+      lastBlinkAt: -999999,
       lastArcaneHitAt: -999999,
+      moltenTickAt: -999999,
       activeArcane: null,
       activeArcaneCleanupTimer: null,
       activeFrozen: null,
-      activeWalls: []
+      activeWalls: [],
+      activeMolten: null,
+      activePoisonPools: [],
+      activeTraps: [],
+      summonUnits: [],
+      enragedActive: false,
+      enrageTriggered: false
     };
     this._eliteAffixText = null;
     this._eliteAura = null;
     this._eliteBlueAura = null;
     this._eliteRedAura = null;
+    this._eliteDarkAura = null;
+    this._elitePurpleAura = null;
+    this._eliteCrown = null;
+    this._eliteSmokeMotes = [];
     this.applyEliteAffixes(config.eliteAffixes);
 
     // 受击反馈（可扩展接口）：被击中后立即触发某种“反应”（远程反击/冲锋/防御法阵等）
@@ -259,6 +279,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   createVisuals(color) {
+    const visualRadius = this.isElite ? Math.round(this.radius * 1.18) : this.radius;
     const core = color || (
       this.minionType === 'ring_shooter' ? 0xff2ca8
         : (this.minionType === 'charger' ? 0xff9a52
@@ -266,13 +287,13 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     );
 
     if (this.minionType === 'ring_shooter') {
-      const halo = this.scene.add.circle(0, 0, this.radius + 5, core, 0.10);
+      const halo = this.scene.add.circle(0, 0, visualRadius + 5, core, 0.10);
       halo.setStrokeStyle(4, 0xffd0f0, 0.96);
       halo.setBlendMode(Phaser.BlendModes.ADD);
-      const coreOrb = this.scene.add.circle(0, 0, Math.max(5, this.radius * 0.46), 0xff79cb, 0.95);
+      const coreOrb = this.scene.add.circle(0, 0, Math.max(5, visualRadius * 0.46), 0xff79cb, 0.95);
       coreOrb.setStrokeStyle(2, 0xffffff, 0.65);
-      const leftSigil = this.scene.add.circle(-this.radius * 0.62, 0, 2.5, 0xffd0f0, 0.9);
-      const rightSigil = this.scene.add.circle(this.radius * 0.62, 0, 2.5, 0xffd0f0, 0.9);
+      const leftSigil = this.scene.add.circle(-visualRadius * 0.62, 0, 2.5, 0xffd0f0, 0.9);
+      const rightSigil = this.scene.add.circle(visualRadius * 0.62, 0, 2.5, 0xffd0f0, 0.9);
       this.sprite = halo;
       this.add(halo);
       this.add(coreOrb);
@@ -282,16 +303,16 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const spearhead = this.scene.add.triangle(
         0,
         0,
-        this.radius * 1.18, 0,
-        -this.radius * 0.86, -this.radius * 0.82,
-        -this.radius * 0.86, this.radius * 0.82,
+        visualRadius * 1.18, 0,
+        -visualRadius * 0.86, -visualRadius * 0.82,
+        -visualRadius * 0.86, visualRadius * 0.82,
         core,
         0.98
       );
       spearhead.setStrokeStyle(2, 0xffe0b0, 0.78);
-      const tail = this.scene.add.rectangle(-this.radius * 0.48, 0, Math.max(8, this.radius * 0.95), Math.max(6, this.radius * 0.60), 0xffc27a, 0.88);
+      const tail = this.scene.add.rectangle(-visualRadius * 0.48, 0, Math.max(8, visualRadius * 0.95), Math.max(6, visualRadius * 0.60), 0xffc27a, 0.88);
       tail.setAngle(0);
-      const coreSpark = this.scene.add.circle(this.radius * 0.20, 0, Math.max(4, this.radius * 0.22), 0xfff1c2, 0.95);
+      const coreSpark = this.scene.add.circle(visualRadius * 0.20, 0, Math.max(4, visualRadius * 0.22), 0xfff1c2, 0.95);
       this.sprite = spearhead;
       this._visualFacingNodes = [tail, spearhead];
       this.add(tail);
@@ -302,13 +323,13 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const texKey = 'shilaimu';
       if (this.scene?.textures?.exists?.(texKey)) {
         this.sprite = this.scene.add.image(0, 0, texKey);
-        this.sprite.setDisplaySize(this.radius * 2, this.radius * 2);
+        this.sprite.setDisplaySize(visualRadius * 2, visualRadius * 2);
         this.add(this.sprite);
       }
     }
 
     // 圆形触碰判定框：透明填充 + 描边
-    this.body = this.scene.add.circle(0, 0, this.radius, core, 0);
+    this.body = this.scene.add.circle(0, 0, visualRadius, core, 0);
     this.body.setStrokeStyle(
       this.minionType === 'ring_shooter' ? 4 : 2,
       this.minionType === 'ring_shooter' ? 0xffd0f0 : (this.minionType === 'charger' ? 0xffd28a : 0xffffff),
@@ -318,18 +339,53 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     if (this.isElite && this.eliteAffixes.length > 0) {
       const ringColor = this.getPrimaryEliteAffixColor();
-      this._eliteBlueAura = this.scene.add.circle(0, 0, this.radius + 10, 0x58a6ff, 0.06);
+      this._eliteDarkAura = this.scene.add.circle(0, 0, visualRadius + 18, 0x090b10, 0.24);
+      this._eliteDarkAura.setStrokeStyle(2, 0x131722, 0.7);
+      this.addAt(this._eliteDarkAura, 0);
+
+      this._eliteBlueAura = this.scene.add.circle(0, 0, visualRadius + 10, 0x58a6ff, 0.08);
       this._eliteBlueAura.setBlendMode(Phaser.BlendModes.ADD);
       this.addAt(this._eliteBlueAura, 0);
 
-      this._eliteRedAura = this.scene.add.circle(0, 0, this.radius + 14, 0xff5b6e, 0.05);
+      this._elitePurpleAura = this.scene.add.circle(0, 0, visualRadius + 12, 0x9d6bff, 0.07);
+      this._elitePurpleAura.setBlendMode(Phaser.BlendModes.ADD);
+      this.addAt(this._elitePurpleAura, 0);
+
+      this._eliteRedAura = this.scene.add.circle(0, 0, visualRadius + 16, 0xff5b6e, 0.06);
       this._eliteRedAura.setBlendMode(Phaser.BlendModes.ADD);
       this.addAt(this._eliteRedAura, 0);
 
-      this._eliteAura = this.scene.add.circle(0, 0, this.radius + 7, ringColor, 0.06);
-      this._eliteAura.setStrokeStyle(2, ringColor, 0.78);
+      this._eliteAura = this.scene.add.circle(0, 0, visualRadius + 8, ringColor, 0.08);
+      this._eliteAura.setStrokeStyle(3, ringColor, 0.84);
       this._eliteAura.setBlendMode(Phaser.BlendModes.ADD);
       this.addAt(this._eliteAura, 0);
+
+      this._eliteCrown = this.scene.add.triangle(
+        0,
+        -visualRadius - 8,
+        -12, 5,
+        0, -9,
+        12, 5,
+        0xffe1a6,
+        0.92
+      );
+      this._eliteCrown.setStrokeStyle(2, ringColor, 0.86);
+      this.add(this._eliteCrown);
+
+      this._eliteSmokeMotes = [];
+      for (let i = 0; i < 6; i += 1) {
+        const mote = this.scene.add.circle(0, 0, Phaser.Math.Between(3, 5), 0x090b10, 0.28);
+        mote.setStrokeStyle(1, i % 2 === 0 ? 0x6e79ff : 0xc14f72, 0.25);
+        this.addAt(mote, 1);
+        this._eliteSmokeMotes.push({
+          node: mote,
+          angle: (Phaser.Math.PI2 / 6) * i,
+          orbitRadius: visualRadius + Phaser.Math.Between(8, 16),
+          speed: Phaser.Math.FloatBetween(0.5, 1.15),
+          drift: Phaser.Math.FloatBetween(2.5, 6.5),
+          pulse: Phaser.Math.FloatBetween(0, Math.PI * 2)
+        });
+      }
 
       this.body.setStrokeStyle(
         this.minionType === 'ring_shooter' ? 4 : 3,
@@ -342,13 +398,13 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
   createHpBar() {
     if (this.hpBarBg || this.hpBarFill) return;
-    const barW = Math.max(42, Math.round(this.radius * 3.2));
-    const barH = 6;
-    const y = -this.radius - 16;
+    const barW = Math.max(this.isElite ? 64 : 42, Math.round(this.radius * (this.isElite ? 4.1 : 3.2)));
+    const barH = this.isElite ? 8 : 6;
+    const y = -this.radius - (this.isElite ? 22 : 16);
 
     this._hpBarW = barW;
     this.hpBarBg = this.scene.add.rectangle(0, y, barW, barH, 0x0b0b18, 0.80).setOrigin(0.5, 0.5);
-    this.hpBarBg.setStrokeStyle(1, 0xffffff, 0.18);
+    this.hpBarBg.setStrokeStyle(this.isElite ? 2 : 1, this.isElite ? 0xffd4a0 : 0xffffff, this.isElite ? 0.42 : 0.18);
 
     this.hpBarFill = this.scene.add.rectangle(-(barW * 0.5) + 1, y, barW - 2, barH - 2, 0x66ff99, 1).setOrigin(0, 0.5);
 
@@ -370,7 +426,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   createAffixUi() {
     if (this._eliteAffixText || !this.isElite || this.eliteAffixes.length <= 0) return;
     const label = buildEliteAffixDisplayText(this.eliteAffixes);
-    this._eliteAffixText = this.scene.add.text(0, -this.radius - 54, label, {
+    const tagText = this.scene.add.text(0, -this.radius - 62, '精英', {
+      fontSize: '11px',
+      color: '#ffd699',
+      fontStyle: 'bold'
+    }).setOrigin(0.5, 0.5);
+    const labelText = this.scene.add.text(0, -this.radius - 47, label, {
       fontSize: '18px',
       color: '#ffe9b8',
       fontStyle: 'bold',
@@ -378,6 +439,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       strokeThickness: 5,
       align: 'center'
     }).setOrigin(0.5, 0.5);
+    const plaqueW = Math.max(86, labelText.width + 30);
+    const plaque = this.scene.add.rectangle(0, -this.radius - 47, plaqueW, 24, 0x120d0d, 0.62).setOrigin(0.5, 0.5);
+    plaque.setStrokeStyle(2, 0xffd0a0, 0.48);
+    const accent = this.scene.add.rectangle(0, -this.radius - 60, 34, 3, this.getPrimaryEliteAffixColor(), 0.9).setOrigin(0.5, 0.5);
+    const badge = this.scene.add.container(0, 0, [plaque, accent, tagText, labelText]);
+    this._eliteAffixText = badge;
     this._eliteAffixText.setDepth(12);
     this.add(this._eliteAffixText);
   }
@@ -466,7 +533,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   }
 
   updateHpBar() {
-    if (!this.showStatusUi) return;
+    if (!this.showStatusUi && !this.isElite) return;
     if (!this.hpBarBg || !this.hpBarFill) return;
     const max = Math.max(1, this.maxHp || 1);
     const cur = Math.max(0, this.currentHp || 0);
@@ -474,7 +541,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const w = Math.max(2, Math.floor((this._hpBarW - 2) * pct));
     this.hpBarFill.width = w;
 
-    const color = pct > 0.6 ? 0x66ff99 : (pct > 0.3 ? 0xffdd88 : 0xff6666);
+    const color = this.isElite
+      ? (pct > 0.6 ? 0x8ef7d0 : (pct > 0.3 ? 0xffc86e : 0xff6b6b))
+      : (pct > 0.6 ? 0x66ff99 : (pct > 0.3 ? 0xffdd88 : 0xff6666));
     this.hpBarFill.fillColor = color;
   }
 
@@ -485,20 +554,27 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   syncOverheadUiVisibility() {
     const shouldShow = this.shouldShowOverheadUi();
     const shouldShowAffix = this.isElite && this.eliteAffixes.length > 0;
-    if (this.showStatusUi === shouldShow && (!!this._eliteAffixText?.visible) === shouldShowAffix) return;
+    const shouldShowEliteBar = this.isElite && this.eliteAffixes.length > 0;
+    if (
+      this.showStatusUi === shouldShow
+      && (!!this._eliteAffixText?.visible) === shouldShowAffix
+      && (!!this.hpBarBg?.visible) === (shouldShow || shouldShowEliteBar)
+    ) return;
 
     this.showStatusUi = shouldShow;
-    if (shouldShow) {
+    if (shouldShow || shouldShowEliteBar) {
       this.createHpBar();
-      this.createDebuffUi();
-      this.updateHpBar();
     }
+    if (shouldShow) {
+      this.createDebuffUi();
+    }
+    this.updateHpBar();
 
     // 精英词缀头标强制常显，不受 showEnemyOverlays 开关控制。
     this.createAffixUi();
 
-    if (this.hpBarBg) this.hpBarBg.setVisible(shouldShow);
-    if (this.hpBarFill) this.hpBarFill.setVisible(shouldShow);
+    if (this.hpBarBg) this.hpBarBg.setVisible(shouldShow || shouldShowEliteBar);
+    if (this.hpBarFill) this.hpBarFill.setVisible(shouldShow || shouldShowEliteBar);
     if (this._debuffUi?.container) this._debuffUi.container.setVisible(shouldShow);
     if (this._eliteAffixText) this._eliteAffixText.setVisible(shouldShowAffix);
   }
@@ -663,6 +739,42 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.currentHp = this.maxHp;
     this.damageTakenMult = Math.min(this.damageTakenMult || 1, 0.92);
 
+    if (this.hasEliteAffix('hasted')) {
+      this.moveSpeed = Math.round(this.moveSpeed * 1.14);
+      this.shootCdMs = Math.max(320, Math.round(this.shootCdMs * 0.88));
+      this.chargeCdMs = Math.max(320, Math.round(this.chargeCdMs * 0.9));
+      this.chargeSpeed = Math.round(this.chargeSpeed * 1.08);
+    }
+
+    if (this.hasEliteAffix('juggernaut')) {
+      this.maxHp = Math.round(this.maxHp * 1.18);
+      this.currentHp = this.maxHp;
+      this.damageTakenMult = Math.min(this.damageTakenMult || 1, 0.84);
+      this.contactDamage = Math.max(1, Math.round((this.contactDamage || 0) * 1.15));
+      this.radius += 2;
+    }
+
+    if (this.hasEliteAffix('ember_nova')) {
+      this.contactDamage = Math.max(1, Math.round((this.contactDamage || 1) * 1.1));
+    }
+
+    if (this.hasEliteAffix('seeker_bombard')) {
+      this.shootRange = Math.max(this.shootRange, 300);
+    }
+
+    if (this.hasEliteAffix('toxic_pool')) {
+      this.shootRange = Math.max(this.shootRange, 260);
+    }
+
+    if (this.hasEliteAffix('summoner')) {
+      this.maxHp = Math.round(this.maxHp * 1.05);
+      this.currentHp = this.maxHp;
+    }
+
+    if (this.hasEliteAffix('blink_step')) {
+      this.moveSpeed = Math.round(this.moveSpeed * 1.04);
+    }
+
     const affixNames = list.map((item) => item.name).filter(Boolean);
     const compactPrefix = affixNames.length > 2
       ? `${affixNames.slice(0, 2).join('·')}+${affixNames.length - 2}`
@@ -721,8 +833,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   updateEliteAffixes(time, delta, player) {
     if (!this.isElite || this.eliteAffixes.length <= 0 || !player?.isAlive) return;
 
+    this.updateEnrageState(time);
     this.updateEliteVisualState(time);
     this.updateActiveArcaneLaser(time, player);
+    this.updateActiveMoltenCore(time, player);
+    this.updateActivePoisonPools(time, player);
+    this.updateActiveSnareTraps(time, player);
 
     if (this._eliteAura?.active) {
       const pulse = 0.72 + 0.16 * Math.sin((time || 0) / 220);
@@ -733,23 +849,77 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.tryTriggerArcaneLaserAffix(time, player);
     this.tryTriggerFrozenBurstAffix(time, player);
     this.tryTriggerWallerAffix(time, player);
+    this.tryTriggerEmberNovaAffix(time, player);
+    this.tryTriggerSeekerBombardAffix(time, player);
+    this.tryTriggerToxicPoolAffix(time, player);
+    this.tryTriggerSummonerAffix(time, player);
+    this.tryTriggerSnareTrapAffix(time, player);
+    this.tryTriggerBlinkStepAffix(time, player);
+  }
+
+  updateEnrageState(time) {
+    if (!this.hasEliteAffix('enraged')) return;
+    if (this._eliteAffixState.enragedActive) return;
+
+    const hpPct = Phaser.Math.Clamp((this.currentHp || 0) / Math.max(1, this.maxHp || 1), 0, 1);
+    if (hpPct > 0.38) return;
+
+    this._eliteAffixState.enragedActive = true;
+    this._eliteAffixState.enrageTriggered = true;
+    this.moveSpeed = Math.round(this.moveSpeed * 1.1);
+    this.shootCdMs = Math.max(260, Math.round(this.shootCdMs * 0.82));
+    this.shootBulletSpeed = Math.round(this.shootBulletSpeed * 1.12);
+    this.chargeCdMs = Math.max(320, Math.round(this.chargeCdMs * 0.88));
+    this.chargeSpeed = Math.round(this.chargeSpeed * 1.06);
+    this.scene?.vfxSystem?.playChargeBurst?.(this.x, this.y, {
+      color: 0xff7a63,
+      count: 18
+    });
   }
 
   updateEliteVisualState(time) {
     if (!this.isElite) return;
     const wave = 0.5 + 0.5 * Math.sin((time || 0) / 180);
-    const color = lerpColor(0x4aa3ff, 0xff5b6e, wave);
+    const halfWave = wave < 0.5 ? wave / 0.5 : (wave - 0.5) / 0.5;
+    const color = wave < 0.5
+      ? lerpColor(0x4aa3ff, 0x9d6bff, halfWave)
+      : lerpColor(0x9d6bff, 0xff5b6e, halfWave);
+
+    if (this._eliteDarkAura?.active) {
+      this._eliteDarkAura.alpha = 0.18 + (1 - wave) * 0.10;
+      this._eliteDarkAura.setScale(1.02 + wave * 0.08);
+    }
 
     if (this._eliteBlueAura?.active) {
       this._eliteBlueAura.alpha = 0.08 + (1 - wave) * 0.10;
       this._eliteBlueAura.setScale(0.95 + (1 - wave) * 0.22);
     }
+    if (this._elitePurpleAura?.active) {
+      this._elitePurpleAura.alpha = Phaser.Math.Clamp(0.06 + 0.08 * Math.sin((time || 0) / 210 + 1.2), 0.03, 0.16);
+      this._elitePurpleAura.setScale(0.98 + 0.16 * Math.sin((time || 0) / 240 + 0.8));
+    }
     if (this._eliteRedAura?.active) {
       this._eliteRedAura.alpha = 0.08 + wave * 0.10;
       this._eliteRedAura.setScale(0.92 + wave * 0.26);
     }
+    if (this._eliteCrown?.active) {
+      this._eliteCrown.y = -Math.round(this.radius * 1.18) - 10 + Math.sin((time || 0) / 220) * 1.5;
+      this._eliteCrown.rotation = Math.sin((time || 0) / 320) * 0.04;
+      this._eliteCrown.alpha = 0.86 + wave * 0.12;
+    }
+    if (Array.isArray(this._eliteSmokeMotes)) {
+      this._eliteSmokeMotes.forEach((mote, index) => {
+        if (!mote?.node?.active) return;
+        const t = (time || 0) * 0.001 * mote.speed;
+        const orbit = mote.orbitRadius + Math.sin(t * 1.6 + mote.pulse) * 4;
+        mote.node.x = Math.cos(mote.angle + t) * orbit;
+        mote.node.y = Math.sin(mote.angle + t) * (orbit * 0.58) - mote.drift - Math.sin(t * 2.2 + index) * 5;
+        mote.node.alpha = Phaser.Math.Clamp(0.16 + 0.16 * Math.sin(t * 2.8 + mote.pulse), 0.05, 0.32);
+        mote.node.setScale(0.86 + 0.26 * Math.sin(t * 2.1 + mote.pulse));
+      });
+    }
     if (this.sprite?.setTint) this.sprite.setTint(color);
-    if (this.body?.setStrokeStyle) this.body.setStrokeStyle(3, color, 1);
+    if (this.body?.setStrokeStyle) this.body.setStrokeStyle(this.isElite ? 4 : 3, color, 1);
   }
 
   tryTriggerArcaneLaserAffix(time, player) {
@@ -952,7 +1122,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
   tryTriggerWallerAffix(time, player) {
     if (!this.hasEliteAffix('waller')) return;
     const now = time || (this.scene?.time?.now ?? 0);
-    if (now - (this._eliteAffixState.lastWallAt || 0) < 3400) return;
+    if (now - (this._eliteAffixState.lastWallAt || 0) < 4400) return;
     if ((this._eliteAffixState.activeWalls || []).length > 0) return;
 
     const cfg = this.scene?.mapConfig;
@@ -962,7 +1132,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const dx = hp.x - this.x;
     const dy = hp.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-    if (dist > 320) return;
+    if (dist > 290) return;
 
     this._eliteAffixState.lastWallAt = now;
     const cellSize = cfg.cellSize;
@@ -971,7 +1141,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const centerGy = Math.floor((hp.y - Math.sign(dy || 1) * cellSize * 0.9) / cellSize);
     const vertical = Math.abs(dx) > Math.abs(dy);
     const cells = [];
+    const gapOffset = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
     for (let i = -1; i <= 1; i += 1) {
+      if (i === gapOffset) continue;
       const gx = vertical ? centerGx : centerGx + i;
       const gy = vertical ? centerGy + i : centerGy;
       if (gx < 0 || gx >= gridSize || gy < 0 || gy >= gridSize) continue;
@@ -1003,9 +1175,20 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         wall.setStrokeStyle(3, 0xffd29b, 0.92);
         return { wall, idx: cell.idx, x, y };
       });
+
+      const gapCell = vertical
+        ? { gx: centerGx, gy: centerGy + gapOffset }
+        : { gx: centerGx + gapOffset, gy: centerGy };
+      if (gapCell.gx >= 0 && gapCell.gx < gridSize && gapCell.gy >= 0 && gapCell.gy < gridSize) {
+        const gapX = gapCell.gx * cellSize + cellSize * 0.5;
+        const gapY = gapCell.gy * cellSize + cellSize * 0.5;
+        const gapHint = this.scene.add.circle(gapX, gapY, Math.max(10, cellSize * 0.14), 0xfff0c8, 0.14).setDepth(8);
+        gapHint.setStrokeStyle(2, 0xfff0c8, 0.55);
+        walls.push({ wall: gapHint, idx: null, x: gapX, y: gapY, isHint: true });
+      }
       this._eliteAffixState.activeWalls = walls;
 
-      const clearTimer = this.scene?.time?.delayedCall?.(1400, () => {
+      const clearTimer = this.scene?.time?.delayedCall?.(1100, () => {
         this.clearEliteWalls();
       });
       this.trackOwnedTimer(clearTimer);
@@ -1013,10 +1196,492 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.trackOwnedTimer(timer);
   }
 
+  tryTriggerEmberNovaAffix(time, player) {
+    if (!this.hasEliteAffix('ember_nova')) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now - (this._eliteAffixState.lastEmberAt || 0) < 3600) return;
+    if (this._eliteAffixState.activeMolten) return;
+
+    const hp = player.getHitboxPosition?.() || { x: player.x, y: player.y, radius: player.hitboxRadius || 16 };
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y);
+    if (dist > 250) return;
+
+    this._eliteAffixState.lastEmberAt = now;
+    const burstRadius = Math.max(74, this.radius + 44);
+    const telegraph = this.scene?.patternSystem?.emitGroundTelegraph?.({
+      x: this.x,
+      y: this.y,
+      telegraphRadius: burstRadius,
+      telegraphColor: 0xff9a54,
+      durationMs: 540
+    });
+    this.trackOwnedObject(telegraph);
+
+    const timer = this.scene?.time?.delayedCall?.(540, () => {
+      if (!this.active || !this.isAlive) return;
+
+      const outer = this.scene?.add?.circle?.(this.x, this.y, burstRadius, 0xff8b47, 0.14)?.setDepth?.(7) || null;
+      const inner = this.scene?.add?.circle?.(this.x, this.y, Math.max(24, burstRadius * 0.52), 0xffd18a, 0.20)?.setDepth?.(8) || null;
+      outer?.setStrokeStyle?.(3, 0xffc27d, 0.9);
+      inner?.setStrokeStyle?.(2, 0xfff0c9, 0.78);
+
+      this._eliteAffixState.activeMolten = {
+        radius: burstRadius,
+        until: (this.scene?.time?.now ?? now) + 2200,
+        outer,
+        inner
+      };
+      this._eliteAffixState.moltenTickAt = (this.scene?.time?.now ?? now);
+      this.scene?.vfxSystem?.playBurst?.(this.x, this.y, {
+        radius: burstRadius,
+        color: 0xffb067,
+        durationMs: 200
+      });
+    });
+    this.trackOwnedTimer(timer);
+  }
+
+  tryTriggerSeekerBombardAffix(time, player) {
+    if (!this.hasEliteAffix('seeker_bombard')) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now - (this._eliteAffixState.lastBombardAt || 0) < 5200) return;
+
+    const hp = player.getHitboxPosition?.() || { x: player.x, y: player.y, radius: player.hitboxRadius || 16 };
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y);
+    if (dist > 500) return;
+
+    this._eliteAffixState.lastBombardAt = now;
+    const lockedPoint = clampWorldPoint(this.scene, hp.x, hp.y, 28);
+    const blastRadius = 64;
+    const telegraph = this.scene?.patternSystem?.emitGroundTelegraph?.({
+      x: lockedPoint.x,
+      y: lockedPoint.y,
+      telegraphRadius: blastRadius,
+      telegraphColor: 0xffcf5f,
+      durationMs: 1080
+    });
+    this.trackOwnedObject(telegraph);
+
+    const timer = this.scene?.time?.delayedCall?.(1080, () => {
+      if (!this.active || !this.isAlive) return;
+
+      this.scene?.vfxSystem?.playCastFlash?.(lockedPoint.x, lockedPoint.y, {
+        color: 0xffcf5f,
+        durationMs: 120,
+        radius: blastRadius
+      });
+      this.scene?.vfxSystem?.playBurst?.(lockedPoint.x, lockedPoint.y, {
+        radius: blastRadius + 10,
+        color: 0xffdf89,
+        durationMs: 200
+      });
+
+      this.scene?.patternSystem?.emitRing?.({
+        side: 'boss',
+        x: lockedPoint.x,
+        y: lockedPoint.y,
+        count: 6,
+        speed: 110,
+        color: 0xffcf5f,
+        radius: 9,
+        damage: Math.max(1, Math.round((this.shootBulletDamage || this.contactDamage || 8) * 0.62)),
+        tags: ['elite_affix_seeker_bombard'],
+        options: {
+          type: 'ring',
+          hasTrail: true,
+          trailColor: 0xffefae,
+          hasGlow: true,
+          glowRadius: 18,
+          ringStrokeWidth: 3,
+          ringFillAlpha: 0.18
+        }
+      });
+
+      const liveHp = player.getHitboxPosition?.() || hp;
+      const hit = Phaser.Math.Distance.Between(lockedPoint.x, lockedPoint.y, liveHp.x, liveHp.y) <= (blastRadius + (liveHp.radius || 16));
+      if (!hit) return;
+
+      this.scene?.vfxSystem?.playHit?.(liveHp.x, liveHp.y, {
+        color: 0xffdf89,
+        radius: 10,
+        durationMs: 120
+      });
+      player.takeDamage(Math.max(1, Math.round((this.shootBulletDamage || this.contactDamage || 8) * 0.95)));
+    });
+    this.trackOwnedTimer(timer);
+  }
+
+  tryTriggerToxicPoolAffix(time, player) {
+    if (!this.hasEliteAffix('toxic_pool')) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now - (this._eliteAffixState.lastPoisonAt || 0) < 5200) return;
+    if ((this._eliteAffixState.activePoisonPools || []).length >= ((this.scene?.currentStage || 1) >= 8 ? 2 : 1)) return;
+
+    const hp = player.getHitboxPosition?.() || { x: player.x, y: player.y, radius: player.hitboxRadius || 16 };
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y);
+    if (dist > 380) return;
+
+    this._eliteAffixState.lastPoisonAt = now;
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, hp.x, hp.y);
+    const spawn = clampWorldPoint(this.scene, hp.x - Math.cos(angle) * 26, hp.y - Math.sin(angle) * 26, 32);
+    const radius = 50;
+    const telegraph = this.scene?.patternSystem?.emitGroundTelegraph?.({
+      x: spawn.x,
+      y: spawn.y,
+      telegraphRadius: radius,
+      telegraphColor: 0x65d96d,
+      durationMs: 620
+    });
+    this.trackOwnedObject(telegraph);
+
+    const timer = this.scene?.time?.delayedCall?.(620, () => {
+      if (!this.active || !this.isAlive) return;
+
+      const poolOuter = this.scene?.add?.circle?.(spawn.x, spawn.y, radius, 0x4fc95c, 0.12)?.setDepth?.(6) || null;
+      const poolInner = this.scene?.add?.circle?.(spawn.x, spawn.y, Math.max(24, radius * 0.56), 0x99f0a0, 0.16)?.setDepth?.(7) || null;
+      poolOuter?.setStrokeStyle?.(3, 0x9ef5a2, 0.8);
+      poolInner?.setStrokeStyle?.(2, 0xd4ffd6, 0.5);
+      this.scene?.vfxSystem?.playBurst?.(spawn.x, spawn.y, {
+        radius,
+        color: 0x83e88a,
+        durationMs: 180
+      });
+      this._eliteAffixState.activePoisonPools.push({
+        x: spawn.x,
+        y: spawn.y,
+        radius,
+        until: (this.scene?.time?.now ?? now) + 2600,
+        nextTickAt: (this.scene?.time?.now ?? now),
+        outer: poolOuter,
+        inner: poolInner
+      });
+    });
+    this.trackOwnedTimer(timer);
+  }
+
+  tryTriggerSummonerAffix(time) {
+    if (!this.hasEliteAffix('summoner')) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    const state = this._eliteAffixState;
+    state.summonUnits = Array.isArray(state.summonUnits)
+      ? state.summonUnits.filter((unit) => unit && unit.isAlive)
+      : [];
+    if (now - (state.lastSummonAt || 0) < 7600) return;
+    if (state.summonUnits.length >= 3) return;
+    if (!Array.isArray(this.scene?.bossManager?.minions)) return;
+
+    state.lastSummonAt = now;
+    this.scene?.vfxSystem?.playCharge?.(this.x, this.y, {
+      radius: this.radius + 8,
+      color: 0x7fb3ff,
+      durationMs: 380
+    });
+
+    const timer = this.scene?.time?.delayedCall?.(380, () => {
+      if (!this.active || !this.isAlive) return;
+      const summonCount = (this.scene?.currentStage || 1) >= 8 ? 3 : 2;
+      for (let index = 0; index < summonCount; index += 1) {
+        const angle = (Phaser.Math.PI2 / summonCount) * index + Math.random() * 0.35;
+        const spawn = clampWorldPoint(this.scene, this.x + Math.cos(angle) * 54, this.y + Math.sin(angle) * 54, 24);
+        const minion = new this.constructor(this.scene, {
+          x: spawn.x,
+          y: spawn.y,
+          name: '召唤杂兵',
+          type: 'chaser',
+          hp: Math.max(16, Math.round(this.maxHp * 0.1)),
+          size: Math.max(10, this.radius - 7),
+          moveSpeed: Math.max(66, Math.round(this.moveSpeed * 0.86)),
+          contactDamage: Math.max(1, Math.round((this.contactDamage || 6) * 0.52)),
+          color: 0x6f9eff,
+          expReward: 0,
+          isSummon: true,
+          noKillRewards: true,
+          aggroOnSeen: false,
+          spawnProtectedUntilVisible: false,
+          summonOwner: this
+        });
+        if (!minion) continue;
+        this.scene?.vfxSystem?.playBurst?.(spawn.x, spawn.y, {
+          radius: 20,
+          color: 0x8ab7ff,
+          durationMs: 160
+        });
+        this.scene.bossManager.minions.push(minion);
+        state.summonUnits.push(minion);
+      }
+    });
+    this.trackOwnedTimer(timer);
+  }
+
+  updateActiveMoltenCore(time, player) {
+    const state = this._eliteAffixState.activeMolten;
+    if (!state) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now >= (state.until || 0) || !this.active || !this.isAlive) {
+      this.clearActiveMoltenCore();
+      return;
+    }
+
+    const wave = 0.5 + 0.5 * Math.sin(now / 120);
+    state.outer?.setPosition?.(this.x, this.y);
+    state.inner?.setPosition?.(this.x, this.y);
+    if (state.outer) {
+      state.outer.alpha = 0.12 + wave * 0.08;
+      state.outer.setScale?.(0.96 + wave * 0.08);
+    }
+    if (state.inner) {
+      state.inner.alpha = 0.14 + (1 - wave) * 0.10;
+      state.inner.setScale?.(0.92 + (1 - wave) * 0.1);
+    }
+
+    const hp = player?.getHitboxPosition?.() || { x: player?.x, y: player?.y, radius: player?.hitboxRadius || 16 };
+    if (!hp) return;
+    const hit = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y) <= (state.radius + (hp.radius || 16));
+    if (!hit) return;
+    if (now < (this._eliteAffixState.moltenTickAt || 0)) return;
+
+    this._eliteAffixState.moltenTickAt = now + 460;
+    this.scene?.vfxSystem?.playHit?.(hp.x, hp.y, {
+      color: 0xffc27d,
+      radius: 9,
+      durationMs: 110
+    });
+    player.takeDamage(Math.max(1, Math.round((this.contactDamage || 8) * 0.55)));
+  }
+
+  clearActiveMoltenCore() {
+    const state = this._eliteAffixState?.activeMolten;
+    if (state) {
+      try { state.outer?.destroy?.(); } catch (_) { /* ignore */ }
+      try { state.inner?.destroy?.(); } catch (_) { /* ignore */ }
+    }
+    this._eliteAffixState.activeMolten = null;
+  }
+
+  updateActivePoisonPools(time, player) {
+    const pools = Array.isArray(this._eliteAffixState.activePoisonPools)
+      ? this._eliteAffixState.activePoisonPools
+      : [];
+    if (pools.length <= 0) return;
+
+    const now = time || (this.scene?.time?.now ?? 0);
+    const hp = player?.getHitboxPosition?.() || { x: player?.x, y: player?.y, radius: player?.hitboxRadius || 16 };
+    const nextPools = [];
+
+    for (let i = 0; i < pools.length; i += 1) {
+      const pool = pools[i];
+      if (!pool) continue;
+      if (now >= (pool.until || 0) || !this.active || !this.isAlive) {
+        try { pool.outer?.destroy?.(); } catch (_) { /* ignore */ }
+        try { pool.inner?.destroy?.(); } catch (_) { /* ignore */ }
+        continue;
+      }
+
+      const wave = 0.5 + 0.5 * Math.sin((now / 180) + i);
+      if (pool.outer) {
+        pool.outer.alpha = 0.1 + wave * 0.08;
+        pool.outer.setScale?.(0.98 + wave * 0.06);
+      }
+      if (pool.inner) {
+        pool.inner.alpha = 0.12 + (1 - wave) * 0.08;
+      }
+
+      const inside = hp && Phaser.Math.Distance.Between(pool.x, pool.y, hp.x, hp.y) <= (pool.radius + (hp.radius || 16));
+      if (inside && now >= (pool.nextTickAt || 0)) {
+        pool.nextTickAt = now + 900;
+        this.scene?.vfxSystem?.playHit?.(hp.x, hp.y, {
+          color: 0x9ef5a2,
+          radius: 8,
+          durationMs: 100
+        });
+        player.applyMoveSpeedSlow?.(0.62, 900);
+        player.takeDamage(Math.max(1, Math.round((this.shootBulletDamage || this.contactDamage || 8) * 0.28)));
+      }
+
+      nextPools.push(pool);
+    }
+
+    this._eliteAffixState.activePoisonPools = nextPools;
+  }
+
+  clearActivePoisonPools() {
+    const pools = Array.isArray(this._eliteAffixState?.activePoisonPools) ? this._eliteAffixState.activePoisonPools : [];
+    pools.forEach((pool) => {
+      try { pool?.outer?.destroy?.(); } catch (_) { /* ignore */ }
+      try { pool?.inner?.destroy?.(); } catch (_) { /* ignore */ }
+    });
+    this._eliteAffixState.activePoisonPools = [];
+  }
+
+  tryTriggerSnareTrapAffix(time, player) {
+    if (!this.hasEliteAffix('snare_trap')) return;
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now - (this._eliteAffixState.lastTrapAt || 0) < 6800) return;
+
+    const hp = player?.getHitboxPosition?.() || { x: player?.x, y: player?.y, radius: player?.hitboxRadius || 16 };
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y);
+    if (dist > 320) return;
+
+    this._eliteAffixState.lastTrapAt = now;
+    const trapCount = (this.scene?.currentStage || 1) >= 7 ? 2 : 1;
+    for (let index = 0; index < trapCount; index += 1) {
+      const angle = Phaser.Math.FloatBetween(0, Phaser.Math.PI2);
+      const offset = 70 + index * 28;
+      const spawn = clampWorldPoint(this.scene, hp.x + Math.cos(angle) * offset, hp.y + Math.sin(angle) * offset, 28);
+      const tele = this.scene?.patternSystem?.emitGroundTelegraph?.({
+        x: spawn.x,
+        y: spawn.y,
+        telegraphRadius: 24,
+        telegraphColor: 0xc6a56b,
+        durationMs: 520
+      });
+      this.trackOwnedObject(tele);
+
+      const timer = this.scene?.time?.delayedCall?.(520, () => {
+        if (!this.active || !this.isAlive) return;
+        const outer = this.scene.add.circle(spawn.x, spawn.y, 24, 0xc6a56b, 0.12).setDepth(7);
+        outer.setStrokeStyle(2, 0xf3dca9, 0.82);
+        const core = this.scene.add.circle(spawn.x, spawn.y, 9, 0xf7e8bf, 0.20).setDepth(8);
+        this._eliteAffixState.activeTraps.push({
+          x: spawn.x,
+          y: spawn.y,
+          radius: 24,
+          until: (this.scene?.time?.now ?? now) + 2600,
+          triggered: false,
+          outer,
+          core
+        });
+      });
+      this.trackOwnedTimer(timer);
+    }
+  }
+
+  updateActiveSnareTraps(time, player) {
+    const traps = Array.isArray(this._eliteAffixState.activeTraps) ? this._eliteAffixState.activeTraps : [];
+    if (traps.length <= 0) return;
+
+    const now = time || (this.scene?.time?.now ?? 0);
+    const hp = player?.getHitboxPosition?.() || { x: player?.x, y: player?.y, radius: player?.hitboxRadius || 16 };
+    const nextTraps = [];
+
+    for (let i = 0; i < traps.length; i += 1) {
+      const trap = traps[i];
+      if (!trap) continue;
+      if (now >= (trap.until || 0)) {
+        try { trap.outer?.destroy?.(); } catch (_) { /* ignore */ }
+        try { trap.core?.destroy?.(); } catch (_) { /* ignore */ }
+        continue;
+      }
+
+      const wave = 0.5 + 0.5 * Math.sin((now / 160) + i);
+      trap.outer.alpha = 0.10 + wave * 0.08;
+      trap.core.alpha = 0.14 + (1 - wave) * 0.10;
+
+      const inside = Phaser.Math.Distance.Between(trap.x, trap.y, hp.x, hp.y) <= (trap.radius + (hp.radius || 16));
+      if (inside && !trap.triggered) {
+        trap.triggered = true;
+        trap.until = now + 120;
+        player.applyRoot?.(450);
+        player.applyMoveSpeedSlow?.(0.68, 900);
+        player.takeDamage?.(Math.max(1, Math.round((this.contactDamage || 8) * 0.42)), { attacker: this, source: 'elite_trap' });
+        this.scene?.vfxSystem?.playHit?.(hp.x, hp.y, {
+          color: 0xf3dca9,
+          radius: 10,
+          durationMs: 120
+        });
+      }
+
+      nextTraps.push(trap);
+    }
+
+    this._eliteAffixState.activeTraps = nextTraps;
+  }
+
+  clearActiveSnareTraps() {
+    const traps = Array.isArray(this._eliteAffixState.activeTraps) ? this._eliteAffixState.activeTraps : [];
+    traps.forEach((trap) => {
+      try { trap?.outer?.destroy?.(); } catch (_) { /* ignore */ }
+      try { trap?.core?.destroy?.(); } catch (_) { /* ignore */ }
+    });
+    this._eliteAffixState.activeTraps = [];
+  }
+
+  tryTriggerBlinkStepAffix(time, player) {
+    if (!this.hasEliteAffix('blink_step')) return;
+    if (this._chargeState !== 'idle') return;
+
+    const now = time || (this.scene?.time?.now ?? 0);
+    if (now - (this._eliteAffixState.lastBlinkAt || 0) < 7000) return;
+
+    const hp = player?.getHitboxPosition?.() || { x: player?.x, y: player?.y };
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, hp.x, hp.y);
+    if (dist < 140 || dist > 280) return;
+
+    this._eliteAffixState.lastBlinkAt = now;
+    const baseAngle = Phaser.Math.Angle.Between(hp.x, hp.y, this.x, this.y);
+    const offsetAngle = Phaser.Math.FloatBetween(-0.85, 0.85);
+    const blinkDist = Phaser.Math.Between(118, 145);
+    const targetPos = clampWorldPoint(
+      this.scene,
+      hp.x + Math.cos(baseAngle + offsetAngle) * blinkDist,
+      hp.y + Math.sin(baseAngle + offsetAngle) * blinkDist,
+      28
+    );
+
+    const sourceFx = this.scene?.patternSystem?.emitGroundTelegraph?.({
+      x: this.x,
+      y: this.y,
+      telegraphRadius: Math.max(18, this.radius + 10),
+      telegraphColor: 0x7fd4ff,
+      durationMs: 320
+    });
+    const targetFx = this.scene?.patternSystem?.emitGroundTelegraph?.({
+      x: targetPos.x,
+      y: targetPos.y,
+      telegraphRadius: Math.max(18, this.radius + 10),
+      telegraphColor: 0x7fd4ff,
+      durationMs: 320
+    });
+    this.trackOwnedObject(sourceFx);
+    this.trackOwnedObject(targetFx);
+
+    const timer = this.scene?.time?.delayedCall?.(320, () => {
+      if (!this.active || !this.isAlive) return;
+      this.scene?.vfxSystem?.playCastFlash?.(this.x, this.y, {
+        color: 0xbbeeff,
+        radius: this.radius + 8,
+        durationMs: 90
+      });
+      this.setPosition(targetPos.x, targetPos.y);
+      this.scene?.vfxSystem?.playCastFlash?.(this.x, this.y, {
+        color: 0xbbeeff,
+        radius: this.radius + 10,
+        durationMs: 110
+      });
+      this.scene?.vfxSystem?.playBurst?.(this.x, this.y, {
+        radius: this.radius + 14,
+        color: 0x7fd4ff,
+        durationMs: 140
+      });
+    });
+    this.trackOwnedTimer(timer);
+  }
+
+  clearSummonUnits() {
+    const units = Array.isArray(this._eliteAffixState?.summonUnits) ? this._eliteAffixState.summonUnits : [];
+    units.forEach((unit) => {
+      if (!unit || !unit.isAlive) return;
+      unit.noKillRewards = true;
+      unit.expReward = 0;
+      unit.destroy?.();
+    });
+    this._eliteAffixState.summonUnits = [];
+  }
+
   clearEliteWalls() {
     const walls = Array.isArray(this._eliteAffixState.activeWalls) ? this._eliteAffixState.activeWalls : [];
     walls.forEach((entry) => {
-      this.scene?.eliteAffixBlockedCells?.delete?.(entry.idx);
+      if (entry?.idx != null) this.scene?.eliteAffixBlockedCells?.delete?.(entry.idx);
       try { entry.wall?.destroy?.(); } catch (_) { /* ignore */ }
     });
     this._eliteAffixState.activeWalls = [];
@@ -1147,6 +1812,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.clearEliteWalls();
     this.clearChargeTelegraph();
     this.clearActiveArcaneLaser();
+    this.clearActiveMoltenCore();
+    this.clearActivePoisonPools();
+    this.clearActiveSnareTraps();
+    this.clearSummonUnits();
 
     if (Array.isArray(this._ownedObjects)) {
       this._ownedObjects.forEach((obj) => {
@@ -1159,8 +1828,14 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     if (this.sprite?.clearTint) this.sprite.clearTint();
     if (this.body?.setStrokeStyle) this.body.setStrokeStyle(2, 0xffffff, 0.85);
     if (this._eliteAura) this._eliteAura.setVisible(false);
+    if (this._eliteDarkAura) this._eliteDarkAura.setVisible(false);
     if (this._eliteBlueAura) this._eliteBlueAura.setVisible(false);
+    if (this._elitePurpleAura) this._elitePurpleAura.setVisible(false);
     if (this._eliteRedAura) this._eliteRedAura.setVisible(false);
+    if (this._eliteCrown) this._eliteCrown.setVisible(false);
+    if (Array.isArray(this._eliteSmokeMotes)) {
+      this._eliteSmokeMotes.forEach((mote) => mote?.node?.setVisible?.(false));
+    }
     if (this._eliteAffixText) this._eliteAffixText.setVisible(false);
     if (this._debuffUi?.container) this._debuffUi.container.setVisible(false);
     if (this.hpBarBg) this.hpBarBg.setVisible(false);
@@ -1191,6 +1866,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         x: this.x,
         y: this.y,
         isElite: !!this.isElite,
+        isSummon: !!this.isSummon,
+        noKillRewards: !!this.noKillRewards,
         expReward: this.expReward,
         isStartRoomTutorialTarget: !!this.isStartRoomTutorialTarget,
         minion: this
@@ -1267,10 +1944,18 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     try { this.scene?.tweens?.killTweensOf?.(this._debuffUi?.container); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._eliteAffixText); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._eliteAura); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._eliteDarkAura); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._eliteBlueAura); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._elitePurpleAura); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._eliteRedAura); } catch (_) { /* ignore */ }
+    try { this.scene?.tweens?.killTweensOf?.(this._eliteCrown); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._freezeAura); } catch (_) { /* ignore */ }
     try { this.scene?.tweens?.killTweensOf?.(this._freezeCrystal); } catch (_) { /* ignore */ }
+    if (Array.isArray(this._eliteSmokeMotes)) {
+      this._eliteSmokeMotes.forEach((mote) => {
+        try { this.scene?.tweens?.killTweensOf?.(mote?.node); } catch (_) { /* ignore */ }
+      });
+    }
 
     this.clearDeathEffects();
 
@@ -1283,8 +1968,12 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this._debuffUi = null;
     this._eliteAffixText = null;
     this._eliteAura = null;
+    this._eliteDarkAura = null;
     this._eliteBlueAura = null;
+    this._elitePurpleAura = null;
     this._eliteRedAura = null;
+    this._eliteCrown = null;
+    this._eliteSmokeMotes = [];
     this._freezeAura = null;
     this._freezeCrystal = null;
   }
@@ -1581,6 +2270,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const spread = Number.isFinite(this.shootBulletSpread) ? this.shootBulletSpread : 0.0;
     const speed = Math.max(60, this.shootBulletSpeed || 180);
     const damage = Math.max(1, this.shootBulletDamage || 10);
+    const enragedShot = this._eliteAffixState?.enragedActive === true;
 
     for (let i = 0; i < count; i++) {
       const t = count === 1 ? 0 : (i / (count - 1));
@@ -1593,13 +2283,15 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         color: 0xaa66ff,
         radius: 9,
         damage,
-        tags: ['minion_shot'],
+        tags: enragedShot ? ['minion_shot', 'elite_affix_enraged'] : ['minion_shot'],
         options: {
           hasTrail: true,
           type: i % 2 === 0 ? 'diamond' : 'circle',
           hasGlow: true,
           glowRadius: 18,
-          trailColor: 0xe4daff
+          trailColor: enragedShot ? 0xffb0a6 : 0xe4daff,
+          homing: enragedShot,
+          homingTurn: enragedShot ? 0.02 : undefined
         }
       });
     }
@@ -1716,11 +2408,13 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.clearChargeTelegraph();
     this._chargeTelegraph = this.scene?.vfxSystem?.playLineTelegraph?.(this.x, this.y, {
       angle: Math.atan2(this._chargeDir.y, this._chargeDir.x),
-      width: 12,
+      width: 16,
       length: this._chargeTelegraphLength,
       color: 0xffa95c,
       durationMs: this.chargeWindupMs + 80
     }) || null;
+    this._chargeTelegraphMarker = this.scene?.add?.circle?.(this._chargeTarget.x, this._chargeTarget.y, this.radius + 8, 0xffd7a6, 0.12)?.setDepth?.(8) || null;
+    this._chargeTelegraphMarker?.setStrokeStyle?.(3, 0xffd7a6, 0.9);
     this.updateChargeTelegraph();
 
     this.scene?.tweens?.add?.({
@@ -1880,12 +2574,24 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
     telegraph.setPosition(this.x + this._chargeDir.x * half, this.y + this._chargeDir.y * half);
     telegraph.setAngle(Phaser.Math.RadToDeg(angle));
+
+    const marker = this._chargeTelegraphMarker;
+    if (marker?.active) {
+      marker.setPosition(this._chargeTarget.x, this._chargeTarget.y);
+      marker.alpha = 0.10 + 0.12 * Math.sin((this.scene?.time?.now ?? 0) / 90);
+      marker.setScale(0.92 + 0.12 * Math.sin((this.scene?.time?.now ?? 0) / 130));
+    }
   }
 
   clearChargeTelegraph() {
-    if (!this._chargeTelegraph) return;
-    try { this._chargeTelegraph.destroy(); } catch (_) { /* ignore */ }
+    if (this._chargeTelegraph) {
+      try { this._chargeTelegraph.destroy(); } catch (_) { /* ignore */ }
+    }
+    if (this._chargeTelegraphMarker) {
+      try { this._chargeTelegraphMarker.destroy(); } catch (_) { /* ignore */ }
+    }
     this._chargeTelegraph = null;
+    this._chargeTelegraphMarker = null;
   }
 
   spawnChargeTrail() {

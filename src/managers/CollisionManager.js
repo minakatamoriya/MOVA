@@ -86,6 +86,16 @@ export default class CollisionManager {
     return [];
   }
 
+  shouldIgnoreNonTargetCollision(bullet, target) {
+    if (!bullet || !target) return false;
+    if (!bullet.ignoreNonTargetCollision) return false;
+
+    const locked = bullet.lockTarget || null;
+    if (!locked || locked.active === false || locked.isAlive === false) return false;
+
+    return locked !== target;
+  }
+
   // 统一命中上报出口：之后无论挂调试、统计还是 on-hit 被动，都从这里接。
   notifyBulletHit(payload = {}) {
     this.getBulletCore()?.notifyHit?.(payload);
@@ -304,6 +314,7 @@ export default class CollisionManager {
         }
 
         if (!collided) continue;
+        if (this.shouldIgnoreNonTargetCollision(bullet, enemy)) continue;
 
         // ====== 剧毒新星：毒圈接触逻辑（小怪/精英与 Boss 同一套叠层体系） ======
         // 这里只负责：标记“仍在毒圈中”、进入时启动计时；具体叠层/扣血在 GameScene.updateWarlockDebuff 里统一驱动。
@@ -424,6 +435,7 @@ export default class CollisionManager {
       }
 
       if (collided) {
+        if (this.shouldIgnoreNonTargetCollision(bullet, boss)) continue;
         const now = this.scene.time?.now ?? 0;
 
         // ====== 剧毒新星：毒圈接触逻辑（不因命中而消失；按持续时间销毁） ======

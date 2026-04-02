@@ -34,10 +34,10 @@ export const TREE_DEFS = [
     id: 'warrior',
     name: '战士-主',
     color: resolveClassColor('warrior'),
-    core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为近战挥砍并外放真空刃。' },
+    core: { id: 'warrior_core', name: '初始：战士', maxLevel: 1, desc: '攻击变为近战月牙斩，前方大范围挥斩敌人。' },
     nodes: [
-      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '强化风刃射程。1/2/3级分别提高基础射程约 27%/55%/91%（对应 280/340/420）。' },
-      { id: 'warrior_swordqi', name: '真空刃强化', maxLevel: 3, desc: '提升每次挥砍放出的风刃数量与飞行速度。基础 1 枚；1/2/3级分别提升到 3/5/10 枚，并同步提高风刃飞行速度。' },
+      { id: 'warrior_range', name: '斩域展开', maxLevel: 3, desc: '强化月牙斩范围。1/2/3级分别提升到 280/340/420，索敌范围与攻击范围保持一致。' },
+      { id: 'warrior_swordqi', name: '满月斩', maxLevel: 1, desc: '月牙斩角度从 180 度扩展到 360 度。' },
       { id: 'warrior_damage', name: '破军刃势', maxLevel: 3, desc: '直接提高战士基础技能伤害。1/2/3级分别提高 12%/24%/40%。' },
     { id: 'warrior_blood_conversion', name: '猩红嗜血', maxLevel: 2, desc: '生命低于30%时自动触发：1级攻击伤害转化为150%吸血，持续10秒；2级转化为200%吸血，持续15秒；冷却30秒。' }
     ]
@@ -46,12 +46,12 @@ export const TREE_DEFS = [
     id: 'mage',
     name: '法师-主',
     color: resolveClassColor('mage'),
-    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为单发冰弹，命中叠加寒霜，叠满五层爆炸并传染。' },
+    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为单发冰弹，命中叠加寒霜，叠满三层爆炸并传染。' },
     nodes: [
       { id: 'mage_frostbite', name: '霜蚀', maxLevel: 1, desc: '冰弹自带强减速，提升到 48%，持续 2.7 秒。' },
       { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 1, desc: '冰弹索敌范围额外 +135。' },
       { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 1, desc: '强化冰弹本体，伤害 +30%。' },
-      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 1, desc: '5 层碎冰后额外冻结主目标 1.7 秒。' },
+      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 1, desc: '3 层碎冰后额外冻结主目标 1.7 秒。' },
       { id: 'mage_shatter', name: '碎冰传染', maxLevel: 3, desc: '强化基础碎冰爆裂。1/2级提升半径与伤害；3级额外把传染提升到 2 层。1/2/3级分别为半径 120/150/185，伤害 70%/100%/135%，传染 1/1/2 层寒霜。' },
       { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 2, desc: '生命低于30%时自动触发冰霜新星。1级冻结 5 秒、范围 380；2级冻结 10 秒、范围 480；冷却30秒。' }
     ]
