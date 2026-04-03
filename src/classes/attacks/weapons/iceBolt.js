@@ -34,8 +34,11 @@ function selectTarget(player, range) {
   if (targets.length === 0) return null;
 
   const center = getRangeCenter(player);
+  const now = scene?.time?.now ?? 0;
+  const coldFocusEnabled = (player?.mageColdFocusLevel || 0) > 0;
   let best = null;
   let bestDistanceSq = Number.POSITIVE_INFINITY;
+  let bestPriority = Number.NEGATIVE_INFINITY;
 
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
@@ -45,8 +48,18 @@ function selectTarget(player, range) {
     if (distanceSq > range * range) continue;
 
     if (target.isBoss) return target;
-    if (distanceSq < bestDistanceSq) {
+
+    let priority = -distanceSq;
+    if (coldFocusEnabled) {
+      const frostStacks = Math.max(0, target?.debuffs?.mageFrost?.stacks || 0);
+      const isFrozen = (target?.freezeUntil || 0) > now;
+      priority += frostStacks * 20000;
+      if (isFrozen) priority += 100000;
+    }
+
+    if (priority > bestPriority || (priority === bestPriority && distanceSq < bestDistanceSq)) {
       best = target;
+      bestPriority = priority;
       bestDistanceSq = distanceSq;
     }
   }
@@ -58,7 +71,8 @@ export function fireMageIceBolt(player, options = {}) {
   const scene = player?.scene;
   if (!scene) return false;
 
-  const range = Math.max(80, Math.round(player.mageMissileRange || player.mageMissileRangeBase || 280));
+  const focusBonusRange = (player?.mageColdFocusLevel || 0) > 0 ? 90 : 0;
+  const range = Math.max(80, Math.round((player.mageMissileRange || player.mageMissileRangeBase || 280) + focusBonusRange));
   const target = (options.target && options.target.isAlive) ? options.target : selectTarget(player, range);
   if (!target) return false;
 

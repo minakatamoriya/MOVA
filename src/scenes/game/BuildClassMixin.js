@@ -13,10 +13,17 @@ import {
 } from '../../classes/upgradePools';
 import { getTalentOfferStage } from '../../classes/dualClass';
 import { recordSkillTreeProgress as recordSkillTreeProgressToRegistry } from '../../classes/progression';
+import { getRuntimeTalentLevel } from '../../classes/runtimeTalentLevels';
 import { getAccentCoreKeyForOffFaction, getFrontierSkillIds, getMaxLevel, getTreeIdForSkill, getTreeSpentPoints, normalizeSkillId } from '../../classes/talentTrees';
 import { getUpgradeOfferPresentation } from '../../classes/upgradeOfferPresentation';
 import { calculateResolvedDamage } from '../../combat/damageModel';
 import { getArcaneRayAcquireRange } from '../../classes/attacks/weapons/laser';
+import {
+  getMageShatterDamageScale,
+  getMageShatterRadius,
+  getMageShatterSpreadStacks,
+  getMageShatterTriggerStacks
+} from '../../classes/mageFrostData';
 import { getPaladinHammerAcquireRange } from '../../classes/attacks/weapons/paladinHammer';
 import { spawnWarriorMeleeHit as _spawnWarriorMeleeHit, spawnWarriorCrescentProjectile as _spawnWarriorCrescentProjectile } from '../../classes/attacks/weapons/warriorSlash';
 
@@ -126,10 +133,14 @@ export function applyBuildClassMixin(GameScene) {
 
             if (normalizedUpgradeId === 'off_arcane') {
               this.player.arcaneCircleEnabled = true;
+              this.player._arcaneTurretNextAt = 0;
+              this._arcaneEntryBurstPending = true;
             }
 
             if (normalizedUpgradeId === 'off_ranger') {
               this.player.rangerBeaconEnabled = true;
+              this._rangerTrapNextAt = 0;
+              this._rangerEntryPulsePending = true;
             }
 
             if (normalizedUpgradeId === 'off_unyielding') {
@@ -139,6 +150,7 @@ export function applyBuildClassMixin(GameScene) {
                 this.player.unyieldingBloodrageLevel = 1;
                 this.recordSkillTreeProgress({ id: 'unyielding_bloodrage', category: 'build' });
               }
+              this.triggerUnyieldingEntryPulse?.(this.time?.now ?? 0);
             }
 
             if (normalizedUpgradeId === 'off_summon') {
@@ -190,22 +202,22 @@ export function applyBuildClassMixin(GameScene) {
           break;
         case 'mage_refract':
         case 'mage_frostbite':
-          this.player.mageFrostbiteLevel = 3;
+          this.player.mageFrostbiteLevel = getRuntimeTalentLevel(this.registry, 'mage_frostbite');
           break;
         case 'mage_arcane_perception':
         case 'mage_cold_focus': {
-          this.player.mageColdFocusLevel = 3;
+          this.player.mageColdFocusLevel = getRuntimeTalentLevel(this.registry, 'mage_cold_focus');
           const base = this.player.mageMissileRangeBase || this.player.mageMissileRange || 280;
           this.player.mageMissileRangeBase = base;
-          this.player.mageMissileRange = Math.round(base + this.player.mageColdFocusLevel * 45);
+          this.player.mageMissileRange = Math.round(base + 90);
           break;
         }
         case 'mage_energy_focus':
         case 'mage_ice_veins':
-          this.player.mageIceVeinsLevel = 3;
+          this.player.mageIceVeinsLevel = getRuntimeTalentLevel(this.registry, 'mage_ice_veins');
           break;
         case 'mage_deep_freeze':
-          this.player.mageDeepFreezeLevel = 3;
+          this.player.mageDeepFreezeLevel = getRuntimeTalentLevel(this.registry, 'mage_deep_freeze');
           break;
         case 'mage_frost_nova':
           this.player.mageFrostNovaLevel = Math.min(2, (this.player.mageFrostNovaLevel || 0) + 1);
@@ -243,7 +255,7 @@ export function applyBuildClassMixin(GameScene) {
           this.player.paladinTriple = true;
           break;
         case 'paladin_stun': {
-          this.player.paladinStunLevel = 3;
+          this.player.paladinStunLevel = getRuntimeTalentLevel(this.registry, 'paladin_stun');
           this.player.paladinStunChance = Math.min(0.95, this.player.paladinStunLevel * 0.10);
           break;
         }
@@ -262,11 +274,11 @@ export function applyBuildClassMixin(GameScene) {
           }
           break;
         case 'warlock_spread':
-          this.player.warlockPoisonSpreadStacks = 3;
+          this.player.warlockPoisonSpreadStacks = getRuntimeTalentLevel(this.registry, 'warlock_spread');
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_corrode':
-          this.player.warlockPoisonCorrodeStacks = 3;
+          this.player.warlockPoisonCorrodeStacks = getRuntimeTalentLevel(this.registry, 'warlock_corrode');
           this.refreshWarlockPoisonNovaState();
           break;
         case 'warlock_toxicity':
@@ -297,41 +309,41 @@ export function applyBuildClassMixin(GameScene) {
 
         case 'arcane_circle':
           this.player.arcaneCircleEnabled = true;
-          this.player.arcaneCircleLevel = (this.player.arcaneCircleLevel || 0) >= 2 ? 3 : 2;
+          this.player.arcaneCircleLevel = getRuntimeTalentLevel(this.registry, 'arcane_circle');
           break;
         case 'arcane_circle_range':
-          this.player.arcaneCircleRangeLevel = 3;
+          this.player.arcaneCircleRangeLevel = getRuntimeTalentLevel(this.registry, 'arcane_circle_range');
           break;
         case 'arcane_fire_circle':
-          this.player.arcaneFireCircleLevel = 3;
+          this.player.arcaneFireCircleLevel = getRuntimeTalentLevel(this.registry, 'arcane_fire_circle');
           break;
         case 'arcane_frost_circle':
-          this.player.arcaneFrostCircleLevel = 3;
+          this.player.arcaneFrostCircleLevel = getRuntimeTalentLevel(this.registry, 'arcane_frost_circle');
           break;
         case 'arcane_resonance_mark':
-          this.player.arcaneResonanceMarkLevel = 3;
+          this.player.arcaneResonanceMarkLevel = getRuntimeTalentLevel(this.registry, 'arcane_resonance_mark');
           break;
         case 'arcane_flowcasting':
           this.player.arcaneFlowcastingLevel = Math.min(3, (this.player.arcaneFlowcastingLevel || 0) + 1);
           break;
 
         case 'ranger_snaretrap':
-          this.player.rangerSnareTrapLevel = (this.player.rangerSnareTrapLevel || 0) >= 2 ? 3 : 2;
+          this.player.rangerSnareTrapLevel = getRuntimeTalentLevel(this.registry, 'ranger_snaretrap');
           break;
         case 'ranger_huntmark':
-          this.player.rangerHuntmarkLevel = 3;
+          this.player.rangerHuntmarkLevel = getRuntimeTalentLevel(this.registry, 'ranger_huntmark');
           break;
         case 'ranger_spiketrap':
           this.player.rangerSpikeTrapLevel = Math.min(2, (this.player.rangerSpikeTrapLevel || 0) + 1);
           break;
         case 'ranger_blasttrap':
-          this.player.rangerBlastTrapLevel = 3;
+          this.player.rangerBlastTrapLevel = getRuntimeTalentLevel(this.registry, 'ranger_blasttrap');
           break;
         case 'ranger_trapcraft':
           this.player.rangerTrapcraftLevel = Math.min(2, (this.player.rangerTrapcraftLevel || 0) + 1);
           break;
         case 'ranger_pack_hunter':
-          this.player.rangerPackHunterLevel = 3;
+          this.player.rangerPackHunterLevel = getRuntimeTalentLevel(this.registry, 'ranger_pack_hunter');
           break;
 
         case 'unyielding_bloodrage':
@@ -342,26 +354,26 @@ export function applyBuildClassMixin(GameScene) {
         case 'unyielding_battlecry':
           this.player.battlecryEnabled = true;
           this.player.battlecryBonus = 0.30;
-          this.player.unyieldingBattlecryLevel = 3;
+          this.player.unyieldingBattlecryLevel = getRuntimeTalentLevel(this.registry, 'unyielding_battlecry');
           break;
         case 'unyielding_hamstring':
-          this.player.unyieldingHamstringLevel = 3;
+          this.player.unyieldingHamstringLevel = getRuntimeTalentLevel(this.registry, 'unyielding_hamstring');
           break;
         case 'unyielding_sunder':
-          this.player.unyieldingSunderLevel = 3;
+          this.player.unyieldingSunderLevel = getRuntimeTalentLevel(this.registry, 'unyielding_sunder');
           break;
         case 'unyielding_standfast':
-          this.player.unyieldingStandfastLevel = (this.player.unyieldingStandfastLevel || 0) >= 2 ? 3 : 2;
+          this.player.unyieldingStandfastLevel = getRuntimeTalentLevel(this.registry, 'unyielding_standfast');
           break;
         case 'unyielding_executioner':
-          this.player.unyieldingExecutionerLevel = 3;
+          this.player.unyieldingExecutionerLevel = getRuntimeTalentLevel(this.registry, 'unyielding_executioner');
           break;
         case 'unyielding_duel':
           this.player.deathDuelEnabled = true;
           break;
 
         case 'summon_necrotic_vitality':
-          this.player.curseNecroticVitalityLevel = 3;
+          this.player.curseNecroticVitalityLevel = getRuntimeTalentLevel(this.registry, 'summon_necrotic_vitality');
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_skeleton_guard':
@@ -373,11 +385,11 @@ export function applyBuildClassMixin(GameScene) {
           this.undeadSummonManager?.refreshFromPlayer?.();
           break;
         case 'summon_mage_empower':
-          this.player.curseMageEmpowerLevel = (this.player.curseMageEmpowerLevel || 0) >= 2 ? 3 : 2;
+          this.player.curseMageEmpowerLevel = getRuntimeTalentLevel(this.registry, 'summon_mage_empower');
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_guard_bulwark':
-          this.player.curseGuardBulwarkLevel = 3;
+          this.player.curseGuardBulwarkLevel = getRuntimeTalentLevel(this.registry, 'summon_guard_bulwark');
           this.undeadSummonManager?.refreshSummonStats?.();
           break;
         case 'summon_ember_echo':
@@ -400,38 +412,39 @@ export function applyBuildClassMixin(GameScene) {
           this.petManager?.refreshPetStats?.();
           break;
         case 'nature_bear_guard':
-          this.player.natureBearGuardLevel = Math.min(3, Math.max(2, (this.player.natureBearGuardLevel || 0) + 2));
+          this.player.natureBearGuardLevel = getRuntimeTalentLevel(this.registry, 'nature_bear_guard');
           this.petManager?.refreshPetStats?.();
           break;
         case 'nature_hawk_huntmark':
-          this.player.natureHawkHuntmarkLevel = Math.min(3, Math.max(2, (this.player.natureHawkHuntmarkLevel || 0) + 2));
+          this.player.natureHawkHuntmarkLevel = getRuntimeTalentLevel(this.registry, 'nature_hawk_huntmark');
           this.petManager?.refreshPetStats?.();
           break;
         case 'nature_treant_bloom':
-          this.player.natureTreantBloomLevel = Math.min(3, Math.max(2, (this.player.natureTreantBloomLevel || 0) + 2));
+          this.player.natureTreantBloomLevel = getRuntimeTalentLevel(this.registry, 'nature_treant_bloom');
           this.petManager?.refreshPetStats?.();
           break;
 
         case 'guardian_block':
-          this.player.guardianBlockLevel = 3;
+          this.player.guardianBlockLevel = getRuntimeTalentLevel(this.registry, 'guardian_block');
           this.player.guardianBlockBonus = 0.15;
           break;
         case 'guardian_armor':
-          this.player.flatDamageReduction = Math.min(25, (this.player.flatDamageReduction || 0) + 6);
+          this.player.guardianArmorLevel = 1;
+          this.player.flatDamageReduction = Math.min(25, (this.player.flatDamageReduction || 0) + 3);
           break;
         case 'guardian_counter':
-          this.player.guardianCounterLevel = 3;
+          this.player.guardianCounterLevel = getRuntimeTalentLevel(this.registry, 'guardian_counter');
           this.player.counterOnBlock = true;
           break;
         case 'guardian_sacred_seal':
-          this.player.guardianSacredSealLevel = 3;
+          this.player.guardianSacredSealLevel = getRuntimeTalentLevel(this.registry, 'guardian_sacred_seal');
           this.player.guardianSealMaxStacks = 5;
           break;
         case 'guardian_holy_rebuke':
-          this.player.guardianHolyRebukeLevel = (this.player.guardianHolyRebukeLevel || 0) >= 2 ? 3 : 2;
+          this.player.guardianHolyRebukeLevel = getRuntimeTalentLevel(this.registry, 'guardian_holy_rebuke');
           break;
         case 'guardian_light_fortress':
-          this.player.guardianLightFortressLevel = 3;
+          this.player.guardianLightFortressLevel = getRuntimeTalentLevel(this.registry, 'guardian_light_fortress');
           break;
 
         // === 紧急冷却天赋（记录 player 属性，实际触发由 installPassiveCooldownSkills 管理） ===
@@ -2577,6 +2590,67 @@ export function applyBuildClassMixin(GameScene) {
       });
     },
 
+    triggerUnyieldingEntryPulse(now) {
+      const player = this.player;
+      if (!player) return;
+
+      const radius = Math.max(112, Math.min(190, Math.round((player.warriorRange || player.warriorRangeBase || 220) * 0.72)));
+      const innerRing = this.add.circle(player.x, player.y, 18, 0xffb347, 0.16);
+      innerRing.setDepth(56);
+      innerRing.setStrokeStyle(3, 0xffefb0, 0.84);
+      this.tweens.add({
+        targets: innerRing,
+        alpha: 0,
+        scaleX: radius / 18,
+        scaleY: radius / 18,
+        duration: 250,
+        ease: 'Cubic.Out',
+        onComplete: () => innerRing.destroy()
+      });
+
+      const outerRing = this.add.circle(player.x, player.y, 14, 0xff7a1a, 0.08);
+      outerRing.setDepth(55);
+      outerRing.setStrokeStyle(2, 0xffcf7a, 0.44);
+      this.tweens.add({
+        targets: outerRing,
+        alpha: 0,
+        scaleX: (radius * 1.18) / 14,
+        scaleY: (radius * 1.18) / 14,
+        duration: 320,
+        ease: 'Quad.Out',
+        onComplete: () => outerRing.destroy()
+      });
+
+      player.battlecryUntil = Math.max(player.battlecryUntil || 0, now + 2400);
+      player.battlecryBonus = Math.max(player.battlecryBonus || 0, 0.18);
+      this.showDamageNumber?.(player.x, player.y - 54, '吼', { color: '#ffd27a', fontSize: 18, whisper: true });
+
+      const targets = this.getOffclassCombatTargets();
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target.isInvincible) continue;
+        const dx = target.x - player.x;
+        const dy = target.y - player.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radius * radius) continue;
+
+        const dist = Math.sqrt(distSq) || 0.0001;
+        const knockback = Math.min(56, Math.max(18, (radius - dist) * 0.24));
+        target.x += (dx / dist) * knockback;
+        target.y += (dy / dist) * knockback;
+
+        if (typeof target.applyFreeze === 'function') {
+          target.applyFreeze(220, { source: 'off_unyielding_entry', player, radius });
+        }
+
+        this.showDamageNumber?.(target.x, target.y - Math.max(18, (target.bossSize || target.radius || 18) + 16), '退', {
+          color: '#ffc766',
+          fontSize: 14,
+          whisper: true
+        });
+      }
+    },
+
     applyWarriorOffclassHitEffects(target, now) {
       const player = this.player;
       if (!player || !target || !target.isAlive) return;
@@ -2614,6 +2688,9 @@ export function applyBuildClassMixin(GameScene) {
 
       const now = Number(context.now || this.time?.now || 0);
       const slowLevel = Math.max(0, Math.min(3, player.mageFrostbiteLevel || 0));
+      const veinsLevel = Math.max(0, Math.min(3, player.mageIceVeinsLevel || 0));
+      const existingFrostStacks = Math.max(0, target?.debuffs?.mageFrost?.stacks || 0);
+      const wasFrozen = (target?.freezeUntil || 0) > now;
       const slowPct = [0.22, 0.30, 0.38, 0.48][slowLevel] || 0.22;
       const slowMs = [1500, 1900, 2300, 2700][slowLevel] || 1500;
 
@@ -2621,7 +2698,66 @@ export function applyBuildClassMixin(GameScene) {
         target.applySlow(slowPct, slowMs);
       }
 
-      this.applyMageFrostStacks(target, 1, now, { fromSpread: !!context.fromSpread, killedByHit: allowDeadFinisher });
+      const extraStacks = (!context.fromSpread && slowLevel > 0 && (wasFrozen || existingFrostStacks > 0)) ? 1 : 0;
+      this.applyMageFrostStacks(target, 1 + extraStacks, now, { fromSpread: !!context.fromSpread, killedByHit: allowDeadFinisher });
+
+      if (!context.fromSpread && veinsLevel > 0 && (wasFrozen || existingFrostStacks >= 2)) {
+        this.triggerMageIceVeinsEcho(target, now, { sourceTarget: target });
+      }
+    },
+
+    triggerMageIceVeinsEcho(originTarget, now, options = {}) {
+      const player = this.player;
+      const level = Math.max(0, Math.min(3, player?.mageIceVeinsLevel || 0));
+      if (!player || !originTarget || level <= 0) return;
+
+      const targets = this.getOffclassCombatTargets();
+      let best = null;
+      let bestD2 = Infinity;
+      const maxRange = 170;
+
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target === originTarget || target.isInvincible) continue;
+        const dx = target.x - originTarget.x;
+        const dy = target.y - originTarget.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > maxRange * maxRange) continue;
+        if (d2 < bestD2) {
+          best = target;
+          bestD2 = d2;
+        }
+      }
+
+      if (!best) return;
+
+      const damageResult = calculateResolvedDamage({
+        attacker: player,
+        target: best,
+        baseDamage: Math.max(1, Math.round((player.bulletDamage || 1) * 0.35)),
+        now,
+        canCrit: false
+      });
+
+      best.takeDamage?.(damageResult.amount, { attacker: player, source: 'mage_ice_veins', suppressHitReaction: true });
+      player.onDealDamage?.(damageResult.amount);
+      this.applyMageFrostStacks(best, 1, now, { fromSpread: true });
+
+      const beam = this.add.line(0, 0, originTarget.x, originTarget.y, best.x, best.y, 0xb8f2ff, 0.7);
+      beam.setLineWidth(3, 1);
+      beam.setDepth(57);
+      this.tweens.add({
+        targets: beam,
+        alpha: 0,
+        duration: 120,
+        onComplete: () => beam.destroy()
+      });
+
+      this.showDamageNumber?.(best.x, best.y - Math.max(18, (best.bossSize || best.radius || 18) + 18), damageResult.amount, {
+        color: '#b8f2ff',
+        fontSize: 18,
+        whisper: true
+      });
     },
 
     applyMageFrostStacks(target, amount, now, context = {}) {
@@ -2630,13 +2766,15 @@ export function applyBuildClassMixin(GameScene) {
       if (!player || !target) return;
       if (!target.isAlive && !allowDeadFinisher) return;
       const showEnemyOverlays = this.registry?.get?.('showEnemyOverlays') === true;
+      const shatterLevel = Math.max(0, Math.min(3, player.mageShatterLevel || 0));
+      const triggerStacks = getMageShatterTriggerStacks(shatterLevel);
 
       target.debuffs = target.debuffs || {};
       const frost = target.debuffs.mageFrost || { stacks: 0, expiresAt: 0 };
       if ((frost.expiresAt || 0) <= now) frost.stacks = 0;
 
       if (target.isAlive) target.syncOverheadUiVisibility?.();
-      frost.stacks = Math.min(3, Math.max(0, Math.round(frost.stacks || 0)) + Math.max(0, Math.round(amount || 0)));
+      frost.stacks = Math.min(triggerStacks, Math.max(0, Math.round(frost.stacks || 0)) + Math.max(0, Math.round(amount || 0)));
       frost.expiresAt = now + 2600;
       target.debuffs.mageFrost = frost;
       if (target.isAlive) {
@@ -2651,7 +2789,7 @@ export function applyBuildClassMixin(GameScene) {
         });
       }
 
-      if (frost.stacks < 3) return;
+      if (frost.stacks < triggerStacks) return;
 
       frost.stacks = 0;
       frost.expiresAt = 0;
@@ -2666,10 +2804,10 @@ export function applyBuildClassMixin(GameScene) {
       const level = Math.max(0, Math.min(3, player?.mageShatterLevel || 0));
       if (!player || !originTarget) return;
 
-      const radius = [92, 120, 150, 185][level] || 92;
-      const damageScale = [0.45, 0.7, 1.0, 1.35][level] || 0.45;
+      const radius = getMageShatterRadius(level);
+      const damageScale = getMageShatterDamageScale(level);
       const freezeMs = [0, 800, 1200, 1700][Math.max(0, Math.min(3, player?.mageDeepFreezeLevel || 0))] || 0;
-      const spreadStacks = level >= 3 ? 2 : 1;
+      const spreadStacks = getMageShatterSpreadStacks(level);
       const startRadius = Math.max(20, Math.round(radius * 0.26));
       this.cameras?.main?.shake?.(100, level >= 2 ? 0.0036 : 0.0024);
 
@@ -3133,6 +3271,29 @@ export function applyBuildClassMixin(GameScene) {
       });
     },
 
+    selectArcaneTurretTarget(turret, targets = []) {
+      if (!turret) return null;
+
+      let target = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+      for (let t = 0; t < targets.length; t++) {
+        const enemy = targets[t];
+        if (!enemy || !enemy.isAlive || enemy.isInvincible) continue;
+        const dx = enemy.x - turret.x;
+        const dy = enemy.y - turret.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > (turret.range * turret.range)) continue;
+        const frostStacks = Math.max(0, enemy.debuffs?.mageFrost?.stacks || 0);
+        const score = distSq - frostStacks * 2400;
+        if (score < bestScore) {
+          bestScore = score;
+          target = enemy;
+        }
+      }
+
+      return target;
+    },
+
     fireArcaneTurretPulse(turret, target, now) {
       const player = this.player;
       if (!player || !turret || !target || !target.isAlive || target.isInvincible) return;
@@ -3322,6 +3483,18 @@ export function applyBuildClassMixin(GameScene) {
           }
           player._arcaneTurretLastPos = { x: player.x, y: player.y };
           player._arcaneTurretNextAt = now + cooldownMs;
+
+          const currentTargets = this.getOffclassCombatTargets();
+          if (this._arcaneEntryBurstPending) {
+            this._arcaneEntryBurstPending = false;
+            const target = this.selectArcaneTurretTarget(turret, currentTargets);
+            turret.nextShotAt = now + 260;
+            if (target) {
+              this.beginArcaneTurretPulse(turret, target, now);
+              turret.nextShotAt = now + Math.max(1200, Math.round((turret.fireIntervalMs || 2400) * 0.75));
+              this.showDamageNumber?.(turret.x, turret.y - 42, '开火', { color: '#c9f4ff', fontSize: 14, whisper: true });
+            }
+          }
         }
       }
 
@@ -3339,22 +3512,7 @@ export function applyBuildClassMixin(GameScene) {
 
         if (now < (turret.nextShotAt || 0)) continue;
 
-        let target = null;
-        let bestScore = Number.POSITIVE_INFINITY;
-        for (let t = 0; t < targets.length; t++) {
-          const enemy = targets[t];
-          if (!enemy || !enemy.isAlive || enemy.isInvincible) continue;
-          const dx = enemy.x - turret.x;
-          const dy = enemy.y - turret.y;
-          const distSq = dx * dx + dy * dy;
-          if (distSq > (turret.range * turret.range)) continue;
-          const frostStacks = Math.max(0, enemy.debuffs?.mageFrost?.stacks || 0);
-          const score = distSq - frostStacks * 2400;
-          if (score < bestScore) {
-            bestScore = score;
-            target = enemy;
-          }
-        }
+        const target = this.selectArcaneTurretTarget(turret, targets);
 
         if (!target) {
           turret.nextShotAt = now + 120;
@@ -3373,6 +3531,49 @@ export function applyBuildClassMixin(GameScene) {
       target.debuffs = target.debuffs || {};
       target.debuffs.huntMarkEnd = now + 3500 + markLevel * 400;
       target.debuffs.huntMarkMult = [1, 1.1, 1.16, 1.22][markLevel] || 1.1;
+    },
+
+    triggerRangerTrapEntryPulse(trap, now) {
+      const player = this.player;
+      if (!trap || !player) return;
+
+      const radius = Math.max(120, trap.tauntRadius || 160);
+      const ring = this.add.circle(trap.x, trap.y, 18, 0xc3ff85, 0.16);
+      ring.setDepth(54);
+      ring.setStrokeStyle(3, 0xe8ffd6, 0.8);
+      this.tweens.add({
+        targets: ring,
+        alpha: 0,
+        scaleX: radius / 18,
+        scaleY: radius / 18,
+        duration: 260,
+        ease: 'Cubic.Out',
+        onComplete: () => ring.destroy()
+      });
+
+      const targets = this.getOffclassCombatTargets();
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        if (!target || !target.isAlive || target.isInvincible) continue;
+        const dx = target.x - trap.x;
+        const dy = target.y - trap.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > radius * radius) continue;
+
+        this.applyRangerTrapMark(target, now);
+
+        const dist = Math.sqrt(distSq) || 0.0001;
+        const pull = Math.min(42, Math.max(12, radius - dist) * 0.18);
+        target.x -= (dx / dist) * pull;
+        target.y -= (dy / dist) * pull;
+
+        if (typeof target.applyFreeze === 'function') {
+          target.applyFreeze(180, { source: 'off_ranger_entry_pulse', player, radius });
+        }
+      }
+
+      trap.nextShotAt = Math.min(trap.nextShotAt || (now + 1200), now + 450);
+      this.showDamageNumber?.(trap.x, trap.y - 38, '诱', { color: '#dcffb2', fontSize: 14, whisper: true });
     },
 
     spawnRangerTrap(time) {
@@ -3491,6 +3692,11 @@ export function applyBuildClassMixin(GameScene) {
       };
       this._rangerTraps = this._rangerTraps || [];
       this._rangerTraps.push(trap);
+
+      if (this._rangerEntryPulsePending) {
+        this._rangerEntryPulsePending = false;
+        this.triggerRangerTrapEntryPulse(trap, this.time?.now ?? time ?? 0);
+      }
     },
 
     fireRangerTrapArrow(trap, target, now) {

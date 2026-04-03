@@ -1,3 +1,5 @@
+import { getTalentSummary } from './talentNodeText';
+
 // 六大职业定义：统一管理职业元数据与核心升级
 
 export const CLASS_IDS = /** @type {const} */ ({
@@ -36,6 +38,10 @@ export const CORE_UPGRADE_ID_ALIASES = /** @type {const} */ ({
   drone_core: 'druid_core'
 });
 
+function getCoreDesc(coreUpgradeId, fallback = '') {
+  return getTalentSummary(coreUpgradeId, fallback);
+}
+
 export const CLASSES = [
   {
     id: CLASS_IDS.warrior,
@@ -43,7 +49,7 @@ export const CLASSES = [
     icon: '战主',
     coreUpgradeId: CORE_UPGRADE_IDS.warrior,
     coreKey: CORE_KEYS.warrior,
-    coreDesc: '基础攻击变为近战月牙斩，生命上限提升'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.warrior)
   },
   {
     id: CLASS_IDS.archer,
@@ -51,7 +57,7 @@ export const CLASSES = [
     icon: '猎主',
     coreUpgradeId: CORE_UPGRADE_IDS.archer,
     coreKey: CORE_KEYS.archer,
-    coreDesc: '基础攻击为箭矢连射，可继续强化为多列箭雨'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.archer)
   },
   {
     id: CLASS_IDS.paladin,
@@ -59,7 +65,7 @@ export const CLASSES = [
     icon: '骑主',
     coreUpgradeId: CORE_UPGRADE_IDS.paladin,
     coreKey: CORE_KEYS.paladin,
-    coreDesc: '获得护盾脉冲清弹并反击'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.paladin)
   },
   {
     id: CLASS_IDS.mage,
@@ -67,7 +73,7 @@ export const CLASSES = [
     icon: '法主',
     coreUpgradeId: CORE_UPGRADE_IDS.mage,
     coreKey: CORE_KEYS.mage,
-    coreDesc: '基础攻击切换为单发冰弹，命中叠加寒霜，叠满三层爆炸并传染'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.mage)
   },
   {
     id: CLASS_IDS.druid,
@@ -75,7 +81,7 @@ export const CLASSES = [
     icon: '德主',
     coreUpgradeId: CORE_UPGRADE_IDS.druid,
     coreKey: CORE_KEYS.druid,
-    coreDesc: '基础攻击变为星落（定位敌方，星星下落造成范围伤害）'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.druid)
   },
   {
     id: CLASS_IDS.warlock,
@@ -83,7 +89,7 @@ export const CLASSES = [
     icon: '术主',
     coreUpgradeId: CORE_UPGRADE_IDS.warlock,
     coreKey: CORE_KEYS.warlock,
-    coreDesc: '基础攻击变为腐疫沼弹：朝最近目标投出腐疫弹，落地生成毒沼并持续叠毒'
+    coreDesc: getCoreDesc(CORE_UPGRADE_IDS.warlock)
   }
 ];
 

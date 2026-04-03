@@ -171,21 +171,31 @@ export default class LevelUpScene extends Phaser.Scene {
       this.rerollSelection();
     }, 200, 44, '18px').setScrollFactor(0).setDepth(50);
 
-    const count = upgrades.length;
-    const topY = 170;
-    const bottomY = this.cameras.main.height - 60;
-    const available = Math.max(180, bottomY - topY);
-    const spacing = count <= 1 ? 0 : Phaser.Math.Clamp(Math.floor(available / (count - 1)), 96, 128);
-    const totalHeight = spacing * Math.max(0, count - 1);
-    const startY = topY + Math.max(0, Math.floor((available - totalHeight) / 2));
-
     this.upgradeCards = [];
-    upgrades.forEach((upgrade, index) => {
-      const card = this.createUpgradeCard(centerX, startY + index * spacing, upgrade, () => {
+    upgrades.forEach((upgrade) => {
+      const card = this.createUpgradeCard(centerX, 0, upgrade, () => {
         console.log(`选择了：${upgrade.name}`);
         this.completeSelection(upgrade);
       });
       this.upgradeCards.push(card);
+    });
+
+    const count = this.upgradeCards.length;
+    const topY = 156;
+    const bottomY = this.cameras.main.height - 32;
+    const available = Math.max(180, bottomY - topY);
+    const totalCardHeight = this.upgradeCards.reduce((sum, card) => sum + Number(card.getData('cardHeight') || 152), 0);
+    const rawGap = count <= 1
+      ? 0
+      : Math.floor((available - totalCardHeight) / Math.max(1, count - 1));
+    const gap = count <= 1 ? 0 : Phaser.Math.Clamp(rawGap, 4, 26);
+    const totalHeight = totalCardHeight + gap * Math.max(0, count - 1);
+    let cursorY = topY + Math.max(0, Math.floor((available - totalHeight) / 2));
+
+    this.upgradeCards.forEach((card) => {
+      const cardHeight = Number(card.getData('cardHeight') || 152);
+      card.setPosition(centerX, cursorY + cardHeight / 2);
+      cursorY += cardHeight + gap;
     });
 
     // 初始化选择
@@ -279,23 +289,23 @@ export default class LevelUpScene extends Phaser.Scene {
     const isSpecial = theme.kind !== 'normal';
     return {
       name: {
-        fontSize: isSpecial ? '25px' : '24px',
+        fontSize: isSpecial ? '28px' : '26px',
         color: theme.titleColor,
         fontStyle: 'bold'
       },
       desc: {
-        fontSize: isSpecial ? '15px' : '16px',
+        fontSize: isSpecial ? '19px' : '20px',
         color: theme.descColor,
         wordWrap: { width: 360 }
       },
       icon: {
-        fontSize: isSpecial ? '22px' : '48px',
+        fontSize: isSpecial ? '24px' : '52px',
         color: '#ffffff',
         fontStyle: isSpecial ? 'bold' : 'normal',
         align: 'center'
       },
       badge: {
-        fontSize: '12px',
+        fontSize: '13px',
         color: '#ffffff',
         fontStyle: 'bold'
       }
@@ -310,10 +320,19 @@ export default class LevelUpScene extends Phaser.Scene {
     const theme = getUpgradeCardTheme(upgrade);
     const styles = this.getCardTextStyles(theme);
     const cardWidth = 592;
-    const cardHeight = 136;
     const levelLabel = upgrade.offerLevelLabel || '';
     const displayDesc = upgrade.offerDesc || upgrade.desc;
     const hasTopMeta = !!(theme.badge || theme.kicker || levelLabel);
+
+    const name = this.add.text(0, 0, upgrade.name, styles.name).setOrigin(0, 0);
+    const desc = this.add.text(0, 0, displayDesc, {
+      ...styles.desc,
+      lineSpacing: 4
+    }).setOrigin(0, 0);
+    const textTop = hasTopMeta ? 42 : 26;
+    const nameToDescGap = hasTopMeta ? 10 : 12;
+    const descTop = textTop + name.height + nameToDescGap;
+    const cardHeight = Math.max(152, Math.ceil(descTop + desc.height + 24));
 
     const aura = this.createCardAura(theme, cardWidth, cardHeight);
     const bg = this.add.rectangle(0, 0, cardWidth, cardHeight, theme.panelFill, theme.panelAlpha);
@@ -363,7 +382,7 @@ export default class LevelUpScene extends Phaser.Scene {
     }
     const kickerText = theme.kicker
       ? this.add.text(0, 0, theme.kicker, {
-        fontSize: '11px',
+        fontSize: '13px',
         color: '#ffffff',
         fontStyle: 'bold'
       }).setOrigin(1, 0.5)
@@ -377,7 +396,7 @@ export default class LevelUpScene extends Phaser.Scene {
       : null;
     const levelBadgeText = levelLabel
       ? this.add.text(-136, -cardHeight / 2 + 20, levelLabel, {
-        fontSize: '16px',
+        fontSize: '18px',
         color: '#ffffff',
         fontStyle: 'bold'
       }).setOrigin(0.5)
@@ -385,17 +404,15 @@ export default class LevelUpScene extends Phaser.Scene {
 
     const iconLabel = theme.iconText || upgrade.icon;
     const iconX = theme.kind === 'normal' ? -240 : -228;
-    const icon = this.add.text(iconX, 0, iconLabel, styles.icon).setOrigin(0.5);
+    const iconCenterY = Phaser.Math.Clamp(-cardHeight / 2 + textTop + 26, -cardHeight / 2 + 34, cardHeight / 2 - 34);
+    const icon = this.add.text(iconX, iconCenterY, iconLabel, styles.icon).setOrigin(0.5);
     if (theme.kind !== 'normal') {
       icon.setPadding(10, 8, 10, 8);
       icon.setBackgroundColor('rgba(255,255,255,0.08)');
     }
 
-    // 升级名称
-    const name = this.add.text(-182, hasTopMeta ? -2 : -18, upgrade.name, styles.name).setOrigin(0, 0.5);
-
-    // 描述
-    const desc = this.add.text(-182, hasTopMeta ? 28 : 18, displayDesc, styles.desc).setOrigin(0, 0.5);
+    name.setPosition(-182, -cardHeight / 2 + textTop);
+    desc.setPosition(-182, -cardHeight / 2 + descTop);
 
     const nodes = [aura, bg, splitBg, accentBar, secondaryAccentBar, shine, cornerGlowTop, cornerGlowBottom, border, innerBorder, badgeBg, badgeText, kickerText, levelBadgeBg, levelBadgeText, icon, name, desc].filter(Boolean);
     card.add(nodes);
@@ -412,6 +429,7 @@ export default class LevelUpScene extends Phaser.Scene {
     card.setData('theme', theme);
     card.setData('upgrade', upgrade);
     card.setData('callback', callback);
+    card.setData('cardHeight', cardHeight);
 
     card.on('pointerdown', (pointer, localX, localY, event) => {
       event?.stopPropagation?.();

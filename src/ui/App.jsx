@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { uiBus } from './bus';
 import { useUiStore } from './store';
-import { TREE_DEFS, getMaxLevel } from '../classes/talentTrees';
-import { DEPTH_SPEC_POOLS, UPGRADE_POOLS, UNIVERSAL_POOLS } from '../classes/upgradePools';
+import { TREE_DEFS, getMaxLevel, getTreeSpentPoints } from '../classes/talentTrees';
+import { DEPTH_SPEC_POOLS, TALENT_OFFER_WEIGHT_CONFIG, UPGRADE_POOLS, UNIVERSAL_POOLS } from '../classes/upgradePools';
+import { getTalentOfferStage } from '../classes/dualClass';
 import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { getGlobalShopCatalog } from '../managers/ShopManager';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
@@ -226,6 +227,38 @@ function chunkTalentNodes(nodes, chunkSize) {
 
 function getTalentNodeMeta(nodeId) {
   return TALENT_NODE_META_BY_ID[nodeId] || null;
+}
+
+function getDepthUnlockState(selectedTrees = [], skillTreeLevels = {}, levelUps = 0) {
+  const mainTreeId = selectedTrees[0] || null;
+  const offTreeId = selectedTrees[1] || null;
+  const mainThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecMainPointThreshold || 6));
+  const offThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecOffPointThreshold || 2));
+  const normalizedLevelUps = Math.max(0, Number(levelUps) || 0);
+  const stage = getTalentOfferStage(normalizedLevelUps);
+  const mainSpent = mainTreeId ? getTreeSpentPoints(mainTreeId, skillTreeLevels) : 0;
+  const offSpent = offTreeId ? getTreeSpentPoints(offTreeId, skillTreeLevels) : 0;
+  const stageReady = stage === 'all';
+  const mainReady = !!mainTreeId && mainSpent >= mainThreshold;
+  const offReady = !!offTreeId && offSpent >= offThreshold;
+
+  return {
+    stage,
+    stageReady,
+    mainReady,
+    offReady,
+    unlocked: !!mainTreeId && !!offTreeId && stageReady && mainReady && offReady,
+    levelUps: normalizedLevelUps,
+    mainTreeId,
+    offTreeId,
+    mainSpent,
+    offSpent,
+    mainThreshold,
+    offThreshold,
+    remainingLevelUps: stageReady ? 0 : Math.max(0, 5 - normalizedLevelUps),
+    remainingMainPoints: mainReady ? 0 : Math.max(0, mainThreshold - mainSpent),
+    remainingOffPoints: offReady ? 0 : Math.max(0, offThreshold - offSpent)
+  };
 }
 
 function buildTalentRows(def) {
@@ -540,8 +573,8 @@ export default function App() {
   const isOffClassChoice = levelUpOptions.length === OFFCLASS_ENTRY_IDS.size
     && levelUpOptions.every((opt) => OFFCLASS_ENTRY_IDS.has(String(opt?.id || '')));
   const rerollItemDef = ITEM_DEFS.find((it) => it.id === 'reroll_dice') || null;
-  const levelUpGridRows = 4;
   const denseLevelUpCards = levelUpOptions.length >= 4;
+  const compactLevelUpCards = denseLevelUpCards || gameViewportRect.height < 680;
   const levelUpViewportWidth = Math.max(320, gameViewportRect.width);
   const levelUpViewportHeight = Math.max(568, gameViewportRect.height);
   const itemShopItems = Array.isArray(viewData?.itemShop?.items)
@@ -978,6 +1011,7 @@ export default function App() {
 
     const mainTreeId = selectedTrees[0] || null;
     const offTreeId = selectedTrees[1] || null;
+    const depthState = getDepthUnlockState(selectedTrees, skillTreeLevels, viewData?.levelUps || 0);
 
     const mainDef = mainTreeId ? TREE_DEFS.find((t) => t.id === mainTreeId) : null;
     const offDef = offTreeId ? TREE_DEFS.find((t) => t.id === offTreeId) : null;
@@ -1024,6 +1058,21 @@ export default function App() {
         .trim();
       return cleaned.slice(0, 2) || '天赋';
     };
+
+    const renderDepthRequirementChip = (label, ready, detail, accentColor) => (
+      <div
+        style={{
+          borderRadius: 12,
+          border: `1px solid ${ready ? 'rgba(74,222,128,0.42)' : 'rgba(255,255,255,0.10)'}`,
+          background: ready ? 'rgba(20,83,45,0.30)' : 'rgba(255,255,255,0.04)',
+          padding: '10px 12px',
+          minWidth: 0
+        }}
+      >
+        <div style={{ fontSize: 11, opacity: 0.72 }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 900, marginTop: 4, color: ready ? '#bbf7d0' : (accentColor || '#ffffff') }}>{detail}</div>
+      </div>
+    );
 
     const TalentIconButton = ({ node, def }) => {
       const meta = getTalentNodeMeta(node.id);
@@ -1202,6 +1251,55 @@ export default function App() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, minHeight: '100%' }}>
         <div
           style={{
+            borderRadius: 16,
+            border: `1px solid ${depthState.unlocked ? 'rgba(74,222,128,0.40)' : 'rgba(255,255,255,0.10)'}`,
+            background: depthState.unlocked
+              ? 'linear-gradient(180deg, rgba(20,83,45,0.36), rgba(9,20,16,0.92))'
+              : 'linear-gradient(180deg, rgba(88,28,135,0.20), rgba(10,10,24,0.88))',
+            padding: 14,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 900, color: depthState.unlocked ? '#bbf7d0' : '#f3e8ff' }}>深度专精进度</div>
+              <div style={{ fontSize: 12, opacity: 0.78, marginTop: 4, lineHeight: 1.5 }}>
+                {depthState.unlocked
+                  ? '已满足后段阶段、主树点数和副树点数条件，深度专精现在可以进入候选池。'
+                  : `当前还未完全解锁。${!depthState.stageReady ? `后段阶段还差 ${depthState.remainingLevelUps} 次普通升级。` : ''}${!depthState.mainReady ? ` 主树还差 ${depthState.remainingMainPoints} 点。` : ''}${!depthState.offReady ? ` ${depthState.offTreeId ? `副树还差 ${depthState.remainingOffPoints} 点。` : '尚未选择副职业。'}` : ''}`}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.06em', color: depthState.unlocked ? '#86efac' : '#e9d5ff', opacity: 0.92 }}>
+              {depthState.unlocked ? 'DEPTH READY' : 'DEPTH LOCKED'}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+            {renderDepthRequirementChip(
+              '后段阶段',
+              depthState.stageReady,
+              depthState.stageReady ? '已进入 all 阶段' : `还需 ${depthState.remainingLevelUps} 次普通升级`,
+              '#f8fafc'
+            )}
+            {renderDepthRequirementChip(
+              '主树点数',
+              depthState.mainReady,
+              `${depthState.mainSpent}/${depthState.mainThreshold}`,
+              mainDef ? toCssHex(mainDef.color) : '#f8fafc'
+            )}
+            {renderDepthRequirementChip(
+              '副树点数',
+              depthState.offReady,
+              depthState.offTreeId ? `${depthState.offSpent}/${depthState.offThreshold}` : '未选择副职业',
+              offDef ? toCssHex(offDef.color) : '#f8fafc'
+            )}
+          </div>
+        </div>
+
+        <div
+          style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 12,
@@ -1362,6 +1460,13 @@ export default function App() {
                     前置条件：{([selectedTalent.def?.core, ...(selectedTalent.def?.nodes || [])].find((item) => item?.id === getTalentNodeMeta(selectedTalent.node.id)?.requiredSkillId)?.name) || getTalentNodeMeta(selectedTalent.node.id)?.requiredSkillId}
                   </div>
                 ) : null}
+                {getTalentNodeMeta(selectedTalent.node.id)?.isDepth ? (
+                  <div style={{ fontSize: 12, opacity: 0.74, marginTop: 6, lineHeight: 1.6, color: depthState.unlocked ? '#bbf7d0' : '#f3e8ff' }}>
+                    {depthState.unlocked
+                      ? '深度专精已解锁，后续会在满足发牌阶段时进入候选。'
+                      : `深度专精未解锁：${depthState.stageReady ? '后段阶段已满足' : `还差 ${depthState.remainingLevelUps} 次普通升级`}；${depthState.mainReady ? `主树已达 ${depthState.mainThreshold} 点` : `主树还差 ${depthState.remainingMainPoints} 点`}；${depthState.offReady ? `副树已达 ${depthState.offThreshold} 点` : `${depthState.offTreeId ? `副树还差 ${depthState.remainingOffPoints} 点` : '尚未选择副职业'}`}`}
+                  </div>
+                ) : null}
                 {(selectedTalent.level || 0) <= 0 ? (
                   <div style={{ fontSize: 12, opacity: 0.62, marginTop: 6 }}>
                     当前未投入点数，灰色图标表示仅预览未激活节点。
@@ -1449,84 +1554,84 @@ export default function App() {
       const theme = getItemTheme(item);
 
       return (
-      <button
-        type="button"
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        onPointerDown={(e) => {
-          if (!item) return;
-          startLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => showBagDetail(item, slotLabel), e);
-        }}
-        onPointerUp={(e) => {
-          if (!item) {
-            e.preventDefault();
-            e.stopPropagation();
-            clearPressState();
-            if (label) showFloatingInfo(`${label}\n空`);
-            return;
-          }
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onPointerDown={(e) => {
+            if (!item) return;
+            startLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => showBagDetail(item, slotLabel), e);
+          }}
+          onPointerUp={(e) => {
+            if (!item) {
+              e.preventDefault();
+              e.stopPropagation();
+              clearPressState();
+              if (label) showFloatingInfo(`${label}\n空`);
+              return;
+            }
 
-          endLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => {
-            showBagDetail(item, slotLabel || label);
-          }, e);
-        }}
-        onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-        onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        style={{
-          cursor: 'pointer',
-          width: isRunLootEquipment ? 82 : 92,
-          height: isRunLootEquipment ? 82 : 92,
-          borderRadius: 12,
-          border: theme.border,
-          background: theme.background,
-          boxShadow: theme.boxShadow,
-          color: '#fff',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: isRunLootEquipment ? 4 : 6,
-          padding: isRunLootEquipment ? 6 : 8,
-          position: 'relative',
-          overflow: 'hidden',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-          touchAction: 'none'
-        }}
-      >
-        {cdOverlayStyle ? <div style={cdOverlayStyle} /> : null}
-        {item?.count && Number(item.count) > 1 ? (
-          <div
-            style={{
-              position: 'absolute',
-              top: 6,
-              right: 6,
-              minWidth: 18,
-              height: 18,
-              padding: '0 6px',
-              borderRadius: 999,
-              background: 'rgba(0,0,0,0.65)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 12,
-              fontWeight: 900,
-              lineHeight: 1,
-              pointerEvents: 'none'
-            }}
-          >
-            {Number(item.count)}
-          </div>
-        ) : null}
-        <div style={{ fontWeight: 900, fontSize: isRunLootEquipment ? 14 : 16, ...(dimStyle || {}) }}>{item?.icon || label || ''}</div>
-        <div style={{ opacity: 0.8, fontSize: isRunLootEquipment ? 11 : 12, textAlign: 'center', ...(dimStyle || {}) }}>{item?.name || ''}</div>
-        {!isRunLootEquipment && item?.rarityLabel ? (
-          <div style={{ position: 'absolute', left: 7, bottom: 6, fontSize: 10, fontWeight: 900, color: item.rarityTextColor || '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.45)' }}>
-            {item.rarityLabel}
-          </div>
-        ) : null}
-      </button>
+            endLongPress(`bag:${slotLabel}:${item.instanceId || item.id || 'empty'}`, () => {
+              showBagDetail(item, slotLabel || label);
+            }, e);
+          }}
+          onPointerCancel={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+          onPointerLeave={(e) => { e.preventDefault(); e.stopPropagation(); clearPressState(); }}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          style={{
+            cursor: 'pointer',
+            width: isRunLootEquipment ? 82 : 92,
+            height: isRunLootEquipment ? 82 : 92,
+            borderRadius: 12,
+            border: theme.border,
+            background: theme.background,
+            boxShadow: theme.boxShadow,
+            color: '#fff',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: isRunLootEquipment ? 4 : 6,
+            padding: isRunLootEquipment ? 6 : 8,
+            position: 'relative',
+            overflow: 'hidden',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            touchAction: 'none'
+          }}
+        >
+          {cdOverlayStyle ? <div style={cdOverlayStyle} /> : null}
+          {item?.count && Number(item.count) > 1 ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 6,
+                minWidth: 18,
+                height: 18,
+                padding: '0 6px',
+                borderRadius: 999,
+                background: 'rgba(0,0,0,0.65)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 900,
+                lineHeight: 1,
+                pointerEvents: 'none'
+              }}
+            >
+              {Number(item.count)}
+            </div>
+          ) : null}
+          <div style={{ fontWeight: 900, fontSize: isRunLootEquipment ? 14 : 16, ...(dimStyle || {}) }}>{item?.icon || label || ''}</div>
+          <div style={{ opacity: 0.8, fontSize: isRunLootEquipment ? 11 : 12, textAlign: 'center', ...(dimStyle || {}) }}>{item?.name || ''}</div>
+          {!isRunLootEquipment && item?.rarityLabel ? (
+            <div style={{ position: 'absolute', left: 7, bottom: 6, fontSize: 10, fontWeight: 900, color: item.rarityTextColor || '#ffffff', textShadow: '0 1px 0 rgba(0,0,0,0.45)' }}>
+              {item.rarityLabel}
+            </div>
+          ) : null}
+        </button>
       );
     };
 
@@ -1787,7 +1892,7 @@ export default function App() {
               boxShadow: '0 20px 48px rgba(0,0,0,0.36)'
             }}
           >
-            <div style={{ fontSize: menuViewportCompact ? 34 : 44, fontWeight: 900, textAlign: 'center', marginBottom: 6 }}>MOVA</div>
+            {/* <div style={{ fontSize: menuViewportCompact ? 34 : 44, fontWeight: 900, textAlign: 'center', marginBottom: 6 }}>MOVA</div> */}
 
             {menuScreen === 'home' ? (
               <>
@@ -1945,7 +2050,7 @@ export default function App() {
                           {selectedMenuClass.strengths.map((text) => <div key={text}>{text}</div>)}
                         </div>
                       </div>
-                      <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
+                      {/* <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
                         <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>代表成长</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {selectedMenuClass.showcase.map((text) => (
@@ -1954,7 +2059,7 @@ export default function App() {
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 ) : null}
@@ -2224,26 +2329,26 @@ export default function App() {
                       }}
                     >
                       {item.icon}
-                        <div
-                          style={{
-                            position: 'absolute',
-                            left: 6,
-                            top: 6,
-                            minWidth: 20,
-                            height: 20,
-                            borderRadius: 999,
-                            padding: '0 6px',
-                            fontSize: 10,
-                            fontWeight: 900,
-                            background: 'rgba(0,0,0,0.44)',
-                            color: item.qualityColor || '#ffffff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                        >
-                          {item.qualityLabel}
-                        </div>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: 6,
+                          top: 6,
+                          minWidth: 20,
+                          height: 20,
+                          borderRadius: 999,
+                          padding: '0 6px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: 'rgba(0,0,0,0.44)',
+                          color: item.qualityColor || '#ffffff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {item.qualityLabel}
+                      </div>
                       {ownedCount > 0 ? (
                         <div
                           style={{
@@ -2730,10 +2835,10 @@ export default function App() {
               borderRadius: 0,
               background: 'rgba(15, 16, 26, 0.92)',
               border: '2px solid rgba(42,42,58,1)',
-              padding: denseLevelUpCards ? '8px 8px 10px' : '10px 10px 12px',
+              padding: compactLevelUpCards ? '8px 8px 10px' : '12px 12px 14px',
               display: 'flex',
               flexDirection: 'column',
-              gap: denseLevelUpCards ? 6 : 8,
+              gap: compactLevelUpCards ? 6 : 10,
               overflow: 'hidden'
             }}
           >
@@ -2865,242 +2970,252 @@ export default function App() {
                 </div>
               </>
             ) : (
-            <>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: denseLevelUpCards ? 'clamp(24px, 5.2vw, 32px)' : 'clamp(28px, 6vw, 36px)', fontWeight: 900, color: '#ffff00', lineHeight: 1.05 }}>
-                  剩余点数：{levelUpPendingPoints}
+              <>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: compactLevelUpCards ? 'clamp(24px, 5.2vw, 32px)' : 'clamp(30px, 6vw, 38px)', fontWeight: 900, color: '#ffff00', lineHeight: 1.05 }}>
+                      剩余点数：{levelUpPendingPoints}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => uiBus.emit('ui:levelUp:close')}
+                      style={{
+                        cursor: 'pointer',
+                        height: compactLevelUpCards ? 34 : 40,
+                        padding: compactLevelUpCards ? '0 10px' : '0 14px',
+                        borderRadius: 999,
+                        border: '1px solid rgba(255,255,255,0.22)',
+                        background: 'rgba(255,255,255,0.08)',
+                        color: '#fff',
+                        fontSize: compactLevelUpCards ? 11 : 14,
+                        fontWeight: 800,
+                        flexShrink: 0
+                      }}
+                    >
+                      稍后再加
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => uiBus.emit('ui:levelUp:close')}
+                <div style={{ opacity: 0.92, fontSize: compactLevelUpCards ? 14 : 17, fontWeight: 800, lineHeight: 1.15 }}>
+                  {`请选择一个升级选项`}
+                </div>
+
+                <div
                   style={{
-                    cursor: 'pointer',
-                    height: denseLevelUpCards ? 34 : 36,
-                    padding: denseLevelUpCards ? '0 10px' : '0 12px',
-                    borderRadius: 999,
-                    border: '1px solid rgba(255,255,255,0.22)',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: '#fff',
-                    fontSize: denseLevelUpCards ? 11 : 12,
-                    fontWeight: 800,
-                    flexShrink: 0
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr)',
+                    gridAutoRows: 'max-content',
+                    gap: compactLevelUpCards ? 6 : 10,
+                    alignContent: 'start',
+                    paddingRight: 4
                   }}
                 >
-                  稍后再加
-                </button>
-              </div>
-            </div>
-            <div style={{ opacity: 0.92, fontSize: denseLevelUpCards ? 14 : 16, fontWeight: 800, lineHeight: 1.1 }}>
-              {`请选择一个升级选项`}
-            </div>
+                  {levelUpOptions.map((opt) => {
+                    const theme = getUpgradeCardTheme(opt);
+                    const isSpecial = theme.kind !== 'normal';
+                    const iconText = theme.iconText || opt.icon;
+                    const levelLabel = opt.offerLevelLabel || '';
+                    const displayDesc = opt.offerDesc || opt.desc;
+                    const hasTopMeta = !!(theme.badge || theme.kicker || levelLabel);
 
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflow: 'hidden',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr)',
-                gridTemplateRows: `repeat(${levelUpGridRows}, minmax(0, 1fr))`,
-                gap: denseLevelUpCards ? 6 : 8,
-                alignContent: 'stretch'
-              }}
-            >
-              {levelUpOptions.map((opt) => {
-                const theme = getUpgradeCardTheme(opt);
-                const isSpecial = theme.kind !== 'normal';
-                const iconText = theme.iconText || opt.icon;
-                const levelLabel = opt.offerLevelLabel || '';
-                const displayDesc = opt.offerDesc || opt.desc;
-                const hasTopMeta = !!(theme.badge || theme.kicker || levelLabel);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => uiBus.emit('ui:levelUp:select', opt.id)}
+                        style={{
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          padding: compactLevelUpCards ? '10px 14px' : '16px 18px',
+                          borderRadius: 16,
+                          border: `2px solid ${toRgba(theme.border, isSpecial ? 0.92 : 0.55)}`,
+                          background: theme.gradient,
+                          color: '#fff',
+                          width: '100%',
+                          minHeight: compactLevelUpCards ? 92 : 112,
+                          height: 'auto',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          boxShadow: theme.shadow,
+                          animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none',
+                          touchAction: 'manipulation',
+                          display: 'flex',
+                          flexDirection: 'row',
+                          alignItems: 'flex-start'
+                        }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: `linear-gradient(180deg, ${toRgba(theme.accentSoft, isSpecial ? 0.12 : 0.05)}, rgba(255,255,255,0))`,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        {theme.effectClassName ? (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: -20,
+                              bottom: -20,
+                              left: '-18%',
+                              width: '30%',
+                              background: `linear-gradient(180deg, rgba(255,255,255,0), ${toRgba(theme.accentSoft, 0.22)}, rgba(255,255,255,0))`,
+                              filter: 'blur(10px)',
+                              transform: 'rotate(-16deg)',
+                              pointerEvents: 'none',
+                              animation: `levelup-card-shimmer ${theme.kind === 'offclass' ? '2.4s' : '1.9s'} linear infinite`
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 0,
+                            top: 10,
+                            bottom: 10,
+                            width: 6,
+                            borderRadius: 999,
+                            background: toRgba(theme.accent, isSpecial ? 0.95 : 0.40),
+                            boxShadow: `0 0 16px ${toRgba(theme.outerGlow, isSpecial ? 0.35 : 0.16)}`,
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        {theme.badge ? (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              right: 12,
+                              top: compactLevelUpCards ? 8 : 12,
+                              padding: compactLevelUpCards ? '2px 7px' : '5px 11px',
+                              borderRadius: 999,
+                              fontSize: compactLevelUpCards ? 9 : 12,
+                              fontWeight: 900,
+                              letterSpacing: '0.08em',
+                              color: theme.badgeColor,
+                              background: theme.badgeBackground,
+                              border: `1px solid ${theme.badgeBorder}`,
+                              backdropFilter: 'blur(8px)'
+                            }}
+                          >
+                            {theme.badge}
+                          </div>
+                        ) : null}
+                        {theme.kicker ? (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              right: 14,
+                              top: compactLevelUpCards ? 26 : 38,
+                              fontSize: compactLevelUpCards ? 9 : 12,
+                              fontWeight: 800,
+                              letterSpacing: '0.08em',
+                              color: 'rgba(255,255,255,0.86)',
+                              textShadow: '0 0 12px rgba(255,255,255,0.12)'
+                            }}
+                          >
+                            {theme.kicker}
+                          </div>
+                        ) : null}
+                        {levelLabel ? (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: compactLevelUpCards ? 12 : 16,
+                              top: compactLevelUpCards ? 8 : 12,
+                              padding: compactLevelUpCards ? '4px 8px' : '6px 11px',
+                              borderRadius: 999,
+                              fontSize: compactLevelUpCards ? 11 : 15,
+                              fontWeight: 900,
+                              letterSpacing: '0.05em',
+                              color: '#fffdf5',
+                              background: toRgba(theme.accentSoft, 0.14),
+                              backdropFilter: 'blur(8px)'
+                            }}
+                          >
+                            {levelLabel}
+                          </div>
+                        ) : null}
+                        {isSpecial ? (
+                          <>
+                            <div style={{ position: 'absolute', left: compactLevelUpCards ? 10 : 14, top: compactLevelUpCards ? 10 : 14, width: compactLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.34), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                            <div style={{ position: 'absolute', right: compactLevelUpCards ? 10 : 14, bottom: compactLevelUpCards ? 10 : 14, width: compactLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.26), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
+                          </>
+                        ) : null}
+                        <div style={{ position: 'relative', display: 'flex', gap: compactLevelUpCards ? 10 : 14, alignItems: 'flex-start', paddingTop: hasTopMeta ? (compactLevelUpCards ? 16 : 24) : 0, minHeight: 0, flex: 1 }}>
+                          <div
+                            style={{
+                              minWidth: compactLevelUpCards ? 38 : 48,
+                              height: compactLevelUpCards ? 38 : 48,
+                              borderRadius: 12,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: compactLevelUpCards ? 15 : 19,
+                              fontWeight: 900,
+                              color: '#fff',
+                              background: isSpecial ? toRgba(theme.accent, 0.22) : 'rgba(255,255,255,0.06)',
+                              border: `1px solid ${toRgba(theme.accentSoft, isSpecial ? 0.48 : 0.18)}`,
+                              boxShadow: isSpecial ? `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 20px ${toRgba(theme.outerGlow, 0.14)}` : 'none'
+                            }}
+                          >
+                            {iconText}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1, paddingRight: theme.badge ? (compactLevelUpCards ? 72 : 92) : 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: compactLevelUpCards ? 1 : 2 }}>
+                            <div style={{ fontWeight: 900, fontSize: compactLevelUpCards ? 16 : 21, color: theme.titleColor, lineHeight: compactLevelUpCards ? 1.1 : 1.15, whiteSpace: 'normal' }}>
+                              {opt.name}
+                            </div>
+                            <div style={{
+                              color: theme.descColor,
+                              opacity: 0.96,
+                              fontSize: compactLevelUpCards ? 13 : 17,
+                              marginTop: compactLevelUpCards ? 6 : 8,
+                              lineHeight: compactLevelUpCards ? 1.28 : 1.38,
+                              whiteSpace: 'normal',
+                              overflowWrap: 'anywhere',
+                              paddingBottom: 2
+                            }}>
+                              {displayDesc}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                return (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 2 }}>
                   <button
-                    key={opt.id}
                     type="button"
-                    onClick={() => uiBus.emit('ui:levelUp:select', opt.id)}
+                    disabled={rerollDiceCount <= 0}
+                    onClick={() => uiBus.emit('ui:levelUp:reroll')}
                     style={{
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      padding: denseLevelUpCards ? '10px 14px' : '12px 16px',
-                      borderRadius: 16,
-                      border: `2px solid ${toRgba(theme.border, isSpecial ? 0.92 : 0.55)}`,
-                      background: theme.gradient,
-                      color: '#fff',
-                      width: '100%',
-                      minHeight: 0,
-                      height: '100%',
-                      position: 'relative',
-                      overflow: 'hidden',
-                      boxShadow: theme.shadow,
-                      animation: theme.kind.startsWith('third_') ? 'levelup-card-pulse 2.2s ease-in-out infinite' : 'none',
-                      touchAction: 'manipulation',
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'flex-start'
+                      cursor: rerollDiceCount > 0 ? 'pointer' : 'not-allowed',
+                      minWidth: compactLevelUpCards ? 108 : 132,
+                      height: compactLevelUpCards ? 40 : 46,
+                      padding: compactLevelUpCards ? '0 12px' : '0 16px',
+                      borderRadius: 14,
+                      border: `1px solid ${rerollDiceCount > 0 ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)'}`,
+                      background: rerollDiceCount > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                      color: rerollDiceCount > 0 ? '#fff' : 'rgba(255,255,255,0.45)',
+                      fontSize: compactLevelUpCards ? 13 : 15,
+                      fontWeight: 900,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: compactLevelUpCards ? 8 : 10
                     }}
                   >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: `linear-gradient(180deg, ${toRgba(theme.accentSoft, isSpecial ? 0.12 : 0.05)}, rgba(255,255,255,0))`,
-                        pointerEvents: 'none'
-                      }}
-                    />
-                    {theme.effectClassName ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: -20,
-                          bottom: -20,
-                          left: '-18%',
-                          width: '30%',
-                          background: `linear-gradient(180deg, rgba(255,255,255,0), ${toRgba(theme.accentSoft, 0.22)}, rgba(255,255,255,0))`,
-                          filter: 'blur(10px)',
-                          transform: 'rotate(-16deg)',
-                          pointerEvents: 'none',
-                          animation: `levelup-card-shimmer ${theme.kind === 'offclass' ? '2.4s' : '1.9s'} linear infinite`
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 10,
-                        bottom: 10,
-                        width: 6,
-                        borderRadius: 999,
-                        background: toRgba(theme.accent, isSpecial ? 0.95 : 0.40),
-                        boxShadow: `0 0 16px ${toRgba(theme.outerGlow, isSpecial ? 0.35 : 0.16)}`,
-                        pointerEvents: 'none'
-                      }}
-                    />
-                    {theme.badge ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: 12,
-                          top: denseLevelUpCards ? 8 : 10,
-                          padding: denseLevelUpCards ? '2px 7px' : '4px 10px',
-                          borderRadius: 999,
-                          fontSize: denseLevelUpCards ? 9 : 11,
-                          fontWeight: 900,
-                          letterSpacing: '0.08em',
-                          color: theme.badgeColor,
-                          background: theme.badgeBackground,
-                          border: `1px solid ${theme.badgeBorder}`,
-                          backdropFilter: 'blur(8px)'
-                        }}
-                      >
-                        {theme.badge}
-                      </div>
-                    ) : null}
-                    {theme.kicker ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: 14,
-                          top: denseLevelUpCards ? 26 : 34,
-                          fontSize: denseLevelUpCards ? 9 : 11,
-                          fontWeight: 800,
-                          letterSpacing: '0.08em',
-                          color: 'rgba(255,255,255,0.86)',
-                          textShadow: '0 0 12px rgba(255,255,255,0.12)'
-                        }}
-                      >
-                        {theme.kicker}
-                      </div>
-                    ) : null}
-                    {levelLabel ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: denseLevelUpCards ? 12 : 16,
-                          top: denseLevelUpCards ? 8 : 10,
-                          padding: denseLevelUpCards ? '4px 8px' : '5px 10px',
-                          borderRadius: 999,
-                          fontSize: denseLevelUpCards ? 11 : 14,
-                          fontWeight: 900,
-                          letterSpacing: '0.05em',
-                          color: '#fffdf5',
-                          background: toRgba(theme.accentSoft, 0.14),
-                          backdropFilter: 'blur(8px)'
-                        }}
-                      >
-                        {levelLabel}
-                      </div>
-                    ) : null}
-                    {isSpecial ? (
-                      <>
-                        <div style={{ position: 'absolute', left: denseLevelUpCards ? 10 : 14, top: denseLevelUpCards ? 10 : 14, width: denseLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.34), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
-                        <div style={{ position: 'absolute', right: denseLevelUpCards ? 10 : 14, bottom: denseLevelUpCards ? 10 : 14, width: denseLevelUpCards ? 18 : 22, height: 6, borderRadius: 999, background: toRgba(theme.accentSoft, 0.26), transform: 'rotate(-40deg)', filter: 'blur(0.5px)' }} />
-                      </>
-                    ) : null}
-                    <div style={{ position: 'relative', display: 'flex', gap: denseLevelUpCards ? 10 : 12, alignItems: 'flex-start', paddingTop: hasTopMeta ? (denseLevelUpCards ? 16 : 22) : 0, minHeight: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          minWidth: denseLevelUpCards ? 38 : 42,
-                          height: denseLevelUpCards ? 38 : 42,
-                          borderRadius: 12,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: denseLevelUpCards ? 15 : 17,
-                          fontWeight: 900,
-                          color: '#fff',
-                          background: isSpecial ? toRgba(theme.accent, 0.22) : 'rgba(255,255,255,0.06)',
-                          border: `1px solid ${toRgba(theme.accentSoft, isSpecial ? 0.48 : 0.18)}`,
-                          boxShadow: isSpecial ? `inset 0 1px 0 rgba(255,255,255,0.14), 0 0 20px ${toRgba(theme.outerGlow, 0.14)}` : 'none'
-                        }}
-                      >
-                        {iconText}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1, paddingRight: theme.badge ? (denseLevelUpCards ? 72 : 86) : 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', paddingTop: denseLevelUpCards ? 1 : 2 }}>
-                        <div style={{ fontWeight: 900, fontSize: denseLevelUpCards ? 16 : 18, color: theme.titleColor, lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {opt.name}
-                        </div>
-                        <div style={{ color: theme.descColor, opacity: 0.9, fontSize: denseLevelUpCards ? 11 : 12, marginTop: 5, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {displayDesc}
-                        </div>
-                      </div>
-                    </div>
+                    <span style={{ fontSize: compactLevelUpCards ? 18 : 20, lineHeight: 1 }}>{rerollItemDef?.icon || '🎲'}</span>
+                    <span style={{ fontSize: compactLevelUpCards ? 14 : 16, lineHeight: 1 }}>{rerollDiceCount}</span>
                   </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 2 }}>
-              <button
-                type="button"
-                disabled={rerollDiceCount <= 0}
-                onClick={() => uiBus.emit('ui:levelUp:reroll')}
-                style={{
-                  cursor: rerollDiceCount > 0 ? 'pointer' : 'not-allowed',
-                  minWidth: denseLevelUpCards ? 108 : 124,
-                  height: denseLevelUpCards ? 40 : 44,
-                  padding: denseLevelUpCards ? '0 12px' : '0 14px',
-                  borderRadius: 14,
-                  border: `1px solid ${rerollDiceCount > 0 ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)'}`,
-                  background: rerollDiceCount > 0 ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
-                  color: rerollDiceCount > 0 ? '#fff' : 'rgba(255,255,255,0.45)',
-                  fontSize: denseLevelUpCards ? 13 : 14,
-                  fontWeight: 900,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: denseLevelUpCards ? 8 : 10
-                }}
-              >
-                <span style={{ fontSize: denseLevelUpCards ? 18 : 20, lineHeight: 1 }}>{rerollItemDef?.icon || '🎲'}</span>
-                <span style={{ fontSize: denseLevelUpCards ? 14 : 15, lineHeight: 1 }}>{rerollDiceCount}</span>
-              </button>
-            </div>
-            </>
+                </div>
+              </>
             )}
           </div>
         </div>

@@ -262,6 +262,60 @@ export default class PetManager {
     if (pet) {
       this.active.set(type, pet);
       this.summonRegistry?.register(REGISTRY_ID, pet);
+      this.onPetSummoned(type, pet);
+    }
+  }
+
+  onPetSummoned(type, pet) {
+    if (!pet?.active) return;
+
+    if (type === PET_TYPES.bear) {
+      const radius = 118;
+      const burst = this.scene.add.circle(pet.x, pet.y, 26, 0xffd27a, 0.18).setDepth(5);
+      burst.setStrokeStyle(3, 0xffefb2, 0.85);
+      this.scene.tweens.add({
+        targets: burst,
+        scale: radius / 26,
+        alpha: 0,
+        duration: 220,
+        onComplete: () => burst.destroy()
+      });
+
+      const enemies = collectCombatEnemies(this.scene);
+      for (let i = 0; i < enemies.length; i++) {
+        const enemy = enemies[i];
+        if (!enemy?.isAlive) continue;
+        const dx = enemy.x - pet.x;
+        const dy = enemy.y - pet.y;
+        if ((dx * dx + dy * dy) > radius * radius) continue;
+        if (typeof enemy.applyFreeze === 'function') {
+          enemy.applyFreeze(280, { source: 'druid_pet_bear_spawn', player: this.player, radius });
+        }
+      }
+
+      this.scene.showDamageNumber?.(pet.x, pet.y - 42, '咆哮', { color: '#ffe7a8', fontSize: 16, whisper: true });
+    }
+
+    if (type === PET_TYPES.treant) {
+      const heal = Math.max(2, Math.round((this.player?.maxHp || 100) * 0.05));
+      const restored = this.player?.heal?.(heal) || 0;
+      const barrier = Math.max(1, Math.round((this.player?.maxHp || 100) * 0.02));
+      this.player.guardianBarrierHp = Math.max(0, Math.round(this.player.guardianBarrierHp || 0)) + barrier;
+
+      const ring = this.scene.add.circle(this.player.x, this.player.y, 18, 0x88ffcc, 0.16).setDepth(5);
+      ring.setStrokeStyle(3, 0xb4f0d3, 0.75);
+      this.scene.tweens.add({
+        targets: ring,
+        scale: 2.4,
+        alpha: 0,
+        duration: 260,
+        onComplete: () => ring.destroy()
+      });
+
+      if (restored > 0) {
+        this.scene.showDamageNumber?.(this.player.x, this.player.y - 76, `芽+${restored}`, { color: '#88ffcc', fontSize: 18, whisper: true });
+      }
+      this.scene.showDamageNumber?.(this.player.x, this.player.y - 96, `盾+${barrier}`, { color: '#b4f0d3', fontSize: 16, whisper: true });
     }
   }
 
@@ -615,6 +669,11 @@ export default class PetManager {
             target.debuffs.natureHawkMarkUntil = time + 2600 + huntmarkLevel * 400;
             target.debuffs.natureHawkMarkMult = [1, 1.08, 1.16, 1.24][huntmarkLevel] || 1.08;
           }
+        } else if (hawkLevel > 0) {
+          target.debuffs = target.debuffs || {};
+          target.debuffs.natureHawkMarkUntil = time + 1400;
+          target.debuffs.natureHawkMarkMult = Math.max(target.debuffs.natureHawkMarkMult || 1, 1.06);
+          this.scene.showDamageNumber(target.x, target.y - 52, '印', { color: '#d7f4ff', fontSize: 14, whisper: true });
         }
 
         // 一道极短的“啄击光线”

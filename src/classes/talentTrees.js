@@ -3,6 +3,8 @@
 import { DEPTH_SPEC_POOLS } from './upgradePools';
 import { resolveClassColor } from './visual/classColors';
 import { normalizeCoreKey } from './classDefs';
+import { MAGE_CORE_DESC, MAGE_DEEP_FREEZE_DESC, MAGE_SHATTER_DESC } from './mageFrostData';
+import { applyTalentSummary } from './talentNodeText';
 
 export const TREE_DEFS = [
   {
@@ -46,13 +48,13 @@ export const TREE_DEFS = [
     id: 'mage',
     name: '法师-主',
     color: resolveClassColor('mage'),
-    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: '攻击变为单发冰弹，命中叠加寒霜，叠满三层爆炸并传染。' },
+    core: { id: 'mage_core', name: '初始：法师', maxLevel: 1, desc: MAGE_CORE_DESC },
     nodes: [
-      { id: 'mage_frostbite', name: '霜蚀', maxLevel: 1, desc: '冰弹自带强减速，提升到 48%，持续 2.7 秒。' },
-      { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 1, desc: '冰弹索敌范围额外 +135。' },
-      { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 1, desc: '强化冰弹本体，伤害 +30%。' },
-      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 1, desc: '3 层碎冰后额外冻结主目标 1.7 秒。' },
-      { id: 'mage_shatter', name: '碎冰传染', maxLevel: 3, desc: '强化基础碎冰爆裂。1/2级提升半径与伤害；3级额外把传染提升到 2 层。1/2/3级分别为半径 120/150/185，伤害 70%/100%/135%，传染 1/1/2 层寒霜。' },
+      { id: 'mage_frostbite', name: '霜蚀', maxLevel: 1, desc: '冰弹自带强减速，并在命中已冻结或已挂寒霜目标时额外补 1 层寒霜。' },
+      { id: 'mage_cold_focus', name: '寒域感知', maxLevel: 1, desc: '冰弹会优先追猎已冻结或高寒霜目标，并额外提高少量索敌范围。' },
+      { id: 'mage_ice_veins', name: '冰脉灌注', maxLevel: 1, desc: '强化冰弹本体，并在命中关键冰目标时分裂次级寒流袭向附近敌人。' },
+      { id: 'mage_deep_freeze', name: '深度冻结', maxLevel: 1, desc: MAGE_DEEP_FREEZE_DESC },
+      { id: 'mage_shatter', name: '碎冰传染', maxLevel: 3, desc: MAGE_SHATTER_DESC },
       { id: 'mage_frost_nova', name: '冰霜新星', maxLevel: 2, desc: '生命低于30%时自动触发冰霜新星。1级冻结 5 秒、范围 380；2级冻结 10 秒、范围 480；冷却30秒。' }
     ]
   },
@@ -89,7 +91,7 @@ export const TREE_DEFS = [
     id: 'arcane',
     name: '法师-副',
     color: resolveClassColor('mage'),
-    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，立即获得基础奥术炮台，并解锁奥术系天赋池。' },
+    core: { id: 'off_arcane', name: '选择：奥术', maxLevel: 1, desc: '作为副职业，立即获得基础奥术炮台；首座炮台会快速完成一次开场射击。' },
     nodes: [
       { id: 'arcane_circle', name: '奥术炮台', maxLevel: 2, desc: '把基础奥术炮台强化到中后期压场档位。' },
       { id: 'arcane_circle_range', name: '棱镜扩容', maxLevel: 1, desc: '大幅提升炮台索敌范围。' },
@@ -103,7 +105,7 @@ export const TREE_DEFS = [
     id: 'ranger',
     name: '猎人-副',
     color: resolveClassColor('archer'),
-    core: { id: 'off_ranger', name: '选择：猎人', maxLevel: 1, desc: '作为副职业，立即获得基础诱饵假人，并解锁猎人系天赋池。' },
+    core: { id: 'off_ranger', name: '选择：猎人', maxLevel: 1, desc: '作为副职业，立即获得基础诱饵假人；首个假人落地时会立刻触发一次牵引脉冲。' },
     nodes: [
       { id: 'ranger_snaretrap', name: '诱饵假人', maxLevel: 2, desc: '把基础诱饵假人强化到稳定控场档位。' },
       { id: 'ranger_huntmark', name: '猎手印记', maxLevel: 1, desc: '被假人牵制的敌人会被标记，承受你更多伤害。' },
@@ -117,7 +119,7 @@ export const TREE_DEFS = [
     id: 'unyielding',
     name: '战士-副',
     color: resolveClassColor('warrior'),
-    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，立即获得基础血怒，并解锁不屈系天赋池。' },
+    core: { id: 'off_unyielding', name: '选择：不屈', maxLevel: 1, desc: '作为副职业，立即获得基础血怒，并立刻爆发一次战吼脉冲，震退并迟滞近身敌人。' },
     nodes: [
       { id: 'unyielding_bloodrage', name: '血怒', maxLevel: 2, desc: '把基础血怒强化到终局档位。' },
       { id: 'unyielding_battlecry', name: '战吼', maxLevel: 1, desc: '受伤后短时间大幅提高伤害。' },
@@ -133,7 +135,7 @@ export const TREE_DEFS = [
     color: resolveClassColor('warlock'),
     core: { id: 'off_summon', name: '选择：召唤', maxLevel: 1, desc: '作为副职业，立即获得 1 名骷髅卫士与 1 名骷髅法师，并解锁召唤系天赋池。' },
     nodes: [
-      { id: 'summon_necrotic_vitality', name: '死灵共鸣', maxLevel: 1, desc: '大幅提高召唤物生命。' },
+      { id: 'summon_necrotic_vitality', name: '死灵共鸣', maxLevel: 1, desc: '提高召唤物生命，并在亡灵阵亡时为其他亡灵回补生命。' },
       { id: 'summon_skeleton_guard', name: '骷髅卫士', maxLevel: 2, desc: '扩充骷髅卫士军势，分两段提高前排规模。' },
       { id: 'summon_skeleton_mage', name: '骷髅法师', maxLevel: 2, desc: '扩充骷髅法师军势，分两段提高后排规模。' },
       { id: 'summon_mage_empower', name: '白骨灌能', maxLevel: 2, desc: '分两段强化骷髅法师输出与节奏。' },
@@ -148,7 +150,7 @@ export const TREE_DEFS = [
     core: { id: 'off_guardian', name: '选择：守护', maxLevel: 1, desc: '作为副职业，立即获得基础格挡与圣印，并解锁守护系天赋池。' },
     nodes: [
       { id: 'guardian_block', name: '坚盾', maxLevel: 2, desc: '把基础格挡强化到终局档位。' },
-      { id: 'guardian_armor', name: '护甲', maxLevel: 1, desc: '大幅提高固定减伤。' },
+      { id: 'guardian_armor', name: '护甲', maxLevel: 1, desc: '提高固定减伤，并在受击后周期性生成护甲屏障。' },
       { id: 'guardian_counter', name: '反制', maxLevel: 1, desc: '格挡成功后触发强力反击。' },
       { id: 'guardian_sacred_seal', name: '庇护圣印', maxLevel: 2, desc: '把基础圣印强化到终局档位。' },
       { id: 'guardian_holy_rebuke', name: '神圣回击', maxLevel: 2, desc: '消耗圣印触发更强的范围冲击。' },
@@ -161,9 +163,9 @@ export const TREE_DEFS = [
     color: resolveClassColor('druid'),
     core: { id: 'off_nature', name: '选择：自然伙伴', maxLevel: 1, desc: '作为副职业，立即获得 1 只熊灵，并解锁自然伙伴天赋池。' },
     nodes: [
-      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 1, desc: '把基础熊灵提升到稳定前排档位。' },
-      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 1, desc: '解锁战鹰，并让其直接进入稳定补伤档位。' },
-      { id: 'druid_pet_treant', name: '树精', maxLevel: 1, desc: '解锁树精，并让其直接进入稳定治疗档位。' },
+      { id: 'druid_pet_bear', name: '熊灵', maxLevel: 1, desc: '把基础熊灵提升到稳定前排档位，出场时会咆哮震慑周围敌人。' },
+      { id: 'druid_pet_hawk', name: '战鹰', maxLevel: 1, desc: '解锁战鹰，并让其基础攻击自带轻度猎印。' },
+      { id: 'druid_pet_treant', name: '树精', maxLevel: 1, desc: '解锁树精，并在出场时立刻提供一次萌芽治疗与护盾。' },
       { id: 'nature_bear_guard', name: '熊灵守护', maxLevel: 2, desc: '强化熊灵承担伤害与拦截能力。' },
       { id: 'nature_hawk_huntmark', name: '战鹰猎印', maxLevel: 2, desc: '强化战鹰标记与对 Boss 增伤。' },
       { id: 'nature_treant_bloom', name: '树精繁茂', maxLevel: 2, desc: '强化树精治疗与护盾。' }
@@ -184,6 +186,11 @@ TREE_DEFS.forEach((treeDef) => {
   }));
 
   treeDef.nodes = [...(treeDef.nodes || []), ...depthNodes];
+});
+
+TREE_DEFS.forEach((treeDef) => {
+  treeDef.core = applyTalentSummary(treeDef.core);
+  treeDef.nodes = (treeDef.nodes || []).map((node) => applyTalentSummary(node));
 });
 
 export const SKILL_TO_TREE = {
@@ -384,15 +391,18 @@ export const TREE_FRONTIER_GROUPS = {
     ['archer_bounce', 'archer_windfury', 'archer_eagleeye']
   ],
   druid: [
-    ['druid_meteor_shower', 'druid_meteor', 'druid_starfire', 'druid_nourish'],
+    ['druid_meteor_shower', 'druid_meteor', 'druid_starfire'],
+    ['druid_nourish'],
     ['druid_kingofbeasts', 'druid_naturefusion', 'druid_astralstorm']
   ],
   warrior: [
-    ['warrior_range', 'warrior_swordqi', 'warrior_damage', 'warrior_blood_conversion'],
+    ['warrior_range', 'warrior_swordqi', 'warrior_damage'],
+    ['warrior_blood_conversion'],
     ['warrior_spin', 'warrior_berserkgod', 'warrior_unyielding']
   ],
   mage: [
-    ['mage_frostbite', 'mage_cold_focus', 'mage_ice_veins', 'mage_deep_freeze', 'mage_shatter', 'mage_frost_nova'],
+    ['mage_frostbite', 'mage_cold_focus', 'mage_ice_veins'],
+    ['mage_deep_freeze', 'mage_shatter', 'mage_frost_nova'],
     ['mage_dualcaster', 'mage_trilaser', 'mage_arcanomorph']
   ],
   paladin: [
@@ -432,9 +442,9 @@ export const TREE_FRONTIER_GROUPS = {
 
 export const TREE_FRONTIER_THRESHOLDS = {
   archer: [0, 3, 6],
-  druid: [0, 6],
-  warrior: [0, 6],
-  mage: [0, 6],
+  druid: [0, 3, 6],
+  warrior: [0, 3, 6],
+  mage: [0, 3, 6],
   paladin: [0, 3, 6],
   warlock: [0, 3, 6],
   arcane: [0, 3],

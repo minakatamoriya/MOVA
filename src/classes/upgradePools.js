@@ -3,6 +3,9 @@
 // - 主职业专精只在第一次选择的职业生效
 // - 副职业只提供通用被动，不提供第二套攻击形态
 
+import { MAGE_DEEP_FREEZE_DESC, MAGE_SHATTER_DESC } from './mageFrostData';
+import { applyTalentSummary } from './talentNodeText';
+
 // 升级天赋出现权重。
 // - 所有候选默认 weight=1，可在单项上单独覆盖。
 // - testing 用于测试期定向提高某个分支/某个技能的出现率，方便验证功能。
@@ -63,11 +66,11 @@ export const UPGRADE_POOLS = {
 
   // 🔵 法师·冰法
   mage: [
-    { id: 'mage_frostbite', category: 'build', name: '霜蚀', desc: '冰弹减速提升至 48%，持续 2.7 秒。', icon: '法主', maxLevel: 1 },
-    { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹索敌范围额外 +135。', icon: '法主', maxLevel: 1 },
-    { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害加成提升至 30%。', icon: '法主', maxLevel: 1 },
-    { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: '额外冻结时长提升至 1.7 秒。', icon: '法主', maxLevel: 1 },
-    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: '寒霜改为 3 层触发碎冰；碎冰半径：0 -> 120 -> 150 -> 185；伤害：45% -> 70% -> 100% -> 135%；传染层数：1 -> 1 -> 1 -> 2。', icon: '法主', maxLevel: 3 },
+    { id: 'mage_frostbite', category: 'build', name: '霜蚀', desc: '冰弹减速提升至 48%，持续 2.7 秒；命中已冻结或已挂寒霜目标时会额外补 1 层寒霜。', icon: '法主', maxLevel: 1 },
+    { id: 'mage_cold_focus', category: 'build', name: '寒域感知', desc: '冰弹会优先追猎已冻结或高寒霜目标，并额外提高少量索敌范围。', icon: '法主', maxLevel: 1 },
+    { id: 'mage_ice_veins', category: 'build', name: '冰脉灌注', desc: '冰弹伤害加成提升至 30%；命中高寒霜或冻结目标时，会分裂一道次级寒流袭向附近敌人。', icon: '法主', maxLevel: 1 },
+    { id: 'mage_deep_freeze', category: 'build', name: '深度冻结', desc: MAGE_DEEP_FREEZE_DESC, icon: '法主', maxLevel: 1 },
+    { id: 'mage_shatter', category: 'build', name: '碎冰传染', desc: MAGE_SHATTER_DESC, icon: '法主', maxLevel: 3 },
     { id: 'mage_frost_nova', category: 'build', name: '冰霜新星', desc: 'Lv1 冻结 5 秒，范围 380；Lv2 冻结 10 秒，范围 480。冷却 30 秒。', icon: '法主', maxLevel: 2 }
   ],
 
@@ -125,7 +128,7 @@ export const UNIVERSAL_POOLS = {
 
   // 🟣 术士·召唤
   summon: [
-    { id: 'summon_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '召唤物生命加成直接提升到 36%。', icon: '术副', maxLevel: 1 },
+    { id: 'summon_necrotic_vitality', category: 'build', name: '死灵共鸣', desc: '召唤物生命加成直接提升到 36%；每有亡灵阵亡，其余亡灵会回复一段生命。', icon: '术副', maxLevel: 1 },
     { id: 'summon_skeleton_guard', category: 'build', name: '骷髅卫士', desc: 'Lv1 把卫士军势扩到稳定前排数量；Lv2 再提高到中期成型规模。', icon: '术副', maxLevel: 2 },
     { id: 'summon_skeleton_mage', category: 'build', name: '骷髅法师', desc: 'Lv1 把法师军势扩到稳定补伤数量；Lv2 再提高到中期成型规模。', icon: '术副', maxLevel: 2 },
     { id: 'summon_mage_empower', category: 'build', name: '白骨灌能', desc: 'Lv1 骷髅法师伤害加成直接提升到 30%；Lv2 进一步提升到 45%，并额外获得 15% 攻击间隔缩短。', icon: '术副', maxLevel: 2, requiredSkillId: 'summon_skeleton_mage' },
@@ -136,7 +139,7 @@ export const UNIVERSAL_POOLS = {
   // 🛡️ 圣骑士·守护
   guardian: [
     { id: 'guardian_block', category: 'build', name: '坚盾', desc: '基础格挡已在解锁副职业时获得；该节点会把格挡率直接提升到 15%。', icon: '骑副', maxLevel: 2 },
-    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '固定减伤直接提升到 6。', icon: '骑副', maxLevel: 1 },
+    { id: 'guardian_armor', category: 'build', name: '护甲', desc: '固定减伤提高到 3；每隔 5 秒首次受到有效伤害后，获得一层短效护甲屏障。', icon: '骑副', maxLevel: 1 },
     { id: 'guardian_counter', category: 'build', name: '反制', desc: '格挡成功后触发反击，反击伤害直接提升到 160%。', icon: '骑副', maxLevel: 1, requiredSkillId: 'guardian_block' },
     { id: 'guardian_sacred_seal', category: 'build', name: '庇护圣印', desc: '基础圣印已在解锁副职业时获得；该节点会把圣印上限直接提升到 5，单层减伤直接提升到 4%。', icon: '骑副', maxLevel: 2, requiredSkillId: 'guardian_block' },
     { id: 'guardian_holy_rebuke', category: 'build', name: '神圣回击', desc: 'Lv1 神圣回击半径提升到 135、伤害提升到 150%；Lv2 半径提升到 150、伤害提升到 200%，并追加 0.5 秒冻结。', icon: '骑副', maxLevel: 2, requiredSkillId: 'guardian_sacred_seal' },
@@ -145,9 +148,9 @@ export const UNIVERSAL_POOLS = {
 
   // 🌿 德鲁伊·自然伙伴
   nature: [
-    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '把基础熊灵提升到稳定前排档位。', icon: '德副', maxLevel: 1 },
-    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '解锁战鹰，并把其直接提升到稳定补伤档位。', icon: '德副', maxLevel: 1 },
-    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '解锁树精，并把其直接提升到稳定治疗档位。', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_bear', category: 'build', name: '熊灵', desc: '把基础熊灵提升到稳定前排档位；出场时会咆哮震慑周围敌人。', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_hawk', category: 'build', name: '战鹰', desc: '解锁战鹰，并让其直接进入稳定补伤档位；基础攻击会附带轻度猎印。', icon: '德副', maxLevel: 1 },
+    { id: 'druid_pet_treant', category: 'build', name: '树精', desc: '解锁树精，并让其直接进入稳定治疗档位；出场时会立刻提供一次萌芽治疗与护盾。', icon: '德副', maxLevel: 1 },
     { id: 'nature_bear_guard', category: 'build', name: '熊灵守护', desc: 'Lv1 显著提高熊灵分担伤害；Lv2 进入完整守护形态并解锁震地减速。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_bear' },
     { id: 'nature_hawk_huntmark', category: 'build', name: '战鹰猎印', desc: 'Lv1 建立稳定猎印增伤；Lv2 把对 Boss 的覆盖率推进到完全体。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_hawk' },
     { id: 'nature_treant_bloom', category: 'build', name: '树精繁茂', desc: 'Lv1 建立治疗与护盾辅助；Lv2 把树精推进到完整护持形态。', icon: '德副', maxLevel: 2, requiredSkillId: 'druid_pet_treant' }
@@ -159,9 +162,9 @@ export const UNIVERSAL_POOLS = {
 // - 选中这些节点时，会在 GameScene.applyUpgrade 中自动写入 offFaction
 // - 会立即发放基础副职业能力，但不再附带独立的全局数值包
 export const OFF_FACTION_ENTRY_OPTIONS = [
-  { id: 'off_arcane', category: 'build', name: '奥术', desc: '解锁法师副职业，并立即获得基础奥术炮台；后续可抽取奥术系强化节点。', icon: '解锁法师副职业！' },
-  { id: 'off_ranger', category: 'build', name: '猎人', desc: '解锁猎人副职业，并立即获得基础诱饵假人；后续可抽取围猎系强化节点。', icon: '解锁猎人副职业！' },
-  { id: 'off_unyielding', category: 'build', name: '不屈', desc: '解锁战士副职业，并立即获得基础血怒；后续可抽取不屈系强化节点。', icon: '解锁战士副职业！' },
+  { id: 'off_arcane', category: 'build', name: '奥术', desc: '解锁法师副职业，并立即获得基础奥术炮台；首座炮台会快速完成一次开场射击。', icon: '解锁法师副职业！' },
+  { id: 'off_ranger', category: 'build', name: '猎人', desc: '解锁猎人副职业，并立即获得基础诱饵假人；首个假人落地时会立刻触发一次牵引脉冲。', icon: '解锁猎人副职业！' },
+  { id: 'off_unyielding', category: 'build', name: '不屈', desc: '解锁战士副职业，并立即获得基础血怒；选中瞬间会爆发一次战吼脉冲，震退并迟滞近身敌人。', icon: '解锁战士副职业！' },
   { id: 'off_summon', category: 'build', name: '召唤', desc: '解锁召唤副职业，并立即获得 1 名骷髅卫士与 1 名骷髅法师；后续可抽取召唤系强化节点。', icon: '解锁术士副职业！' },
   { id: 'off_guardian', category: 'build', name: '守护', desc: '解锁圣骑士副职业，并立即获得基础格挡与圣印；后续可抽取守护系强化节点。', icon: '解锁圣骑士副职业！' },
   { id: 'off_nature', category: 'build', name: '自然伙伴', desc: '解锁德鲁伊副职业，并立即获得 1 只熊灵；后续可抽取战鹰、树精与自然伙伴强化节点。', icon: '解锁德鲁伊副职业！' }
@@ -200,6 +203,22 @@ export const DEPTH_SPEC_POOLS = {
     { id: 'druid_astralstorm', category: 'third_depth', name: '天穹潮汐', desc: '星落循环显著加速，流星雨与陨石能更高频进入战场', icon: '德深', maxLevel: 3 }
   ]
 };
+
+Object.keys(UPGRADE_POOLS).forEach((poolId) => {
+  UPGRADE_POOLS[poolId] = UPGRADE_POOLS[poolId].map((option) => applyTalentSummary(option));
+});
+
+Object.keys(UNIVERSAL_POOLS).forEach((poolId) => {
+  UNIVERSAL_POOLS[poolId] = UNIVERSAL_POOLS[poolId].map((option) => applyTalentSummary(option));
+});
+
+Object.keys(DEPTH_SPEC_POOLS).forEach((poolId) => {
+  DEPTH_SPEC_POOLS[poolId] = DEPTH_SPEC_POOLS[poolId].map((option) => applyTalentSummary(option));
+});
+
+for (let i = 0; i < OFF_FACTION_ENTRY_OPTIONS.length; i += 1) {
+  OFF_FACTION_ENTRY_OPTIONS[i] = applyTalentSummary(OFF_FACTION_ENTRY_OPTIONS[i]);
+}
 
 // 技能树 id -> GameScene.buildState.core key
 export const TREE_TO_CORE_KEY = {

@@ -304,6 +304,7 @@ export default class UndeadSummonManager {
       }
       this.infernals = (this.infernals || []).filter((entry) => entry !== unit && entry?.active);
       this.destroyUnit(unit);
+      this.triggerNecroticVitalityPulse(unit);
       return;
     }
 
@@ -313,12 +314,61 @@ export default class UndeadSummonManager {
     this.units.set(type, next);
     this.destroyUnit(unit);
     this.player?.onUndeadSummonDeath?.();
+    this.triggerNecroticVitalityPulse(unit);
 
     if (this.getDesiredCount(type) > next.length) {
       const now = this.scene.time?.now ?? 0;
       const current = this.respawnAt.get(type) || 0;
       this.respawnAt.set(type, current > now ? current : now + this.respawnDelayMs);
     }
+  }
+
+  triggerNecroticVitalityPulse(originUnit) {
+    const level = Math.max(0, Math.min(3, Math.round(this.player?.curseNecroticVitalityLevel || 0)));
+    if (level <= 0 || !originUnit || !this.scene) return;
+
+    const healRatio = [0, 0.04, 0.08, 0.12][level] || 0;
+    if (healRatio <= 0) return;
+
+    const recipients = [];
+    for (const list of this.units.values()) {
+      for (let i = 0; i < list.length; i++) {
+        const unit = list[i];
+        if (!unit?.active || unit === originUnit) continue;
+        if ((unit.currentHp || 0) <= 0 || (unit.maxHp || 0) <= 0) continue;
+        recipients.push(unit);
+      }
+    }
+
+    const infernals = this.infernals || [];
+    for (let i = 0; i < infernals.length; i++) {
+      const unit = infernals[i];
+      if (!unit?.active || unit === originUnit) continue;
+      if ((unit.currentHp || 0) <= 0 || (unit.maxHp || 0) <= 0) continue;
+      recipients.push(unit);
+    }
+
+    if (recipients.length <= 0) return;
+
+    const pulse = this.scene.add.circle(originUnit.x, originUnit.y, 18, 0xd9f99d, 0.22).setDepth(7);
+    pulse.setStrokeStyle(3, 0xecfccb, 0.75);
+    this.scene.tweens.add({
+      targets: pulse,
+      scale: 2.6,
+      alpha: 0,
+      duration: 260,
+      ease: 'Cubic.Out',
+      onComplete: () => pulse.destroy()
+    });
+
+    recipients.forEach((unit) => {
+      const heal = Math.max(1, Math.round((unit.maxHp || 0) * healRatio));
+      const nextHp = Math.min(unit.maxHp || 0, Math.max(0, Math.round(unit.currentHp || 0)) + heal);
+      const restored = Math.max(0, nextHp - Math.max(0, Math.round(unit.currentHp || 0)));
+      if (restored <= 0) return;
+      unit.currentHp = nextHp;
+      this.scene.showDamageNumber?.(unit.x, unit.y - 28, `骨+${restored}`, { color: '#d9f99d', fontSize: 16, whisper: true });
+    });
   }
 
   spawnUnit(type, index = 0, total = 1) {

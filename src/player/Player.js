@@ -281,6 +281,8 @@ export default class Player extends Phaser.GameObjects.Container {
 
     this.guardianBlockLevel = 0;
     this.guardianBlockBonus = 0;
+    this.guardianArmorLevel = 0;
+    this.guardianArmorCooldownUntil = 0;
     this.guardianCounterLevel = 0;
     this.guardianSacredSealLevel = 0;
     this.guardianSealStacks = 0;
@@ -1718,6 +1720,15 @@ export default class Player extends Phaser.GameObjects.Container {
     if (finalDamage > 0 && this.battlecryEnabled && this.scene?.time) {
       if (Math.random() < 0.2) {
         this.battlecryUntil = (this.scene.time.now || 0) + 3000;
+      }
+    }
+
+    if (finalDamage > 0 && (this.guardianArmorLevel || 0) > 0 && gameplayNow >= (this.guardianArmorCooldownUntil || 0)) {
+      this.guardianArmorCooldownUntil = gameplayNow + 5000;
+      const barrier = Math.max(4, Math.round((this.maxHp || 1) * 0.06));
+      this.guardianBarrierHp = Math.max(0, Math.round(this.guardianBarrierHp || 0)) + barrier;
+      if (this.scene?.showDamageNumber) {
+        this.scene.showDamageNumber(this.x, this.y - 74, `甲+${barrier}`, { color: '#c7f0ff', fontSize: 18, whisper: true });
       }
     }
 
