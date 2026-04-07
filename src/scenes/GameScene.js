@@ -252,6 +252,8 @@ class GameScene extends Phaser.Scene {
     this.currentLine = null;           // 当前主线 (LINE.HUNT / ARCANE / WAR)
     this.runState = {                  // 本局运行时状态
       visitedMapIds: [],               // 已走过的地图 id
+      bossPlanIds: [],                 // 本局 Boss 随机池（按轮次顺序）
+      defeatedBossIds: [],             // 本局已击败 Boss
     };
     this._mapNameText = null;          // 小地图上方的地图名称文本
     this._pathChoiceActive = false;    // 三选一 UI 是否激活
@@ -380,7 +382,11 @@ class GameScene extends Phaser.Scene {
     this.currentMapInfo = { ...START_ROOM };
     this.currentStage = 0;
     this.currentLine = null;
-    this.runState = { visitedMapIds: [] };
+    this.runState = {
+      visitedMapIds: [],
+      bossPlanIds: [],
+      defeatedBossIds: []
+    };
     this._pathChoiceActive = false;
     this._pathChoiceObjects = [];
     this._pathDoorZones = [];
@@ -3536,7 +3542,7 @@ class GameScene extends Phaser.Scene {
             else boss.combatActive = true;
 
             if (typeof this.bossManager.showBossWarning === 'function') {
-              this.bossManager.showBossWarning(boss.bossName || 'Boss');
+              this.bossManager.showBossWarning(boss);
             }
           }
         }

@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════
- *  第 1 关 Boss · 裂牙兽王
+ *  Boss 原型 A · 近战压迫模板
  * ═══════════════════════════════════════════════════
  *
  * 定位：近战肉搏型 Boss，追踪玩家 + 近战挥砍为核心。
@@ -17,7 +17,7 @@ import Phaser from 'phaser';
 
 // ─── Boss 元数据 ────────────────────────────────
 export const BOSS_META = {
-  name: '裂牙兽王',
+  name: 'Boss 原型 A',
   color: 0xdd7733,
 };
 
@@ -74,7 +74,8 @@ function executeSlash(boss) {
   // 狂暴时弧度更大、起手更快
   const arcDeg = enraged ? 200 : SLASH_ARC_DEG;
   const windupMs = enraged ? 360 : SLASH_WINDUP_MS;
-  const damage = enraged ? Math.round(SLASH_DAMAGE * 1.3) : SLASH_DAMAGE;
+  const damageBase = enraged ? Math.round(SLASH_DAMAGE * 1.3) : SLASH_DAMAGE;
+  const damage = boss.scaleAttackDamage?.(damageBase) ?? damageBase;
 
   boss.castCrescentSlashAtPlayer({
     range: SLASH_RANGE_BASE + (boss.bossSize || 44),
@@ -154,7 +155,7 @@ function executeSlamTimeline(boss) {
                 speed: SLAM_SPEED,
                 color: 0xff8844,
                 radius: SLAM_RADIUS,
-                damage: SLAM_DAMAGE,
+                damage: boss.scaleAttackDamage?.(SLAM_DAMAGE) ?? SLAM_DAMAGE,
                 tags: ['stage1_slam_ring'],
                 options: {
                   type: 'circle',

@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════
- *  第 3 关 Boss · 深渊守卫
+ *  Boss 原型 C · 召唤压场模板
  * ═══════════════════════════════════════════════════
  *
  * 定位：混合型 Boss，近战 + 弹幕 + 召唤小怪。
@@ -26,7 +26,7 @@ import Phaser from 'phaser';
 
 // ─── Boss 元数据 ────────────────────────────────
 export const BOSS_META = {
-  name: '深渊守卫',
+  name: 'Boss 原型 C',
   color: 0x446688,
 };
 
@@ -102,6 +102,7 @@ function castFan(boss) {
   if (!tp) return;
 
   const enraged = isEnraged(boss);
+  const damage = boss.scaleAttackDamage?.(FAN_DAMAGE) ?? FAN_DAMAGE;
 
   scene.vfxSystem?.playCastFlash?.(boss.x, boss.y, {
     color: 0x5588bb,
@@ -121,7 +122,7 @@ function castFan(boss) {
       speed: FAN_SPEED,
       color: 0x5588cc,
       radius: FAN_RADIUS,
-      damage: FAN_DAMAGE,
+      damage,
       tags: ['stage3_fan'],
       options: { type: 'diamond', hasTrail: true, trailColor: 0x77aadd, hasGlow: false },
     });
@@ -142,7 +143,7 @@ function castFan(boss) {
         speed: FAN_SPEED,
         color: 0x7744aa,
         radius: FAN_RADIUS,
-        damage: FAN_DAMAGE,
+        damage,
         tags: ['stage3_cross_fan'],
         options: { type: 'diamond', hasTrail: true, trailColor: 0x9966cc, hasGlow: false },
       });
@@ -153,6 +154,7 @@ function castFan(boss) {
 // ─── 招式：半月斩 ─────────────────────────────────
 function castSlash(boss) {
   const enraged = isEnraged(boss);
+  const damageBase = enraged ? Math.round(SLASH_DAMAGE * 1.25) : SLASH_DAMAGE;
 
   boss.castCrescentSlashAtPlayer({
     range: SLASH_RANGE_BASE + (boss.bossSize || 44),
@@ -161,7 +163,7 @@ function castSlash(boss) {
     slashMs: SLASH_MS,
     lingerMs: 350,
     color: enraged ? 0x8855cc : 0x5588bb,
-    damage: enraged ? Math.round(SLASH_DAMAGE * 1.25) : SLASH_DAMAGE,
+    damage: boss.scaleAttackDamage?.(damageBase) ?? damageBase,
   });
 }
 
@@ -207,7 +209,7 @@ function castSummon(boss) {
           hp: SUMMON_HP,
           size: SUMMON_SIZE,
           moveSpeed: SUMMON_SPEED,
-          contactDamage: SUMMON_CONTACT_DAMAGE,
+          contactDamage: boss.scaleAttackDamage?.(SUMMON_CONTACT_DAMAGE) ?? SUMMON_CONTACT_DAMAGE,
           color: 0x556688,
           expReward: 0,
           isSummon: true,
@@ -238,6 +240,7 @@ function castSummon(boss) {
 function castCrossCrack(boss) {
   const scene = boss.scene;
   if (!scene?.attackTimeline?.startTimeline) return;
+  const damage = boss.scaleAttackDamage?.(CROSS_DAMAGE) ?? CROSS_DAMAGE;
 
   boss.showAlertIcon?.(CROSS_TELEGRAPH_MS);
 
@@ -296,7 +299,7 @@ function castCrossCrack(boss) {
                     speed,
                     color: 0x7744aa,
                     radius: CROSS_RADIUS,
-                    damage: CROSS_DAMAGE,
+                    damage,
                     tags: ['stage3_cross_line'],
                     options: { type: 'circle', hasTrail: true, trailColor: 0x9966cc, hasGlow: false },
                   });

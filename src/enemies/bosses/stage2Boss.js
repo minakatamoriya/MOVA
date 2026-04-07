@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════
- *  第 2 关 Boss · 奥术编织者
+ *  Boss 原型 B · 远程调度模板
  * ═══════════════════════════════════════════════════
  *
  * 定位：远程弹幕型 Boss，保持距离 + 多种弹型交替施放。
@@ -20,7 +20,7 @@ import Phaser from 'phaser';
 
 // ─── Boss 元数据 ────────────────────────────────
 export const BOSS_META = {
-  name: '奥术编织者',
+  name: 'Boss 原型 B',
   color: 0x9966ff,
 };
 
@@ -82,6 +82,7 @@ function castSpiral(boss) {
   const enraged = isEnraged(boss);
   const loops = enraged ? 2 : 1;
   const shotsPerLoop = SPIRAL_SHOTS;
+  const damage = boss.scaleAttackDamage?.(SPIRAL_DAMAGE) ?? SPIRAL_DAMAGE;
 
   // 蓄力闪光
   scene.vfxSystem?.playCastFlash?.(boss.x, boss.y, {
@@ -100,7 +101,7 @@ function castSpiral(boss) {
     speed: SPIRAL_SPEED,
     color: 0xaa77ff,
     radius: SPIRAL_RADIUS,
-    damage: SPIRAL_DAMAGE,
+    damage,
     tags: ['stage2_spiral'],
     options: {
       type: 'diamond',
@@ -124,6 +125,7 @@ function castAimedFan(boss) {
 
   const enraged = isEnraged(boss);
   const count = enraged ? FAN_ENRAGE_COUNT : FAN_COUNT;
+  const damage = boss.scaleAttackDamage?.(FAN_DAMAGE) ?? FAN_DAMAGE;
 
   scene.vfxSystem?.playCastFlash?.(boss.x, boss.y, {
     color: 0xddaaff,
@@ -141,7 +143,7 @@ function castAimedFan(boss) {
     speed: FAN_SPEED,
     color: 0xcc88ff,
     radius: FAN_RADIUS,
-    damage: FAN_DAMAGE,
+    damage,
     tags: ['stage2_fan'],
     options: {
       type: 'diamond',
@@ -166,6 +168,7 @@ function castTelegraphBurst(boss) {
   const enraged = isEnraged(boss);
   const ringCount = enraged ? BURST_ENRAGE_RING_COUNT : BURST_RING_COUNT;
   const telegraphRadius = enraged ? BURST_TELEGRAPH_RADIUS + 18 : BURST_TELEGRAPH_RADIUS;
+  const damage = boss.scaleAttackDamage?.(BURST_DAMAGE) ?? BURST_DAMAGE;
 
   boss.showAlertIcon?.(BURST_TELEGRAPH_MS);
 
@@ -213,7 +216,7 @@ function castTelegraphBurst(boss) {
                 speed: BURST_SPEED,
                 color: 0xaa77ff,
                 radius: BURST_RADIUS,
-                damage: BURST_DAMAGE,
+                damage,
                 tags: ['stage2_burst_ring'],
                 options: {
                   type: 'circle',

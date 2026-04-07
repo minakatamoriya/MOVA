@@ -4,6 +4,7 @@ import { getMapBoss, getMapMinions, getMapElites, getRoleSize, getRoleHp, getLay
 import { BALANCE_CONSTANTS, TUTORIAL_EXP_REWARDS, getBossArenaWorldRect, getExitDoorWorldRect, getStageBalance } from '../../data/balanceConfig';
 import { rollEliteAffixes } from '../../data/eliteAffixes';
 import { OUTRUN_ITEM_SLOT_COUNT } from '../../data/items';
+import { buildBossRunPlan, getAllBossDefinitions, getBossDefinitionById, getBossEncounterPresentation } from '../../enemies/bosses/bossRegistry';
 import { applyCoreUpgrade } from '../../classes/attacks/coreEnablers';
 import { getBaseColorForCoreKey } from '../../classes/visual/basicSkillColors';
 import { createRiftPortal, getDefaultRiftTouchPadPx } from '../../classes/visual/riftPortal';
@@ -569,20 +570,49 @@ export function applyLevelProgressionMixin(GameScene) {
       };
     },
 
-    getChaosArenaPresentation(stage, mapInfo) {
+    ensureChaosBossPlan() {
       const maxRounds = this.getChaosArenaMaxRounds();
-      const boss = mapInfo?.id ? getMapBoss(mapInfo.id) : null;
+      const bossPool = getAllBossDefinitions();
+      const desiredCount = Math.min(maxRounds, bossPool.length);
 
-      if (stage >= maxRounds) {
-        return {
-          name: '混沌竞技场',
-          subtitle: boss?.name || '最终决战'
-        };
+      if (!this.runState || typeof this.runState !== 'object') {
+        this.runState = { visitedMapIds: [], bossPlanIds: [], defeatedBossIds: [] };
       }
 
+      const existing = Array.isArray(this.runState.bossPlanIds)
+        ? this.runState.bossPlanIds.filter((bossId, index, arr) => !!getBossDefinitionById(bossId) && arr.indexOf(bossId) === index)
+        : [];
+
+      if (existing.length >= desiredCount) {
+        this.runState.bossPlanIds = existing.slice(0, desiredCount);
+        return this.runState.bossPlanIds;
+      }
+
+      const needed = desiredCount - existing.length;
+      const generated = buildBossRunPlan(needed, existing);
+      this.runState.bossPlanIds = [...existing, ...generated];
+      return this.runState.bossPlanIds;
+    },
+
+    getBossEncounterDefForStage(stage) {
+      const targetStage = Math.max(1, Math.floor(stage || 1));
+      const plan = this.ensureChaosBossPlan();
+      if (plan.length <= 0) return null;
+      const index = Math.min(targetStage, plan.length) - 1;
+      return getBossDefinitionById(plan[index]) || null;
+    },
+
+    getChaosArenaPresentation(stage, mapInfo) {
+      const maxRounds = this.getChaosArenaMaxRounds();
+      const boss = this.getBossEncounterDefForStage(stage);
+      const presentation = getBossEncounterPresentation(stage, boss || mapInfo, {
+        isFinalRound: stage >= maxRounds,
+        fallbackName: mapInfo?.name || 'Boss 挑战'
+      });
+
       return {
-        name: `混沌竞技场·第${stage}轮`,
-        subtitle: boss?.name || mapInfo?.name || 'Boss 挑战'
+        name: presentation.title,
+        subtitle: presentation.subtitle
       };
     },
 
@@ -905,7 +935,7 @@ export function applyLevelProgressionMixin(GameScene) {
         key: 'chaos_boss_approach',
         durationMs: 1800
       });
-      this.bossManager.showBossWarning?.(boss.bossName || def.name || 'Boss');
+      this.bossManager.showBossWarning?.(boss);
       return boss;
     },
 
@@ -1398,6 +1428,8 @@ export function applyLevelProgressionMixin(GameScene) {
         rewardBoss: boss ? {
           x: Number(boss.x) || 0,
           y: Number(boss.y) || 0,
+          bossId: boss.bossId || null,
+          bossName: boss.bossName || 'Boss',
           attackPatterns: Array.isArray(boss.attackPatterns) ? boss.attackPatterns : [{}]
         } : null
       };
@@ -1411,7 +1443,7 @@ export function applyLevelProgressionMixin(GameScene) {
         .setDepth(2801);
       panel.setStrokeStyle(3, 0xffdd88, 0.95);
 
-      const title = this.add.text(cam.centerX, cam.centerY - 112, '本轮 Boss 已击败', {
+      const title = this.add.text(cam.centerX, cam.centerY - 112, boss?.bossName ? `已击败 ${boss.bossName}` : '本轮 Boss 已击败', {
         fontSize: '34px',
         fontFamily: 'Arial, sans-serif',
         color: '#ffffff',
@@ -1739,13 +1771,15 @@ export function applyLevelProgressionMixin(GameScene) {
 
       const minions = getMapMinions(mapId);
       const elites  = getMapElites(mapId);
-      const bossDef = getMapBoss(mapId);
+      const stage = this.currentStage || 1;
+      const bossDef = mapId === 'tutorial_level'
+        ? getMapBoss(mapId)
+        : this.getBossEncounterDefForStage(stage);
       if (minions.length === 0 && elites.length === 0 && !bossDef) return;
 
       const cfg = this.mapConfig;
       if (!cfg) return;
 
-      const stage = this.currentStage || 1;
       const balance = getStageBalance(stage);
 
       const directorConfig = this.spawnDirector?.buildRoundConfig?.(stage, balance) || {};

@@ -3,21 +3,38 @@ import BaseBoss from '../enemies/bosses/BaseBoss';
 import TestMinion from '../enemies/minions/TestMinion';
 import { getRoleSize, getRoleHp, getLayerScaling } from '../data/mapMonsters';
 import { TUTORIAL_EXP_REWARDS, getStageBalance } from '../data/balanceConfig';
+import { getBossDefinitionById, getBossStageProfile, getBossHudCopy, getBossWarningCopy } from '../enemies/bosses/bossRegistry';
 
 // ── 每关 Boss 独立配置 ──────────────────────────
-import { getAttackPatterns as getStage1Patterns, BOSS_META as STAGE1_META } from '../enemies/bosses/stage1Boss';
-import { getAttackPatterns as getStage2Patterns, BOSS_META as STAGE2_META } from '../enemies/bosses/stage2Boss';
-import { getAttackPatterns as getStage3Patterns, BOSS_META as STAGE3_META } from '../enemies/bosses/stage3Boss';
+import { getAttackPatterns as getStage1Patterns } from '../enemies/bosses/stage1Boss';
+import { getAttackPatterns as getStage2Patterns } from '../enemies/bosses/stage2Boss';
+import { getAttackPatterns as getStage3Patterns } from '../enemies/bosses/stage3Boss';
+import MirrorExecutionerBoss from '../enemies/bosses/MirrorExecutionerBoss';
 
 /**
- * 根据关卡 stage 获取 Boss 专属名称/颜色/攻击模式。
- * stage 1~3 有独立设计，4+ 回退到通用模式。
+ * 根据独立的 Boss 原型映射表获取当前可用的 Boss 模式原型。
+ * 当前阶段只先接管名字、随机池和数值成长；机制本体后续逐个替换。
  */
-const STAGE_BOSS_CONFIGS = {
-  1: { meta: STAGE1_META, getPatterns: getStage1Patterns },
-  2: { meta: STAGE2_META, getPatterns: getStage2Patterns },
-  3: { meta: STAGE3_META, getPatterns: getStage3Patterns },
+const PATTERN_FAMILY_CONFIGS = {
+  stage1: { getPatterns: getStage1Patterns },
+  stage2: { getPatterns: getStage2Patterns },
+  stage3: { getPatterns: getStage3Patterns },
+  showcase: {
+    getPatterns: () => ([
+      { interval: 2800, execute: executeBossPatternShowcase }
+    ])
+  }
 };
+
+const CUSTOM_BOSS_CLASSES = {
+  boss_mirror_executioner: MirrorExecutionerBoss,
+};
+
+function getPatternFamilyConfig(bossDef, stage) {
+  const family = bossDef?.patternFamily
+    || (stage <= 1 ? 'stage1' : (stage === 2 ? 'stage2' : (stage === 3 ? 'stage3' : 'showcase')));
+  return PATTERN_FAMILY_CONFIGS[family] || PATTERN_FAMILY_CONFIGS.showcase;
+}
 
 function getTargetPoint(target) {
   if (!target) return { x: 0, y: 0, radius: 0 };
@@ -40,6 +57,7 @@ function getTargetPoint(target) {
 
 function playBossShowcaseFan(scene, boss, targetPoint) {
   if (!scene || !boss?.isAlive) return;
+  const damage = boss.scaleAttackDamage?.(10) ?? 10;
 
   scene.vfxSystem?.playCastFlash?.(boss.x, boss.y - Math.max(8, (boss.bossSize || 50) * 0.18), {
     color: 0xffd580,
@@ -57,7 +75,7 @@ function playBossShowcaseFan(scene, boss, targetPoint) {
     speed: 170,
     color: 0xff9b54,
     radius: 9,
-    damage: 10,
+    damage,
     tags: ['boss_showcase_fan'],
     options: {
       type: 'diamond',
@@ -70,6 +88,7 @@ function playBossShowcaseFan(scene, boss, targetPoint) {
 
 function playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius) {
   if (!scene || !boss?.isAlive) return;
+  const damage = boss.scaleAttackDamage?.(10) ?? 10;
 
   scene.vfxSystem?.playBurst?.(targetPoint.x, targetPoint.y, {
     radius: telegraphRadius,
@@ -86,7 +105,7 @@ function playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius) {
     speed: 145,
     color: 0xffd580,
     radius: 8,
-    damage: 10,
+    damage,
     tags: ['boss_showcase_burst'],
     options: {
       type: 'circle',
@@ -103,7 +122,7 @@ function playBossShowcaseBurst(scene, boss, targetPoint, telegraphRadius) {
     speed: 0,
     color: 0xffd580,
     radius: Math.max(22, Math.round(telegraphRadius * 0.78)),
-    damage: 10,
+    damage,
     tags: ['boss_showcase_ground_blast'],
     options: {
       type: 'ring',
@@ -280,30 +299,36 @@ export default class BossManager {
 
     const stage = Math.max(1, Math.floor(layer || 1));
     const balance = getStageBalance(stage);
+    const stageProfile = getBossStageProfile(stage);
     const bossSize = getRoleSize('boss');
     const cellSize = Math.max(64, Math.round(this.scene?.mapConfig?.cellSize || 128));
     const aggroRadius = Phaser.Math.Clamp(Math.floor(cellSize * 6.0), 520, 980);
+    const registeredBoss = getBossDefinitionById(bossData?.bossId || bossData?.id) || null;
 
     // Boss 统一采用 tracking 移动
     const resolvedMovePattern = 'tracking';
 
-    // ── 根据 stage 选择专属 Boss 配置（名称/颜色/攻击模式）──
-    const stageConfig = STAGE_BOSS_CONFIGS[stage] || null;
+    // ── 当前阶段：名称/颜色/池管理走注册表，机制原型按 patternFamily 回退到现有脚本。──
+    const patternConfig = getPatternFamilyConfig(registeredBoss, stage);
 
     // 先创建 Boss，再绑定攻击模式（getAttackPatterns 需要 boss 实例引用）
-    const bossName = stageConfig?.meta?.name || bossData.name;
-    const bossColor = stageConfig?.meta?.color ?? bossData.color;
+    const bossName = registeredBoss?.name || bossData.name;
+    const bossColor = registeredBoss?.color ?? bossData.color;
+    const scaledHp = Math.max(1, Math.round(balance.boss.hp * stageProfile.hpMultiplier));
 
     const cfg = {
       x: spawnPt.x,
       y: spawnPt.y,
+      bossId: registeredBoss?.id || bossData?.bossId || bossData?.id || null,
       name: bossName,
-      hp: Math.round(balance.boss.hp),
-      expReward: balance.boss.exp,
+      hp: scaledHp,
+      expReward: Math.max(balance.boss.exp, Math.round(scaledHp / 10)),
       size: bossSize,
       color: bossColor,
       movePattern: resolvedMovePattern,
       moveSpeed: balance.boss.moveSpeed,
+      damageMultiplier: stageProfile.damageMultiplier,
+      encounterStage: stage,
       aggroRadius,
       trackingStopDist: 150,
       // 先传空数组，下面会用 stage 专属模式覆盖
@@ -313,25 +338,30 @@ export default class BossManager {
       entryDuration: 400,
     };
 
-    this.currentBoss = new BaseBoss(this.scene, cfg);
+    const CustomBossClass = CUSTOM_BOSS_CLASSES[registeredBoss?.id] || null;
+    this.currentBoss = CustomBossClass
+      ? new CustomBossClass(this.scene, cfg)
+      : new BaseBoss(this.scene, cfg);
 
     // 将 TestMinion 类暴露给召唤型 Boss（stage3 需要）
     this.scene._TestMinionClass = TestMinion;
 
     // 绑定 stage 专属攻击模式
-    if (stageConfig?.getPatterns) {
-      this.currentBoss.attackPatterns = stageConfig.getPatterns(this.currentBoss);
-    } else {
-      // 4+ 关回退到通用展示模式
-      this.currentBoss.attackPatterns = [
-        { interval: 2800, execute: executeBossPatternShowcase }
-      ];
+    if (!CustomBossClass) {
+      if (patternConfig?.getPatterns) {
+        this.currentBoss.attackPatterns = patternConfig.getPatterns(this.currentBoss);
+      } else {
+        // 4+ 关回退到通用展示模式
+        this.currentBoss.attackPatterns = [
+          { interval: 2800, execute: executeBossPatternShowcase }
+        ];
+      }
     }
 
     this.updateBossInfo();
 
     if (!silent) {
-      this.showBossWarning(bossData.name);
+      this.showBossWarning(this.currentBoss || registeredBoss || bossData);
     }
 
     return this.currentBoss;
@@ -442,6 +472,17 @@ export default class BossManager {
 
     this.defeatedBossCount++;
     const defeatedBoss = this.currentBoss;
+    if (defeatedBoss?.bossId) {
+      if (!this.scene.runState || typeof this.scene.runState !== 'object') {
+        this.scene.runState = { visitedMapIds: [], bossPlanIds: [], defeatedBossIds: [] };
+      }
+      if (!Array.isArray(this.scene.runState.defeatedBossIds)) {
+        this.scene.runState.defeatedBossIds = [];
+      }
+      if (!this.scene.runState.defeatedBossIds.includes(defeatedBoss.bossId)) {
+        this.scene.runState.defeatedBossIds.push(defeatedBoss.bossId);
+      }
+    }
 
     // 更新玩家数据
     if (this.scene.playerData) {
@@ -481,8 +522,15 @@ export default class BossManager {
   //  UI & 工具
   // ══════════════════════════════════════════════════════════════
 
-  showBossWarning(bossName) {
-    return bossName;
+  showBossWarning(bossLike) {
+    const stage = this.scene?.currentStage || 1;
+    const copy = getBossWarningCopy(stage, bossLike?.bossId ? { id: bossLike.bossId, name: bossLike.bossName } : bossLike);
+    this.scene?.systemMessage?.show?.(`${copy.title}
+${copy.message}`, {
+      key: `boss_warning_${stage}_${copy.title}`,
+      durationMs: 1800,
+    });
+    return copy;
   }
 
   clearBossInfo() {
@@ -500,12 +548,13 @@ export default class BossManager {
 
     const bossText = this.scene?.infoTexts?.boss;
     const bossHpText = this.scene?.infoTexts?.bossHp;
+    const hudCopy = getBossHudCopy(this.currentBoss?.bossId ? { id: this.currentBoss.bossId, name: this.currentBoss.bossName } : this.currentBoss);
 
     if (bossText && bossText.setText) {
-      bossText.setText(`Boss: ${this.currentBoss.bossName}`);
+      bossText.setText(`首领：${hudCopy.label}`);
     }
     if (bossHpText && bossHpText.setText) {
-      bossHpText.setText(`Boss HP: ${this.currentBoss.currentHp}/${this.currentBoss.maxHp}`);
+      bossHpText.setText(`${hudCopy.hpLabel}：${this.currentBoss.currentHp}/${this.currentBoss.maxHp}`);
     }
   }
 
@@ -527,8 +576,9 @@ export default class BossManager {
   update(time, delta) {
     if (this.currentBoss && this.currentBoss.isAlive) {
       const bossHpText = this.scene?.infoTexts?.bossHp;
+      const hudCopy = getBossHudCopy(this.currentBoss?.bossId ? { id: this.currentBoss.bossId, name: this.currentBoss.bossName } : this.currentBoss);
       if (bossHpText && bossHpText.setText) {
-        bossHpText.setText(`Boss HP: ${this.currentBoss.currentHp}/${this.currentBoss.maxHp}`);
+        bossHpText.setText(`${hudCopy.hpLabel}：${this.currentBoss.currentHp}/${this.currentBoss.maxHp}`);
       }
 
       // Boss 行为更新（tracking 追踪等）

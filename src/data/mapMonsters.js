@@ -49,7 +49,7 @@ export const DAWN_WOODLAND_MONSTERS = [
   { id: 'dw_m3', name: '疾风斥候',     role: 'minion', mapId: 'dawn_woodland', line: LINE.HUNT, color: 0x88ccaa, moveType: 'chaser' },
   { id: 'dw_e1', name: '古老树精',     role: 'elite',  mapId: 'dawn_woodland', line: LINE.HUNT, color: 0x447733, moveType: 'patrol' },
   { id: 'dw_e2', name: '黎明守卫',     role: 'elite',  mapId: 'dawn_woodland', line: LINE.HUNT, color: 0xddcc44, moveType: 'chaser' },
-  { id: 'dw_b1', name: '黎明鹿王·艾尔文', role: 'boss', mapId: 'dawn_woodland', line: LINE.HUNT, color: 0xffdd66, moveType: 'chaser' },
+  { id: 'dw_b1', name: 'Boss 占位', role: 'boss', mapId: 'dawn_woodland', line: LINE.HUNT, color: 0xffdd66, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -61,7 +61,7 @@ export const WIND_FOREST_MONSTERS = [
   { id: 'wf_m3', name: '旋风幼体',     role: 'minion', mapId: 'wind_forest', line: LINE.HUNT, color: 0x99ccbb, moveType: 'chaser' },
   { id: 'wf_e1', name: '狂风使者',     role: 'elite',  mapId: 'wind_forest', line: LINE.HUNT, color: 0x55aa88, moveType: 'chaser' },
   { id: 'wf_e2', name: '风暴追猎者',   role: 'elite',  mapId: 'wind_forest', line: LINE.HUNT, color: 0x77ccaa, moveType: 'chaser' },
-  { id: 'wf_b1', name: '风语者·赛莲',  role: 'boss',   mapId: 'wind_forest', line: LINE.HUNT, color: 0x66eebb, moveType: 'patrol' },
+  { id: 'wf_b1', name: 'Boss 占位',  role: 'boss',   mapId: 'wind_forest', line: LINE.HUNT, color: 0x66eebb, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -73,7 +73,7 @@ export const GLOOM_SWAMP_MONSTERS = [
   { id: 'gs_m3', name: '泥沼怪',       role: 'minion', mapId: 'gloom_swamp', line: LINE.HUNT, color: 0x556633, moveType: 'chaser' },
   { id: 'gs_e1', name: '剧毒潜伏者',   role: 'elite',  mapId: 'gloom_swamp', line: LINE.HUNT, color: 0x44aa33, moveType: 'chaser' },
   { id: 'gs_e2', name: '幽光亡魂',     role: 'elite',  mapId: 'gloom_swamp', line: LINE.HUNT, color: 0xaacc77, moveType: 'patrol' },
-  { id: 'gs_b1', name: '沼泽之母·格蕾塔', role: 'boss', mapId: 'gloom_swamp', line: LINE.HUNT, color: 0x338833, moveType: 'patrol' },
+  { id: 'gs_b1', name: 'Boss 占位', role: 'boss', mapId: 'gloom_swamp', line: LINE.HUNT, color: 0x338833, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -85,7 +85,7 @@ export const BEAST_LAIR_MONSTERS = [
   { id: 'bl_m3', name: '暗影豹',       role: 'minion', mapId: 'beast_lair', line: LINE.HUNT, color: 0x554466, moveType: 'chaser' },
   { id: 'bl_e1', name: '兽王亲卫',     role: 'elite',  mapId: 'beast_lair', line: LINE.HUNT, color: 0xcc8844, moveType: 'chaser' },
   { id: 'bl_e2', name: '狂乱巨熊',     role: 'elite',  mapId: 'beast_lair', line: LINE.HUNT, color: 0x885533, moveType: 'chaser' },
-  { id: 'bl_b1', name: '兽王·卡恩',    role: 'boss',   mapId: 'beast_lair', line: LINE.HUNT, color: 0xdd9944, moveType: 'chaser' },
+  { id: 'bl_b1', name: 'Boss 占位',    role: 'boss',   mapId: 'beast_lair', line: LINE.HUNT, color: 0xdd9944, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -97,7 +97,7 @@ export const THORN_MAZE_MONSTERS = [
   { id: 'tm_m3', name: '毒刺花妖',     role: 'minion', mapId: 'thorn_maze', line: LINE.HUNT, color: 0xcc66aa, moveType: 'shooter' },
   { id: 'tm_e1', name: '荆棘编织者',   role: 'elite',  mapId: 'thorn_maze', line: LINE.HUNT, color: 0x447722, moveType: 'patrol' },
   { id: 'tm_e2', name: '铁刺守卫',     role: 'elite',  mapId: 'thorn_maze', line: LINE.HUNT, color: 0x667744, moveType: 'chaser' },
-  { id: 'tm_b1', name: '迷宫之主·索恩', role: 'boss',  mapId: 'thorn_maze', line: LINE.HUNT, color: 0x339922, moveType: 'patrol' },
+  { id: 'tm_b1', name: 'Boss 占位', role: 'boss',  mapId: 'thorn_maze', line: LINE.HUNT, color: 0x339922, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -109,7 +109,7 @@ export const MOONLAKE_MONSTERS = [
   { id: 'ml_m3', name: '夜行猎手',     role: 'minion', mapId: 'moonlake', line: LINE.HUNT, color: 0x556688, moveType: 'chaser' },
   { id: 'ml_e1', name: '暗月刺客',     role: 'elite',  mapId: 'moonlake', line: LINE.HUNT, color: 0x6666aa, moveType: 'chaser' },
   { id: 'ml_e2', name: '湖中女妖',     role: 'elite',  mapId: 'moonlake', line: LINE.HUNT, color: 0x8888cc, moveType: 'shooter' },
-  { id: 'ml_b1', name: '月影女士·莱拉', role: 'boss',  mapId: 'moonlake', line: LINE.HUNT, color: 0xaaaaee, moveType: 'patrol' },
+  { id: 'ml_b1', name: 'Boss 占位', role: 'boss',  mapId: 'moonlake', line: LINE.HUNT, color: 0xaaaaee, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -121,7 +121,7 @@ export const JADE_GARDEN_MONSTERS = [
   { id: 'jg_m3', name: '治愈守护灵',   role: 'minion', mapId: 'jade_garden', line: LINE.HUNT, color: 0x88ddaa, moveType: 'patrol' },
   { id: 'jg_e1', name: '德鲁伊长老',   role: 'elite',  mapId: 'jade_garden', line: LINE.HUNT, color: 0x338855, moveType: 'patrol' },
   { id: 'jg_e2', name: '翡翠龙兽',     role: 'elite',  mapId: 'jade_garden', line: LINE.HUNT, color: 0x22aa55, moveType: 'chaser' },
-  { id: 'jg_b1', name: '翡翠之母·维拉', role: 'boss',  mapId: 'jade_garden', line: LINE.HUNT, color: 0x33dd77, moveType: 'patrol' },
+  { id: 'jg_b1', name: 'Boss 占位', role: 'boss',  mapId: 'jade_garden', line: LINE.HUNT, color: 0x33dd77, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -133,7 +133,7 @@ export const VERDANT_DOME_MONSTERS = [
   { id: 'vd_m3', name: '自然之灵',     role: 'minion', mapId: 'verdant_dome', line: LINE.HUNT, color: 0x77cc88, moveType: 'patrol' },
   { id: 'vd_e1', name: '远古守护者',   role: 'elite',  mapId: 'verdant_dome', line: LINE.HUNT, color: 0x336633, moveType: 'chaser' },
   { id: 'vd_e2', name: '苍翠幼龙',     role: 'elite',  mapId: 'verdant_dome', line: LINE.HUNT, color: 0x55aa55, moveType: 'chaser' },
-  { id: 'vd_b1', name: '苍翠之魂·奥姆', role: 'boss',  mapId: 'verdant_dome', line: LINE.HUNT, color: 0x44cc44, moveType: 'chaser' },
+  { id: 'vd_b1', name: 'Boss 占位', role: 'boss',  mapId: 'verdant_dome', line: LINE.HUNT, color: 0x44cc44, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -145,7 +145,7 @@ export const FORBIDDEN_LIB_MONSTERS = [
   { id: 'fl_m3', name: '魔法飞弹构造体', role: 'minion', mapId: 'forbidden_lib', line: LINE.ARCANE, color: 0xaa88cc, moveType: 'shooter' },
   { id: 'fl_e1', name: '禁忌学者',     role: 'elite',  mapId: 'forbidden_lib', line: LINE.ARCANE, color: 0x7755aa, moveType: 'shooter' },
   { id: 'fl_e2', name: '咒术师',       role: 'elite',  mapId: 'forbidden_lib', line: LINE.ARCANE, color: 0x9966cc, moveType: 'shooter' },
-  { id: 'fl_b1', name: '大图书馆长·莫比乌斯', role: 'boss', mapId: 'forbidden_lib', line: LINE.ARCANE, color: 0xbb99dd, moveType: 'patrol' },
+  { id: 'fl_b1', name: 'Boss 占位', role: 'boss', mapId: 'forbidden_lib', line: LINE.ARCANE, color: 0xbb99dd, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -157,7 +157,7 @@ export const ARCANE_TOWER_MONSTERS = [
   { id: 'at_m3', name: '元素侍从',     role: 'minion', mapId: 'arcane_tower', line: LINE.ARCANE, color: 0xaa77cc, moveType: 'chaser' },
   { id: 'at_e1', name: '高阶法师',     role: 'elite',  mapId: 'arcane_tower', line: LINE.ARCANE, color: 0x6655aa, moveType: 'shooter' },
   { id: 'at_e2', name: '奥术构造体',   role: 'elite',  mapId: 'arcane_tower', line: LINE.ARCANE, color: 0x8877cc, moveType: 'chaser' },
-  { id: 'at_b1', name: '大法师·萨洛蒙', role: 'boss',  mapId: 'arcane_tower', line: LINE.ARCANE, color: 0x9966ff, moveType: 'shooter' },
+  { id: 'at_b1', name: 'Boss 占位', role: 'boss',  mapId: 'arcane_tower', line: LINE.ARCANE, color: 0x9966ff, moveType: 'shooter' },
 ];
 
 // ─────────────────────────────────────────────
@@ -169,7 +169,7 @@ export const VOID_CORRIDOR_MONSTERS = [
   { id: 'vc_m3', name: '召唤传送门',   role: 'minion', mapId: 'void_corridor', line: LINE.ARCANE, color: 0x7744aa, moveType: 'static' },
   { id: 'vc_e1', name: '虚空吞噬者',   role: 'elite',  mapId: 'void_corridor', line: LINE.ARCANE, color: 0x663399, moveType: 'chaser' },
   { id: 'vc_e2', name: '暗影祭司',     role: 'elite',  mapId: 'void_corridor', line: LINE.ARCANE, color: 0x774488, moveType: 'shooter' },
-  { id: 'vc_b1', name: '虚空领主·扎拉斯', role: 'boss', mapId: 'void_corridor', line: LINE.ARCANE, color: 0x8833cc, moveType: 'chaser' },
+  { id: 'vc_b1', name: 'Boss 占位', role: 'boss', mapId: 'void_corridor', line: LINE.ARCANE, color: 0x8833cc, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -181,7 +181,7 @@ export const MANA_SPRING_MONSTERS = [
   { id: 'ms_m3', name: '源泉守卫',     role: 'minion', mapId: 'mana_spring', line: LINE.ARCANE, color: 0x5599bb, moveType: 'chaser' },
   { id: 'ms_e1', name: '魔力喷涌者',   role: 'elite',  mapId: 'mana_spring', line: LINE.ARCANE, color: 0x3377bb, moveType: 'shooter' },
   { id: 'ms_e2', name: '源泉守护者',   role: 'elite',  mapId: 'mana_spring', line: LINE.ARCANE, color: 0x4499cc, moveType: 'chaser' },
-  { id: 'ms_b1', name: '魔力之泉·安努', role: 'boss',  mapId: 'mana_spring', line: LINE.ARCANE, color: 0x55bbee, moveType: 'patrol' },
+  { id: 'ms_b1', name: 'Boss 占位', role: 'boss',  mapId: 'mana_spring', line: LINE.ARCANE, color: 0x55bbee, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -193,7 +193,7 @@ export const ELEM_THRONE_MONSTERS = [
   { id: 'et_m3', name: '雷击者',       role: 'minion', mapId: 'elem_throne', line: LINE.ARCANE, color: 0xffee44, moveType: 'shooter' },
   { id: 'et_e1', name: '元素大使',     role: 'elite',  mapId: 'elem_throne', line: LINE.ARCANE, color: 0xee8833, moveType: 'chaser' },
   { id: 'et_e2', name: '混沌元素',     role: 'elite',  mapId: 'elem_throne', line: LINE.ARCANE, color: 0xcc44ff, moveType: 'chaser' },
-  { id: 'et_b1', name: '四相元素聚合体', role: 'boss', mapId: 'elem_throne', line: LINE.ARCANE, color: 0xff8844, moveType: 'chaser' },
+  { id: 'et_b1', name: 'Boss 占位', role: 'boss', mapId: 'elem_throne', line: LINE.ARCANE, color: 0xff8844, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -205,7 +205,7 @@ export const TIME_RIFT_MONSTERS = [
   { id: 'tr_m3', name: '空间裂隙兽',   role: 'minion', mapId: 'time_rift', line: LINE.ARCANE, color: 0x7755bb, moveType: 'chaser' },
   { id: 'tr_e1', name: '时间编织者',   role: 'elite',  mapId: 'time_rift', line: LINE.ARCANE, color: 0x9977ee, moveType: 'shooter' },
   { id: 'tr_e2', name: '空间切割者',   role: 'elite',  mapId: 'time_rift', line: LINE.ARCANE, color: 0x6644bb, moveType: 'chaser' },
-  { id: 'tr_b1', name: '时空之主·柯罗诺斯', role: 'boss', mapId: 'time_rift', line: LINE.ARCANE, color: 0xbb88ff, moveType: 'patrol' },
+  { id: 'tr_b1', name: 'Boss 占位', role: 'boss', mapId: 'time_rift', line: LINE.ARCANE, color: 0xbb88ff, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -217,7 +217,7 @@ export const RUNE_FORGE_MONSTERS = [
   { id: 'rf_m3', name: '活化符文',     role: 'minion', mapId: 'rune_forge', line: LINE.ARCANE, color: 0xaa7733, moveType: 'patrol' },
   { id: 'rf_e1', name: '符文铁匠',     role: 'elite',  mapId: 'rune_forge', line: LINE.ARCANE, color: 0xdd9944, moveType: 'chaser' },
   { id: 'rf_e2', name: '符文守护者',   role: 'elite',  mapId: 'rune_forge', line: LINE.ARCANE, color: 0xcc8833, moveType: 'chaser' },
-  { id: 'rf_b1', name: '大符文匠·托林', role: 'boss',  mapId: 'rune_forge', line: LINE.ARCANE, color: 0xeeaa55, moveType: 'chaser' },
+  { id: 'rf_b1', name: 'Boss 占位', role: 'boss',  mapId: 'rune_forge', line: LINE.ARCANE, color: 0xeeaa55, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -229,7 +229,7 @@ export const STAR_PALACE_MONSTERS = [
   { id: 'sp_m3', name: '陨石碎片',     role: 'minion', mapId: 'star_palace', line: LINE.ARCANE, color: 0x887766, moveType: 'shooter' },
   { id: 'sp_e1', name: '星辰预言者',   role: 'elite',  mapId: 'star_palace', line: LINE.ARCANE, color: 0x99aacc, moveType: 'shooter' },
   { id: 'sp_e2', name: '穹顶守护者',   role: 'elite',  mapId: 'star_palace', line: LINE.ARCANE, color: 0xbbccdd, moveType: 'chaser' },
-  { id: 'sp_b1', name: '星辰之主·阿斯特拉', role: 'boss', mapId: 'star_palace', line: LINE.ARCANE, color: 0xddeecc, moveType: 'patrol' },
+  { id: 'sp_b1', name: 'Boss 占位', role: 'boss', mapId: 'star_palace', line: LINE.ARCANE, color: 0xddeecc, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -241,7 +241,7 @@ export const IRON_FORT_MONSTERS = [
   { id: 'if_m3', name: '弩炮手',       role: 'minion', mapId: 'iron_fort', line: LINE.WAR, color: 0xaa8877, moveType: 'shooter' },
   { id: 'if_e1', name: '铁壁骑士',     role: 'elite',  mapId: 'iron_fort', line: LINE.WAR, color: 0x6666aa, moveType: 'chaser' },
   { id: 'if_e2', name: '要塞指挥官',   role: 'elite',  mapId: 'iron_fort', line: LINE.WAR, color: 0x8888bb, moveType: 'chaser' },
-  { id: 'if_b1', name: '钢铁领主·加雷特', role: 'boss', mapId: 'iron_fort', line: LINE.WAR, color: 0x9999cc, moveType: 'chaser' },
+  { id: 'if_b1', name: 'Boss 占位', role: 'boss', mapId: 'iron_fort', line: LINE.WAR, color: 0x9999cc, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -253,7 +253,7 @@ export const BLOOD_ARENA_MONSTERS = [
   { id: 'ba_m3', name: '狂战士',       role: 'minion', mapId: 'blood_arena', line: LINE.WAR, color: 0xee3322, moveType: 'chaser' },
   { id: 'ba_e1', name: '血腥屠夫',     role: 'elite',  mapId: 'blood_arena', line: LINE.WAR, color: 0xbb2211, moveType: 'chaser' },
   { id: 'ba_e2', name: '斗技场冠军',   role: 'elite',  mapId: 'blood_arena', line: LINE.WAR, color: 0xdd4433, moveType: 'chaser' },
-  { id: 'ba_b1', name: '鲜血之王·卡修斯', role: 'boss', mapId: 'blood_arena', line: LINE.WAR, color: 0xff4444, moveType: 'chaser' },
+  { id: 'ba_b1', name: 'Boss 占位', role: 'boss', mapId: 'blood_arena', line: LINE.WAR, color: 0xff4444, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -265,7 +265,7 @@ export const THUNDER_CLIFF_MONSTERS = [
   { id: 'tc_m3', name: '风暴之鹰',     role: 'minion', mapId: 'thunder_cliff', line: LINE.WAR, color: 0xeedd55, moveType: 'patrol' },
   { id: 'tc_e1', name: '雷霆使者',     role: 'elite',  mapId: 'thunder_cliff', line: LINE.WAR, color: 0xffee44, moveType: 'chaser' },
   { id: 'tc_e2', name: '崖壁萨满',     role: 'elite',  mapId: 'thunder_cliff', line: LINE.WAR, color: 0xccbb33, moveType: 'shooter' },
-  { id: 'tc_b1', name: '雷霆之王·索尔', role: 'boss',  mapId: 'thunder_cliff', line: LINE.WAR, color: 0xffff44, moveType: 'chaser' },
+  { id: 'tc_b1', name: 'Boss 占位', role: 'boss',  mapId: 'thunder_cliff', line: LINE.WAR, color: 0xffff44, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -277,7 +277,7 @@ export const DRAGON_GRAVE_MONSTERS = [
   { id: 'dg_m3', name: '墓穴蠕虫',     role: 'minion', mapId: 'dragon_grave', line: LINE.WAR, color: 0x776655, moveType: 'patrol' },
   { id: 'dg_e1', name: '龙魂骑士',     role: 'elite',  mapId: 'dragon_grave', line: LINE.WAR, color: 0xaa8866, moveType: 'chaser' },
   { id: 'dg_e2', name: '墓穴巨龙',     role: 'elite',  mapId: 'dragon_grave', line: LINE.WAR, color: 0xccaa77, moveType: 'chaser' },
-  { id: 'dg_b1', name: '太古龙魂·奈萨里奥', role: 'boss', mapId: 'dragon_grave', line: LINE.WAR, color: 0xddbb88, moveType: 'chaser' },
+  { id: 'dg_b1', name: 'Boss 占位', role: 'boss', mapId: 'dragon_grave', line: LINE.WAR, color: 0xddbb88, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -289,7 +289,7 @@ export const GALE_CANYON_MONSTERS = [
   { id: 'gc_m3', name: '冲锋骑兵',     role: 'minion', mapId: 'gale_canyon', line: LINE.WAR, color: 0xcc9966, moveType: 'chaser' },
   { id: 'gc_e1', name: '风骑士',       role: 'elite',  mapId: 'gale_canyon', line: LINE.WAR, color: 0x77bb55, moveType: 'chaser' },
   { id: 'gc_e2', name: '峡谷领主',     role: 'elite',  mapId: 'gale_canyon', line: LINE.WAR, color: 0x99cc77, moveType: 'chaser' },
-  { id: 'gc_b1', name: '烈风之主·阿拉斯特', role: 'boss', mapId: 'gale_canyon', line: LINE.WAR, color: 0xbbee88, moveType: 'chaser' },
+  { id: 'gc_b1', name: 'Boss 占位', role: 'boss', mapId: 'gale_canyon', line: LINE.WAR, color: 0xbbee88, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -301,7 +301,7 @@ export const WAR_ALTAR_MONSTERS = [
   { id: 'wa_m3', name: '战争使者',     role: 'minion', mapId: 'war_altar', line: LINE.WAR, color: 0xee7755, moveType: 'chaser' },
   { id: 'wa_e1', name: '战神祭祀',     role: 'elite',  mapId: 'war_altar', line: LINE.WAR, color: 0xcc5533, moveType: 'shooter' },
   { id: 'wa_e2', name: '狂信者',       role: 'elite',  mapId: 'war_altar', line: LINE.WAR, color: 0xdd7744, moveType: 'chaser' },
-  { id: 'wa_b1', name: '战神化身·马尔斯', role: 'boss', mapId: 'war_altar', line: LINE.WAR, color: 0xff8855, moveType: 'chaser' },
+  { id: 'wa_b1', name: 'Boss 占位', role: 'boss', mapId: 'war_altar', line: LINE.WAR, color: 0xff8855, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -313,7 +313,7 @@ export const IMMORTAL_TOMB_MONSTERS = [
   { id: 'it_m3', name: '尸妖',         role: 'minion', mapId: 'immortal_tomb', line: LINE.WAR, color: 0x667755, moveType: 'chaser' },
   { id: 'it_e1', name: '死亡骑士',     role: 'elite',  mapId: 'immortal_tomb', line: LINE.WAR, color: 0x555577, moveType: 'chaser' },
   { id: 'it_e2', name: '不朽守卫',     role: 'elite',  mapId: 'immortal_tomb', line: LINE.WAR, color: 0x777799, moveType: 'chaser' },
-  { id: 'it_b1', name: '不朽之王·莱因哈特', role: 'boss', mapId: 'immortal_tomb', line: LINE.WAR, color: 0x8888aa, moveType: 'chaser' },
+  { id: 'it_b1', name: 'Boss 占位', role: 'boss', mapId: 'immortal_tomb', line: LINE.WAR, color: 0x8888aa, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -370,7 +370,7 @@ export const ILLUSION_MAZE_MONSTERS = [
   { id: 'im_m3', name: '幻影猎手',     role: 'minion', mapId: 'illusion_maze', line: NEUTRAL, color: 0x9999bb, moveType: 'chaser' },
   { id: 'im_e1', name: '幻象编织者',   role: 'elite',  mapId: 'illusion_maze', line: NEUTRAL, color: 0x7777aa, moveType: 'shooter' },
   { id: 'im_e2', name: '迷宫牛头怪',   role: 'elite',  mapId: 'illusion_maze', line: NEUTRAL, color: 0xaa8866, moveType: 'chaser' },
-  { id: 'im_b1', name: '迷宫之主·米诺陶斯', role: 'boss', mapId: 'illusion_maze', line: NEUTRAL, color: 0xccbbaa, moveType: 'chaser' },
+  { id: 'im_b1', name: 'Boss 占位', role: 'boss', mapId: 'illusion_maze', line: NEUTRAL, color: 0xccbbaa, moveType: 'chaser' },
 ];
 
 // ─────────────────────────────────────────────
@@ -382,7 +382,7 @@ export const TIME_NEXUS_MONSTERS = [
   { id: 'tn_m3', name: '空间监察者',   role: 'minion', mapId: 'time_nexus', line: NEUTRAL, color: 0xaa99dd, moveType: 'patrol' },
   { id: 'tn_e1', name: '时空撕裂者',   role: 'elite',  mapId: 'time_nexus', line: NEUTRAL, color: 0x7766aa, moveType: 'chaser' },
   { id: 'tn_e2', name: '枢纽守护者',   role: 'elite',  mapId: 'time_nexus', line: NEUTRAL, color: 0x9988bb, moveType: 'chaser' },
-  { id: 'tn_b1', name: '时空之主·克罗米', role: 'boss', mapId: 'time_nexus', line: NEUTRAL, color: 0xbb99ee, moveType: 'patrol' },
+  { id: 'tn_b1', name: 'Boss 占位', role: 'boss', mapId: 'time_nexus', line: NEUTRAL, color: 0xbb99ee, moveType: 'patrol' },
 ];
 
 // ─────────────────────────────────────────────
@@ -469,9 +469,24 @@ export function getMonstersByMapAndRole(mapId, role) {
   return ALL_MONSTERS.filter(m => m.mapId === mapId && m.role === role);
 }
 
+const TUTORIAL_BOSS_MAP_ID = 'tutorial_level';
+
+function createLegacyBossPlaceholder(def) {
+  if (!def) return null;
+  return {
+    ...def,
+    id: `${def.mapId}__boss_placeholder`,
+    name: 'Boss 占位',
+    legacyBossPlaceholder: true,
+  };
+}
+
 /** 获取某张地图的 Boss */
 export function getMapBoss(mapId) {
-  return ALL_MONSTERS.find(m => m.mapId === mapId && m.role === 'boss') || null;
+  const boss = ALL_MONSTERS.find(m => m.mapId === mapId && m.role === 'boss') || null;
+  if (!boss) return null;
+  if (mapId === TUTORIAL_BOSS_MAP_ID) return boss;
+  return createLegacyBossPlaceholder(boss);
 }
 
 /** 获取某张地图的小怪列表 */

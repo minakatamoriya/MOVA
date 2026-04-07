@@ -59,6 +59,11 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
     this.maxHp = config.hp || 1000;
     this.currentHp = this.maxHp;
     this.isAlive = true;
+    this.bossId = config.bossId || null;
+    this.damageMultiplier = Number.isFinite(Number(config.damageMultiplier))
+      ? Math.max(0.1, Number(config.damageMultiplier))
+      : 1;
+    this.encounterStage = Math.max(1, Math.floor(Number(config.encounterStage) || 1));
     this.expReward = (config.expReward != null)
       ? Math.max(0, Math.floor(config.expReward))
       : Math.floor(this.maxHp / 10);
@@ -252,6 +257,12 @@ export default class BaseBoss extends Phaser.GameObjects.Container {
       damage,
       ...options
     });
+  }
+
+  scaleAttackDamage(baseDamage, minimum = 1) {
+    const raw = Number(baseDamage || 0);
+    const min = Math.max(0, Math.round(Number(minimum || 0)));
+    return Math.max(min, Math.round(raw * Math.max(0.1, Number(this.damageMultiplier || 1))));
   }
 
   setMoveBoundsRect(rect) {
