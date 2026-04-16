@@ -2078,7 +2078,8 @@ export function applyBuildClassMixin(GameScene) {
         return Phaser.Display.Color.GetColor(c.r, c.g, c.b);
       };
 
-      const yScale = Phaser.Math.Clamp(this.slashEllipseYScale ?? 0.78, 0.55, 0.95);
+      const isFullCircle = arcSpan >= (Math.PI * 2 - 0.001);
+      const yScale = isFullCircle ? 1 : Phaser.Math.Clamp(this.slashEllipseYScale ?? 0.78, 0.55, 0.95);
       const toEllipsePoint = (angle) => {
         const phi = angle - baseAngle;
         const rx = range;

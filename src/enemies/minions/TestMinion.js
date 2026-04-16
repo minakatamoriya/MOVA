@@ -85,6 +85,39 @@ function getTargetHitbox(target) {
   };
 }
 
+function getTargetMotion(target, fallbackDx = 0, fallbackDy = 0) {
+  const vx = Number(target?.worldVelocity?.x || 0);
+  const vy = Number(target?.worldVelocity?.y || 0);
+  const speed = Math.hypot(vx, vy);
+  if (speed > 0.001) {
+    return { vx, vy, speed, dirX: vx / speed, dirY: vy / speed };
+  }
+
+  const lx = Number(target?.lastMoveIntent?.x || 0);
+  const ly = Number(target?.lastMoveIntent?.y || 0);
+  const lastMag = Math.hypot(lx, ly);
+  if (lastMag > 0.001) {
+    return { vx: lx, vy: ly, speed: 1, dirX: lx / lastMag, dirY: ly / lastMag };
+  }
+
+  const fallbackMag = Math.hypot(fallbackDx, fallbackDy);
+  if (fallbackMag > 0.001) {
+    return {
+      vx: fallbackDx / fallbackMag,
+      vy: fallbackDy / fallbackMag,
+      speed: 1,
+      dirX: fallbackDx / fallbackMag,
+      dirY: fallbackDy / fallbackMag,
+    };
+  }
+
+  return { vx: 0, vy: 1, speed: 0, dirX: 0, dirY: 1 };
+}
+
+function perpendicularVector(x, y, sign = 1) {
+  return sign >= 0 ? { x: -y, y: x } : { x: y, y: -x };
+}
+
 export default class TestMinion extends Phaser.GameObjects.Container {
   constructor(scene, config) {
     super(scene, config.x || 0, config.y || 0);
@@ -249,6 +282,22 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.aggroOnSeen = !!config.aggroOnSeen;
     this.aggroActive = !this.aggroOnSeen;
     this.forceChasePlayerAfterBoss = !!config.forceChasePlayerAfterBoss;
+    this.packRole = config.packRole || (this.minionType === 'ring_shooter'
+      ? 'orbiter'
+      : (this.minionType === 'charger' ? 'diver' : 'frontliner'));
+    this.packIndex = Math.max(0, Math.floor(Number(config.packIndex) || 0));
+    this.flankSign = (config.flankSign != null)
+      ? (Number(config.flankSign) >= 0 ? 1 : -1)
+      : ((this.packIndex % 2 === 0) ? 1 : -1);
+    this.interceptLeadMs = (config.interceptLeadMs != null)
+      ? Phaser.Math.Clamp(Number(config.interceptLeadMs), 80, 520)
+      : (this.minionType === 'ring_shooter' ? 160 : 240);
+    this.flankOffset = (config.flankOffset != null)
+      ? Math.max(0, Math.round(Number(config.flankOffset) || 0))
+      : (this.minionType === 'ring_shooter' ? 54 : 84);
+    this.orbitRange = (config.orbitRange != null)
+      ? Math.max(12, Math.round(Number(config.orbitRange) || 0))
+      : (this.minionType === 'ring_shooter' ? 72 : 48);
 
     // “检测到后缓缓移动”：速度爬升时间（毫秒）
     this.aggroRampMs = (config.aggroRampMs != null) ? Math.max(0, Math.floor(config.aggroRampMs)) : 650;
@@ -1985,6 +2034,71 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     super.destroy(fromScene);
   }
 
+  moveTowardPoint(goalX, goalY, maxStep, faceAngle = true) {
+    const dx = goalX - this.x;
+    const dy = goalY - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+    const step = Math.min(dist, Math.max(0, maxStep || 0));
+    this.x += (dx / dist) * step;
+    this.y += (dy / dist) * step;
+    if (faceAngle) this.updateFacingVisual(Math.atan2(dy, dx));
+    return dist;
+  }
+
+  buildInterceptGoal(targetHitbox, target) {
+    const fallbackDx = targetHitbox.x - this.x;
+    const fallbackDy = targetHitbox.y - this.y;
+    const motion = getTargetMotion(target, fallbackDx, fallbackDy);
+    const directDist = Math.sqrt(fallbackDx * fallbackDx + fallbackDy * fallbackDy) || 0.0001;
+    const leadSec = Phaser.Math.Clamp((this.interceptLeadMs + directDist * 0.45) / 1000, 0.12, 0.52);
+    let goalX = targetHitbox.x + motion.vx * leadSec;
+    let goalY = targetHitbox.y + motion.vy * leadSec;
+
+    const flankWindow = Phaser.Math.Clamp((directDist - 48) / 180, 0, 1);
+    if (this.packRole === 'flanker' || this.packRole === 'orbiter') {
+      const perpendicular = perpendicularVector(motion.dirX, motion.dirY, this.flankSign);
+      const offset = this.flankOffset * flankWindow;
+      goalX += perpendicular.x * offset;
+      goalY += perpendicular.y * offset;
+    }
+
+    if (this.packRole === 'backliner') {
+      goalX -= motion.dirX * 22;
+      goalY -= motion.dirY * 22;
+    }
+
+    return clampWorldPoint(this.scene, goalX, goalY, 20);
+  }
+
+  updateOrbiterMovement(dt, speedMult, target, targetHitbox) {
+    const dx = targetHitbox.x - this.x;
+    const dy = targetHitbox.y - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+    const preferredRange = Math.max(72, (this.shootRange || 190) - 26);
+    const radialX = dx / dist;
+    const radialY = dy / dist;
+    const motion = getTargetMotion(target, dx, dy);
+    const perpendicular = perpendicularVector(motion.dirX, motion.dirY, this.flankSign);
+
+    const anchorX = targetHitbox.x - radialX * preferredRange;
+    const anchorY = targetHitbox.y - radialY * preferredRange;
+    const orbitX = anchorX + perpendicular.x * this.orbitRange;
+    const orbitY = anchorY + perpendicular.y * this.orbitRange;
+
+    const moveSpeed = this.moveSpeed * speedMult;
+    if (dist > preferredRange + 24) {
+      const intercept = this.buildInterceptGoal(targetHitbox, target);
+      this.moveTowardPoint(intercept.x, intercept.y, moveSpeed * dt);
+      return;
+    }
+    if (dist < preferredRange - 24) {
+      this.moveTowardPoint(anchorX - radialX * 26, anchorY - radialY * 26, moveSpeed * dt);
+      return;
+    }
+
+    this.moveTowardPoint(orbitX, orbitY, moveSpeed * dt);
+  }
+
   update(time, delta, player) {
     if (!this.isAlive) return;
 
@@ -2160,21 +2274,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     if (this.minionType === 'ring_shooter' && target && target.active !== false && target.isAlive !== false && targetHitbox) {
-      const dx = targetHitbox.x - this.x;
-      const dy = targetHitbox.y - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-      const attackRange = Math.max(80, this.shootRange || 210);
-      const preferredRange = Math.max(60, attackRange - 40);
-
-      if (dist > attackRange) {
-        const step = Math.min(dist - attackRange, (this.moveSpeed * speedMult) * dt);
-        this.x += (dx / dist) * step;
-        this.y += (dy / dist) * step;
-      } else if (dist < preferredRange) {
-        const backoff = Math.min(preferredRange - dist, (this.moveSpeed * 0.72) * dt);
-        this.x -= (dx / dist) * backoff;
-        this.y -= (dy / dist) * backoff;
-      }
+      this.updateOrbiterMovement(dt, speedMult, target, targetHitbox);
 
       this.tryShoot(time, target);
       return;
@@ -2187,17 +2287,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     // shooter（不跟随Boss）：缓慢靠近到理想距离并射击
     if (this.minionType === 'shooter' && target && target.active !== false && target.isAlive !== false && targetHitbox) {
-      const dx = targetHitbox.x - this.x;
-      const dy = targetHitbox.y - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-
-      // 远程单位：进入预警范围后，先走到“可攻击距离”再开始攻击
-      const attackRange = Math.max(60, this.shootRange || 190);
-      if (dist > attackRange) {
-        const step = Math.min(dist - attackRange, (this.moveSpeed * speedMult) * dt);
-        this.x += (dx / dist) * step;
-        this.y += (dy / dist) * step;
-      }
+      this.updateOrbiterMovement(dt, speedMult * 0.94, target, targetHitbox);
 
       this.tryShoot(time, target);
       return;
@@ -2205,12 +2295,8 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     // chaser：追玩家
     if (target && target.active !== false && target.isAlive !== false && targetHitbox) {
-      const dx = targetHitbox.x - this.x;
-      const dy = targetHitbox.y - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
-      const step = Math.min(dist, (this.moveSpeed * speedMult) * dt);
-      this.x += (dx / dist) * step;
-      this.y += (dy / dist) * step;
+      const goal = this.buildInterceptGoal(targetHitbox, target);
+      this.moveTowardPoint(goal.x, goal.y, (this.moveSpeed * speedMult) * dt);
 
       this.tryContact(time, target);
 

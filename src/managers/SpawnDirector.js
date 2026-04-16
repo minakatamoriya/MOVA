@@ -352,6 +352,39 @@ export default class SpawnDirector {
     return Phaser.Math.Between(Math.max(state.burstMin + 1, midMax), state.burstMax + 1) + pacing.burstBonus;
   }
 
+  getPlayerFlowVector() {
+    const player = this.scene?.player;
+    const vx = Number(player?.worldVelocity?.x || 0);
+    const vy = Number(player?.worldVelocity?.y || 0);
+    const speed = Math.hypot(vx, vy);
+    if (speed > 0.001) {
+      return { x: vx / speed, y: vy / speed, speed };
+    }
+
+    const lx = Number(player?.lastMoveIntent?.x || 0);
+    const ly = Number(player?.lastMoveIntent?.y || 0);
+    const lastSpeed = Math.hypot(lx, ly);
+    if (lastSpeed > 0.001) {
+      return { x: lx / lastSpeed, y: ly / lastSpeed, speed: lastSpeed };
+    }
+
+    return { x: 0, y: 1, speed: 0 };
+  }
+
+  scoreSpawnSide(side) {
+    const flow = this.getPlayerFlowVector();
+    const normals = {
+      top: { x: 0, y: -1 },
+      right: { x: 1, y: 0 },
+      bottom: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+    };
+    const normal = normals[side] || { x: 0, y: 0 };
+    const forwardDot = (normal.x * flow.x) + (normal.y * flow.y);
+    const sideCross = Math.abs((normal.x * flow.y) - (normal.y * flow.x));
+    return forwardDot + sideCross * 0.42;
+  }
+
   getBurstSides() {
     const state = this.state;
     if (!state) return [];
@@ -359,7 +392,8 @@ export default class SpawnDirector {
     const fallbackSides = ['top', 'right', 'bottom', 'left'];
     const sides = availableSides.length > 0 ? availableSides : fallbackSides;
     const filtered = sides.filter((side) => side !== state.safeSide);
-    return filtered.length > 0 ? filtered : sides;
+    const ranked = (filtered.length > 0 ? filtered : sides).slice().sort((a, b) => this.scoreSpawnSide(b) - this.scoreSpawnSide(a));
+    return ranked;
   }
 
   refreshSafeSide(now, force) {
@@ -368,9 +402,10 @@ export default class SpawnDirector {
 
     const availableSides = this.scene?.getAvailableArenaSpawnSides?.({ offscreenPad: state.offscreenPad }) || [];
     const sides = availableSides.length > 0 ? availableSides : ['top', 'right', 'bottom', 'left'];
-    const pool = force ? sides : sides.filter((side) => side !== state.safeSide);
-    const nextSides = pool.length > 0 ? pool : sides;
-    state.safeSide = nextSides[(state.burstIndex + state.spawnCursor) % nextSides.length] || null;
+    const ranked = sides.slice().sort((a, b) => this.scoreSpawnSide(a) - this.scoreSpawnSide(b));
+    const pool = force ? ranked : ranked.filter((side) => side !== state.safeSide);
+    const nextSides = pool.length > 0 ? pool : ranked;
+    state.safeSide = nextSides[0] || null;
     state.safeSideUntil = now + state.safeSideDurationMs;
   }
 

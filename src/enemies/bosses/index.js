@@ -4,6 +4,14 @@
  */
 
 export { default as BaseBoss } from './BaseBoss';
+export { default as MirrorExecutionerBoss } from './MirrorExecutionerBoss';
+export { default as ToxicWeaverBoss } from './ToxicWeaverBoss';
+export { default as TideEyeBoss } from './TideEyeBoss';
+export { default as BroodmotherBoss } from './BroodmotherBoss';
+export { default as ThunderWardenBoss } from './ThunderWardenBoss';
+export { default as TideDevourerBoss } from './TideDevourerBoss';
+export { default as TimeBishopBoss } from './TimeBishopBoss';
+export { default as StarRoyalistBoss } from './StarRoyalistBoss';
 
 // 各关 Boss 独立配置
 export * as Stage1Boss from './stage1Boss';

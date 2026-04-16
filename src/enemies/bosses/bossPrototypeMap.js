@@ -6,46 +6,46 @@ const BOSS_PROTOTYPE_MAP = Object.freeze({
     notes: '已切到独立 Boss 类，当前包含旋转灼镜、定点十字审判与镜锚扇射。'
   },
   boss_toxic_weaver: {
-    patternFamily: 'showcase',
-    currentTemplate: 'prototype_showcase_ground_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先借地面预警与延迟爆发模板，后续替换成真正的横纵毒线。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_toxic_weaver',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含横纵毒线、网格封锁与交点毒卵。'
   },
   boss_tide_eye: {
-    patternFamily: 'stage2',
-    currentTemplate: 'prototype_b_ranged_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先用远程节奏模板占位，后续替换成外放回收球状态机。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_tide_eye',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含外放回收球与黑环坍缩。'
   },
   boss_broodmother: {
-    patternFamily: 'stage3',
-    currentTemplate: 'prototype_c_summon_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前最接近正式方向，后续重点把召唤改为巢穴体系。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_broodmother',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含巢穴投放、黏液地毯与狂孵波次。'
   },
   boss_thunder_warden: {
-    patternFamily: 'stage2',
-    currentTemplate: 'prototype_b_ranged_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先借远程模板承载节奏，后续换成雷柱落点、电链和脉冲。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_thunder_warden',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含落雷立柱、电链闭环与雷暴脉冲。'
   },
   boss_tide_devourer: {
-    patternFamily: 'showcase',
-    currentTemplate: 'prototype_showcase_ground_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先借地面调度模板占位，后续换成潮线波墙、滞留漩涡与轨道陨核。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_tide_devourer',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含潮线波墙、漩核滞留与吞星坠点。'
   },
   boss_time_bishop: {
-    patternFamily: 'showcase',
-    currentTemplate: 'prototype_showcase_ground_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先借延迟地面预警模板，后续扩成多计时判决系统。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_time_bishop',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含延时圣裁、错拍判决与旧位追罚。'
   },
   boss_star_royalist: {
-    patternFamily: 'stage2',
-    currentTemplate: 'prototype_b_ranged_pattern',
-    implementationStatus: 'prototype-bound',
-    notes: '当前先借远程调度模板承载星图前的轰炸节奏。'
+    patternFamily: 'custom',
+    currentTemplate: 'formal_star_royalist',
+    implementationStatus: 'implemented',
+    notes: '已切到独立 Boss 类，当前包含黑白换相、对立星区与双色轰炸。'
   }
 });
 

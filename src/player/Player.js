@@ -167,6 +167,9 @@ export default class Player extends Phaser.GameObjects.Container {
     this.canMove = true;
     this.hitboxRadius = 8; // 核心判定半径（小型圆形）
     this.visualRadius = 15; // 视觉大小
+    this.moveIntent = new Phaser.Math.Vector2(0, 0);
+    this.lastMoveIntent = new Phaser.Math.Vector2(0, 1);
+    this.worldVelocity = new Phaser.Math.Vector2(0, 0);
 
     // 若使用放大后的 archer 资源：同步放大判定/视觉圈（以旧 64px 为基准）
     {
@@ -1284,6 +1287,8 @@ export default class Player extends Phaser.GameObjects.Container {
    */
   updateMovement(delta) {
     if (this.canMove === false) {
+      this.moveIntent.set(0, 0);
+      this.worldVelocity.set(0, 0);
       this.updateMovementVisuals(0, 0);
       this.updateBaseAnimation(0, 0);
       this.updateArcaneCircle(delta, false);
@@ -1337,11 +1342,16 @@ export default class Player extends Phaser.GameObjects.Container {
     }
     
     this.isMoving = Math.abs(velocityX) > 0.0001 || Math.abs(velocityY) > 0.0001;
+    this.moveIntent.set(velocityX, velocityY);
+    if (this.isMoving) {
+      this.lastMoveIntent.set(velocityX, velocityY);
+    }
 
     // 应用移动
     const step = (delta / 1000);
     const dx = velocityX * currentSpeed * step;
     const dy = velocityY * currentSpeed * step;
+    this.worldVelocity.set(step > 0 ? (dx / step) : 0, step > 0 ? (dy / step) : 0);
 
     const scene = this.scene;
     const canBlock = scene && typeof scene.isWorldPointBlocked === 'function' && scene.mapConfig;

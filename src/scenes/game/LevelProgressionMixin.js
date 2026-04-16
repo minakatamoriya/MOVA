@@ -722,10 +722,15 @@ export function applyLevelProgressionMixin(GameScene) {
       const resolvedType = resolveDirectedMinionType(def?.moveType, waveIndex, stage);
       const baseMoveSpeed = balance.minions.speed[def?.moveType] ?? balance.minions.speed.chaser;
       const resolvedMoveSpeed = resolvedType === 'charger'
-        ? Math.max(baseMoveSpeed + 18, Math.round(balance.minions.speed.chaser * 1.55))
+        ? Math.max(baseMoveSpeed + 34, Math.round(balance.minions.speed.chaser * 1.9))
         : (resolvedType === 'ring_shooter'
-          ? Math.max(baseMoveSpeed + 10, Math.round(balance.minions.speed.chaser * 1.12))
-          : Math.max(baseMoveSpeed, balance.minions.speed.chaser));
+          ? Math.max(baseMoveSpeed + 18, Math.round(balance.minions.speed.chaser * 1.28))
+          : Math.max(baseMoveSpeed + 24, Math.round(balance.minions.speed.chaser * 1.55)));
+      const packRole = resolvedType === 'charger'
+        ? 'diver'
+        : (resolvedType === 'ring_shooter'
+          ? ((waveIndex % 2 === 0) ? 'orbiter' : 'backliner')
+          : ((waveIndex % 3 === 0) ? 'flanker' : 'frontliner'));
 
       return {
         x: point.x,
@@ -754,6 +759,12 @@ export function applyLevelProgressionMixin(GameScene) {
         chargeRange: resolvedType === 'charger' ? 155 : undefined,
         chargeDamage: resolvedType === 'charger' ? Math.max(1, Math.round(balance.minions.contactDamage * 1.25)) : undefined,
         chargeSpeed: resolvedType === 'charger' ? 380 : undefined,
+        packRole,
+        packIndex: waveIndex,
+        flankSign: waveIndex % 2 === 0 ? 1 : -1,
+        interceptLeadMs: resolvedType === 'ring_shooter' ? 150 : (resolvedType === 'charger' ? 180 : 240),
+        flankOffset: resolvedType === 'ring_shooter' ? 52 : ((packRole === 'flanker') ? 104 : 64),
+        orbitRange: resolvedType === 'ring_shooter' ? 82 : 44,
         hitReactionCdMs: Infinity,
       };
     },
@@ -766,14 +777,17 @@ export function applyLevelProgressionMixin(GameScene) {
         : (eliteIndex % 2 === 0 ? 'charger' : 'chaser');
       const baseMoveSpeed = balance.elites.speed[def?.moveType] ?? balance.elites.speed.chaser;
       const resolvedMoveSpeed = resolvedEliteType === 'charger'
-        ? Math.max(baseMoveSpeed + 24, Math.round(balance.elites.speed.chaser * 1.6))
+        ? Math.max(baseMoveSpeed + 36, Math.round(balance.elites.speed.chaser * 1.95))
         : (resolvedEliteType === 'ring_shooter'
-          ? Math.max(baseMoveSpeed + 12, Math.round(balance.elites.speed.chaser * 1.16))
-          : Math.max(baseMoveSpeed, balance.elites.speed.chaser));
+          ? Math.max(baseMoveSpeed + 18, Math.round(balance.elites.speed.chaser * 1.34))
+          : Math.max(baseMoveSpeed + 26, Math.round(balance.elites.speed.chaser * 1.62)));
       const eliteAffixes = rollEliteAffixes({
         stage,
         role: resolvedEliteType
       });
+      const packRole = resolvedEliteType === 'charger'
+        ? 'diver'
+        : (resolvedEliteType === 'ring_shooter' ? 'orbiter' : ((eliteIndex % 3 === 0) ? 'flanker' : 'frontliner'));
 
       return {
         x: point.x,
@@ -803,6 +817,12 @@ export function applyLevelProgressionMixin(GameScene) {
         chargeRange: def?.moveType === 'chaser' ? 178 : undefined,
         chargeDamage: def?.moveType === 'chaser' ? Math.max(1, Math.round(balance.elites.contactDamage * 1.35)) : undefined,
         chargeSpeed: def?.moveType === 'chaser' ? 430 : undefined,
+        packRole,
+        packIndex: eliteIndex,
+        flankSign: eliteIndex % 2 === 0 ? 1 : -1,
+        interceptLeadMs: resolvedEliteType === 'ring_shooter' ? 180 : (resolvedEliteType === 'charger' ? 180 : 260),
+        flankOffset: resolvedEliteType === 'ring_shooter' ? 60 : ((packRole === 'flanker') ? 116 : 76),
+        orbitRange: resolvedEliteType === 'ring_shooter' ? 92 : 54,
         hitReactionCdMs: stage <= 2 ? Infinity : undefined,
       };
     },

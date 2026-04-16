@@ -10,6 +10,13 @@ import { getAttackPatterns as getStage1Patterns } from '../enemies/bosses/stage1
 import { getAttackPatterns as getStage2Patterns } from '../enemies/bosses/stage2Boss';
 import { getAttackPatterns as getStage3Patterns } from '../enemies/bosses/stage3Boss';
 import MirrorExecutionerBoss from '../enemies/bosses/MirrorExecutionerBoss';
+import ToxicWeaverBoss from '../enemies/bosses/ToxicWeaverBoss';
+import TideEyeBoss from '../enemies/bosses/TideEyeBoss';
+import BroodmotherBoss from '../enemies/bosses/BroodmotherBoss';
+import ThunderWardenBoss from '../enemies/bosses/ThunderWardenBoss';
+import TideDevourerBoss from '../enemies/bosses/TideDevourerBoss';
+import TimeBishopBoss from '../enemies/bosses/TimeBishopBoss';
+import StarRoyalistBoss from '../enemies/bosses/StarRoyalistBoss';
 
 /**
  * 根据独立的 Boss 原型映射表获取当前可用的 Boss 模式原型。
@@ -28,6 +35,13 @@ const PATTERN_FAMILY_CONFIGS = {
 
 const CUSTOM_BOSS_CLASSES = {
   boss_mirror_executioner: MirrorExecutionerBoss,
+  boss_toxic_weaver: ToxicWeaverBoss,
+  boss_tide_eye: TideEyeBoss,
+  boss_broodmother: BroodmotherBoss,
+  boss_thunder_warden: ThunderWardenBoss,
+  boss_tide_devourer: TideDevourerBoss,
+  boss_time_bishop: TimeBishopBoss,
+  boss_star_royalist: StarRoyalistBoss,
 };
 
 function getPatternFamilyConfig(bossDef, stage) {

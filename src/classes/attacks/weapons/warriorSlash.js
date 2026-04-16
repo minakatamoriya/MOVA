@@ -258,28 +258,32 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   const lowHpRatio = (player.maxHp || 0) > 0 ? ((player.hp || 0) / player.maxHp) : 1;
   const unyieldingDamageMult = lowHpRatio <= 0.35 ? ([1, 1.12, 1.24, 1.40][unyieldingLevel] || 1) : 1;
   const arcSpan = (player.warriorSpin || hasBladestorm) ? Math.PI * 2 : Phaser.Math.DegToRad(arcDegByLevel[arcLevel] || 90);
+  const isFullCircle = arcSpan >= (Math.PI * 2 - 0.001);
   const start = -arcSpan / 2;
   const end = arcSpan / 2;
-  const yScale = Phaser.Math.Clamp(scene.slashEllipseYScale ?? 0.78, 0.55, 0.95);
+  const yScale = isFullCircle ? 1 : Phaser.Math.Clamp(scene.slashEllipseYScale ?? 0.78, 0.55, 0.95);
 
   const rawRange = scene.getWarriorSenseRange?.() || scene.meleeRange || player.warriorRange || 220;
   const hitRange = Phaser.Math.Clamp(rawRange, 46, 420);
   const hitRadius = hitRange;
 
-  // 计算弧形碰撞采样点
-  const arcSamples = [];
-  const ringRadii = (player.warriorSpin || hasBladestorm)
-    ? [hitRadius * 0.35, hitRadius * 0.70, hitRadius]
-    : [hitRadius * 0.45, hitRadius * 0.72, hitRadius];
-  const sampleCount = (player.warriorSpin || hasBladestorm) ? 22 : 18;
+  // 计算弧形碰撞采样点；满圆时直接退化为整圆区域判定，保证范围圈内全部生效。
+  let arcSamples = null;
+  if (!isFullCircle) {
+    arcSamples = [];
+    const ringRadii = (player.warriorSpin || hasBladestorm)
+      ? [hitRadius * 0.35, hitRadius * 0.70, hitRadius]
+      : [hitRadius * 0.45, hitRadius * 0.72, hitRadius];
+    const sampleCount = (player.warriorSpin || hasBladestorm) ? 22 : 18;
 
-  for (let r = 0; r < ringRadii.length; r++) {
-    const rr = ringRadii[r];
-    for (let s = 0; s < sampleCount; s++) {
-      const t = sampleCount === 1 ? 0.5 : (s / (sampleCount - 1));
-      const phi = Phaser.Math.Linear(start, end, t);
-      const p = ellipsePoint(phi, rr, yScale);
-      arcSamples.push({ x: p.x, y: p.y });
+    for (let r = 0; r < ringRadii.length; r++) {
+      const rr = ringRadii[r];
+      for (let s = 0; s < sampleCount; s++) {
+        const t = sampleCount === 1 ? 0.5 : (s / (sampleCount - 1));
+        const phi = Phaser.Math.Linear(start, end, t);
+        const p = ellipsePoint(phi, rr, yScale);
+        arcSamples.push({ x: p.x, y: p.y });
+      }
     }
   }
 
@@ -288,7 +292,7 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
     player.x, player.y,
     scheme.coreBright,
     {
-      radius: 14,
+      radius: isFullCircle ? hitRadius : 14,
       damage: Math.max(1, Math.round((player.bulletDamage || 34) * (1.05 + bladestormLevel * 0.14) * warriorDamageMult * unyieldingDamageMult)),
       alpha: 0.001,
       maxLifeMs: 140,
@@ -300,9 +304,11 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
       tags: ['warrior_melee'],
       flags: {
         followPlayer: true,
-        hitShape: 'arcSamples',
-        arcSampleRadius: (player.warriorSpin || hasBladestorm) ? 14 : 18,
-        arcSamples,
+        ...(isFullCircle ? {} : {
+          hitShape: 'arcSamples',
+          arcSampleRadius: (player.warriorSpin || hasBladestorm) ? 14 : 18,
+          arcSamples,
+        }),
         visualCoreColor: scheme.coreBright,
         visualAccentColor: scheme.coreColor,
       }
