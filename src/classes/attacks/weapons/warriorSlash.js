@@ -19,13 +19,6 @@ function getWarriorScheme(player) {
   };
 }
 
-/**
- * 椭圆采样点（用于弧形命中判定）
- */
-function ellipsePoint(phi, r, yScale) {
-  return { x: Math.cos(phi) * r, y: Math.sin(phi) * r * yScale };
-}
-
 function wrapAngle(angle) {
   let value = angle;
   while (value <= -Math.PI) value += Math.PI * 2;
@@ -239,11 +232,13 @@ function spawnSlashAfterimage(scene, scheme, geom, x, y, rotation, swingDir, dep
 //  spawnWarriorMeleeHit —— 近战 / 旋风斩命中判定
 // ═════════════════════════════════════════════
 
-export function spawnWarriorMeleeHit(scene, facingAngle) {
+export function spawnWarriorMeleeHit(scene, facingAngle, opts = {}) {
   const player = scene.player;
   if (!player) return;
 
   const angle = (typeof facingAngle === 'number') ? facingAngle : -Math.PI / 2;
+  const swingDir = opts.swingDir >= 0 ? 1 : -1;
+  const sweepDurationMs = Math.max(120, Math.round(Number(opts.durationMs || scene.slashSwingDuration || 420)));
 
   const scheme = getWarriorScheme(player);
   const enh = getBasicAttackEnhancements(player.mainCoreKey, player.offCoreKey);
@@ -266,49 +261,37 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   const rawRange = scene.getWarriorSenseRange?.() || scene.meleeRange || player.warriorRange || 220;
   const hitRange = Phaser.Math.Clamp(rawRange, 46, 420);
   const hitRadius = hitRange;
-
-  // 计算弧形碰撞采样点；满圆时直接退化为整圆区域判定，保证范围圈内全部生效。
-  let arcSamples = null;
-  if (!isFullCircle) {
-    arcSamples = [];
-    const ringRadii = (player.warriorSpin || hasBladestorm)
-      ? [hitRadius * 0.35, hitRadius * 0.70, hitRadius]
-      : [hitRadius * 0.45, hitRadius * 0.72, hitRadius];
-    const sampleCount = (player.warriorSpin || hasBladestorm) ? 22 : 18;
-
-    for (let r = 0; r < ringRadii.length; r++) {
-      const rr = ringRadii[r];
-      for (let s = 0; s < sampleCount; s++) {
-        const t = sampleCount === 1 ? 0.5 : (s / (sampleCount - 1));
-        const phi = Phaser.Math.Linear(start, end, t);
-        const p = ellipsePoint(phi, rr, yScale);
-        arcSamples.push({ x: p.x, y: p.y });
-      }
-    }
-  }
+  const sweepStartAngle = angle + (swingDir > 0 ? start : end);
+  const sweepEndAngle = angle + (swingDir > 0 ? end : start);
+  const sweepThickness = (player.warriorSpin || hasBladestorm) ? 18 : 16;
 
   // 通过 BulletCore 统一入口创建不可见区域子弹
   const bullet = scene.createManagedPlayerAreaBullet(
     player.x, player.y,
     scheme.coreBright,
     {
-      radius: isFullCircle ? hitRadius : 14,
+      radius: sweepThickness,
       damage: Math.max(1, Math.round((player.bulletDamage || 34) * (1.05 + bladestormLevel * 0.14) * warriorDamageMult * unyieldingDamageMult)),
       alpha: 0.001,
-      maxLifeMs: 140,
+      maxLifeMs: sweepDurationMs,
       pierce: true,
       maxHits: 99,
-      hitCooldownMs: 9999,
+      hitCooldownMs: Math.max(120, sweepDurationMs - 16),
       angleOffset: angle,
       depth: 4,
       tags: ['warrior_melee'],
       flags: {
         followPlayer: true,
-        ...(isFullCircle ? {} : {
-          hitShape: 'arcSamples',
-          arcSampleRadius: (player.warriorSpin || hasBladestorm) ? 14 : 18,
-          arcSamples,
-        }),
+        sweepLine: true,
+        sweepStartAngle,
+        sweepEndAngle,
+        sweepCurrentAngleRaw: sweepStartAngle,
+        sweepPrevAngleRaw: sweepStartAngle,
+        sweepRadius: hitRadius,
+        sweepThickness,
+        sweepCollisionStepRad: Phaser.Math.DegToRad(isFullCircle ? 10 : 6),
+        sweepStartAt: Number(scene.time?.now || 0),
+        sweepDurationMs,
         visualCoreColor: scheme.coreBright,
         visualAccentColor: scheme.coreColor,
       }
@@ -316,6 +299,7 @@ export function spawnWarriorMeleeHit(scene, facingAngle) {
   );
 
   if (!bullet) return;
+  bullet.rotation = sweepStartAngle;
   if (enh) applyEnhancementsToBullet(bullet, enh, scheme);
   player.bullets.push(bullet);
 }

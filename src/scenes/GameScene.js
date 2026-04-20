@@ -371,6 +371,7 @@ class GameScene extends Phaser.Scene {
       this.registry.remove('naturePetType');
       this.registry.remove('selectedTrees');
       this.registry.remove('skillTreeLevels');
+      this.registry.set('buildLevelUps', 0);
     }
 
     // 可暂停的"局内逻辑时钟"（用于物品冷却等需要在菜单暂停的节奏）
@@ -546,6 +547,7 @@ class GameScene extends Phaser.Scene {
 
     const currentLevelUpOffer = this.getCurrentLevelUpOffer?.() || null;
     const pendingLevelUpPoints = this.getPendingLevelUpPoints?.() || 0;
+    const levelUps = Math.max(0, Number(this.buildState?.levelUps ?? this.registry?.get?.('buildLevelUps') ?? 0));
     const runConsumables = this.getRunConsumableSnapshot();
     const levelUp = (pendingLevelUpPoints > 0 || currentLevelUpOffer)
       ? {
@@ -563,6 +565,7 @@ class GameScene extends Phaser.Scene {
     return {
       selectedTrees,
       skillTreeLevels,
+      levelUps,
       mainCore,
       offFaction,
       naturePetType,

@@ -717,15 +717,40 @@ export function applyLevelProgressionMixin(GameScene) {
       return mode === 'low' ? 0.7 : 1;
     },
 
+    getEnemyMoveSpeedMultiplier(stage, { isElite = false, resolvedType = 'chaser' } = {}) {
+      const s = Math.max(1, Math.floor(Number(stage) || 1));
+      let mult = 1;
+
+      if (s <= 1) mult = isElite ? 0.82 : 0.76;
+      else if (s === 2) mult = isElite ? 0.88 : 0.84;
+      else if (s === 3) mult = isElite ? 0.94 : 0.92;
+      else if (s >= 6) mult = isElite ? 1.05 : 1.02;
+
+      if (resolvedType === 'charger') {
+        mult *= s <= 2 ? 0.92 : (s === 3 ? 0.96 : 1);
+      } else if (resolvedType === 'ring_shooter') {
+        mult *= s <= 2 ? 0.95 : 1;
+      }
+
+      return mult;
+    },
+
     buildMinionRuntimeConfig(def, stage, waveIndex, point) {
       const balance = getStageBalance(stage);
       const resolvedType = resolveDirectedMinionType(def?.moveType, waveIndex, stage);
       const baseMoveSpeed = balance.minions.speed[def?.moveType] ?? balance.minions.speed.chaser;
-      const resolvedMoveSpeed = resolvedType === 'charger'
+      const rawResolvedMoveSpeed = resolvedType === 'charger'
         ? Math.max(baseMoveSpeed + 34, Math.round(balance.minions.speed.chaser * 1.9))
         : (resolvedType === 'ring_shooter'
           ? Math.max(baseMoveSpeed + 18, Math.round(balance.minions.speed.chaser * 1.28))
           : Math.max(baseMoveSpeed + 24, Math.round(balance.minions.speed.chaser * 1.55)));
+      const moveSpeed = Math.max(
+        Math.round(baseMoveSpeed * 0.9),
+        Math.round(rawResolvedMoveSpeed * this.getEnemyMoveSpeedMultiplier(stage, { resolvedType }))
+      );
+      const chargeSpeed = resolvedType === 'charger'
+        ? Math.round((stage <= 1 ? 320 : (stage === 2 ? 340 : (stage === 3 ? 360 : 380))) * this.getEnemyMoveSpeedMultiplier(stage, { resolvedType }))
+        : undefined;
       const packRole = resolvedType === 'charger'
         ? 'diver'
         : (resolvedType === 'ring_shooter'
@@ -740,13 +765,13 @@ export function applyLevelProgressionMixin(GameScene) {
         hp: Math.max(8, Math.round(balance.minions.hp * this.getEnemyHpMultiplier())),
         size: getRoleSize('minion'),
         color: def?.color,
-        moveSpeed: resolvedMoveSpeed,
+        moveSpeed,
         contactDamage: balance.minions.contactDamage,
         expReward: Math.max(1, Math.round(balance.minions.exp || 1)),
         isElite: false,
         aggroOnSeen: false,
         spawnProtectedUntilVisible: true,
-        aggroRampMs: Math.max(180, Math.round(BALANCE_CONSTANTS.aggro.rampMs * 0.5)),
+        aggroRampMs: Math.max(220, Math.round(BALANCE_CONSTANTS.aggro.rampMs * (stage <= 2 ? 0.72 : 0.58))),
         aggroRadius: 680,
         shootRange: resolvedType === 'ring_shooter' ? 240 : undefined,
         shootCdMs: resolvedType === 'ring_shooter' ? Math.max(1500, balance.minions.projectiles.cdMs + 480) : undefined,
@@ -758,7 +783,7 @@ export function applyLevelProgressionMixin(GameScene) {
         shootBulletDamage: resolvedType === 'ring_shooter' ? Math.max(1, Math.round(balance.minions.projectiles.damage * 0.85)) : undefined,
         chargeRange: resolvedType === 'charger' ? 155 : undefined,
         chargeDamage: resolvedType === 'charger' ? Math.max(1, Math.round(balance.minions.contactDamage * 1.25)) : undefined,
-        chargeSpeed: resolvedType === 'charger' ? 380 : undefined,
+        chargeSpeed,
         packRole,
         packIndex: waveIndex,
         flankSign: waveIndex % 2 === 0 ? 1 : -1,
@@ -776,11 +801,18 @@ export function applyLevelProgressionMixin(GameScene) {
         ? 'ring_shooter'
         : (eliteIndex % 2 === 0 ? 'charger' : 'chaser');
       const baseMoveSpeed = balance.elites.speed[def?.moveType] ?? balance.elites.speed.chaser;
-      const resolvedMoveSpeed = resolvedEliteType === 'charger'
+      const rawResolvedMoveSpeed = resolvedEliteType === 'charger'
         ? Math.max(baseMoveSpeed + 36, Math.round(balance.elites.speed.chaser * 1.95))
         : (resolvedEliteType === 'ring_shooter'
           ? Math.max(baseMoveSpeed + 18, Math.round(balance.elites.speed.chaser * 1.34))
           : Math.max(baseMoveSpeed + 26, Math.round(balance.elites.speed.chaser * 1.62)));
+      const moveSpeed = Math.max(
+        Math.round(baseMoveSpeed * 0.92),
+        Math.round(rawResolvedMoveSpeed * this.getEnemyMoveSpeedMultiplier(stage, { isElite: true, resolvedType: resolvedEliteType }))
+      );
+      const chargeSpeed = resolvedEliteType === 'charger'
+        ? Math.round((stage <= 1 ? 350 : (stage === 2 ? 370 : (stage === 3 ? 395 : 430))) * this.getEnemyMoveSpeedMultiplier(stage, { isElite: true, resolvedType: resolvedEliteType }))
+        : undefined;
       const eliteAffixes = rollEliteAffixes({
         stage,
         role: resolvedEliteType
@@ -797,14 +829,14 @@ export function applyLevelProgressionMixin(GameScene) {
         hp: Math.max(18, Math.round(balance.elites.hp * hpMult)),
         size: getRoleSize('elite'),
         color: def?.color,
-        moveSpeed: resolvedMoveSpeed,
+        moveSpeed,
         contactDamage: balance.elites.contactDamage,
         expReward: Math.max(1, Math.round(balance.elites.exp || 1)),
         isElite: true,
         eliteAffixes,
         aggroOnSeen: false,
         spawnProtectedUntilVisible: true,
-        aggroRampMs: Math.max(180, Math.round(BALANCE_CONSTANTS.aggro.rampMs * 0.45)),
+        aggroRampMs: Math.max(220, Math.round(BALANCE_CONSTANTS.aggro.rampMs * (stage <= 2 ? 0.68 : 0.52))),
         aggroRadius: 760,
         shootRange: def?.moveType === 'shooter' ? 260 : undefined,
         shootCdMs: def?.moveType === 'shooter' ? Math.max(1400, balance.elites.projectiles.cdMs + 260) : undefined,
@@ -816,7 +848,7 @@ export function applyLevelProgressionMixin(GameScene) {
         shootBulletDamage: def?.moveType === 'shooter' ? Math.max(1, Math.round(balance.elites.projectiles.damage * 0.9)) : undefined,
         chargeRange: def?.moveType === 'chaser' ? 178 : undefined,
         chargeDamage: def?.moveType === 'chaser' ? Math.max(1, Math.round(balance.elites.contactDamage * 1.35)) : undefined,
-        chargeSpeed: def?.moveType === 'chaser' ? 430 : undefined,
+        chargeSpeed,
         packRole,
         packIndex: eliteIndex,
         flankSign: eliteIndex % 2 === 0 ? 1 : -1,

@@ -14,12 +14,15 @@ export default class BuildTreeScene extends Phaser.Scene {
 
   getUiSnapshot() {
     const gameScene = this.scene?.get?.(this.returnSceneKey);
+    const syncedLevelUps = this.registry.get('buildLevelUps');
+    const rawLevelUps = gameScene?.buildState?.levelUps ?? syncedLevelUps ?? 0;
+    const levelUps = Math.max(0, Number(rawLevelUps || 0));
     return {
       selectedTrees: this.selectedTrees || [],
       skillTreeLevels: this.skillTreeLevels || {},
       mainCore: this.registry.get('mainCore') || null,
       offFaction: this.registry.get('offFaction') || null,
-      levelUps: Math.max(0, Number(gameScene?.buildState?.levelUps || 0))
+      levelUps
     };
   }
 

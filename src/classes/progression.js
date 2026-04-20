@@ -1,5 +1,5 @@
 import { getTreeIdForSkill, getMaxLevel, normalizeSkillId } from './talentTrees';
-import { normalizeCoreKey } from './classDefs';
+import { CORE_UPGRADE_IDS, normalizeCoreKey } from './classDefs';
 
 export function migrateLegacyProgressionRegistry(registry) {
   if (!registry?.get || !registry?.set) return false;
@@ -29,6 +29,12 @@ export function migrateLegacyProgressionRegistry(registry) {
   const selectedTrees = registry.get('selectedTrees') || [];
   if (Array.isArray(selectedTrees) && selectedTrees.includes('curse')) {
     registry.set('selectedTrees', selectedTrees.map((treeId) => (treeId === 'curse' ? 'summon' : treeId)));
+    changed = true;
+  }
+
+  const normalizedSelectedTrees = registry.get('selectedTrees') || [];
+  if (normalizedMainCore && Array.isArray(normalizedSelectedTrees) && !normalizedSelectedTrees.includes(normalizedMainCore) && normalizedSelectedTrees.length < 2) {
+    registry.set('selectedTrees', [...normalizedSelectedTrees, normalizedMainCore]);
     changed = true;
   }
 
@@ -143,6 +149,15 @@ export function migrateLegacyProgressionRegistry(registry) {
   if (levelMapChanged) {
     registry.set('skillTreeLevels', migratedSkillTreeLevels);
     changed = true;
+  }
+
+  if (normalizedMainCore) {
+    const coreUpgradeId = CORE_UPGRADE_IDS[normalizedMainCore] || null;
+    if (coreUpgradeId && !(Number(migratedSkillTreeLevels[coreUpgradeId]) > 0)) {
+      migratedSkillTreeLevels[coreUpgradeId] = 1;
+      registry.set('skillTreeLevels', migratedSkillTreeLevels);
+      changed = true;
+    }
   }
 
   return changed;

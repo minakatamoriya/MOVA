@@ -101,6 +101,58 @@ export default class CollisionManager {
     this.getBulletCore()?.notifyHit?.(payload);
   }
 
+  getTargetRadius(target) {
+    if (!target) return 0;
+    return Number.isFinite(Number(target.bossSize)) ? Number(target.bossSize) : (Number(target.radius) || Number(target.hitRadius) || 16);
+  }
+
+  getClosestPointOnSegment(ax, ay, bx, by, px, py) {
+    const abx = bx - ax;
+    const aby = by - ay;
+    const abLenSq = (abx * abx) + (aby * aby);
+    if (abLenSq <= 0.0001) {
+      return { x: ax, y: ay };
+    }
+
+    const apx = px - ax;
+    const apy = py - ay;
+    const t = Phaser.Math.Clamp(((apx * abx) + (apy * aby)) / abLenSq, 0, 1);
+    return {
+      x: ax + abx * t,
+      y: ay + aby * t
+    };
+  }
+
+  getSweepLineHitPoint(bullet, target) {
+    if (!bullet?.sweepLine || !target) return null;
+
+    const startRaw = Number.isFinite(Number(bullet.sweepPrevAngleRaw))
+      ? Number(bullet.sweepPrevAngleRaw)
+      : Number(bullet.sweepCurrentAngleRaw || bullet.rotation || 0);
+    const endRaw = Number.isFinite(Number(bullet.sweepCurrentAngleRaw))
+      ? Number(bullet.sweepCurrentAngleRaw)
+      : startRaw;
+    const radius = Math.max(1, Number(bullet.sweepRadius || bullet.radius || 1));
+    const thickness = Math.max(1, Number(bullet.sweepThickness || bullet.radius || 4));
+    const stepRad = Math.max(Phaser.Math.DegToRad(2), Number(bullet.sweepCollisionStepRad || Phaser.Math.DegToRad(6)));
+    const targetRadius = this.getTargetRadius(target);
+    const delta = Math.abs(endRaw - startRaw);
+    const steps = Math.max(1, Math.ceil(delta / stepRad));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 1 : (i / steps);
+      const angle = Phaser.Math.Linear(startRaw, endRaw, t);
+      const endX = bullet.x + Math.cos(angle) * radius;
+      const endY = bullet.y + Math.sin(angle) * radius;
+      const closest = this.getClosestPointOnSegment(bullet.x, bullet.y, endX, endY, target.x, target.y);
+      if (this.circleCollision(closest.x, closest.y, thickness, target.x, target.y, targetRadius)) {
+        return closest;
+      }
+    }
+
+    return null;
+  }
+
   // 统一销毁出口：CollisionManager 不再直接决定走哪套 manager。
   destroyManagedBullet(bullet, side, reason = 'hit') {
     if (!bullet) return;
@@ -287,7 +339,14 @@ export default class CollisionManager {
         let hitX = bullet.x;
         let hitY = bullet.y;
 
-        if (Array.isArray(bullet.arcSamples) && bullet.arcSamples.length > 0) {
+        if (bullet.sweepLine) {
+          const sweepHit = this.getSweepLineHitPoint(bullet, enemy);
+          if (sweepHit) {
+            collided = true;
+            hitX = sweepHit.x;
+            hitY = sweepHit.y;
+          }
+        } else if (Array.isArray(bullet.arcSamples) && bullet.arcSamples.length > 0) {
           const rot = bullet.rotation || 0;
           const cosR = Math.cos(rot);
           const sinR = Math.sin(rot);
@@ -407,8 +466,15 @@ export default class CollisionManager {
       let hitX = bullet.x;
       let hitY = bullet.y;
 
-      // 特殊形状：弧段采样点碰撞（用于半月斩等“弧形边缘”）
-      if (Array.isArray(bullet.arcSamples) && bullet.arcSamples.length > 0) {
+      // 特殊形状：旋转扫线/弧段采样点碰撞
+      if (bullet.sweepLine) {
+        const sweepHit = this.getSweepLineHitPoint(bullet, boss);
+        if (sweepHit) {
+          collided = true;
+          hitX = sweepHit.x;
+          hitY = sweepHit.y;
+        }
+      } else if (Array.isArray(bullet.arcSamples) && bullet.arcSamples.length > 0) {
         const rot = bullet.rotation || 0;
         const cosR = Math.cos(rot);
         const sinR = Math.sin(rot);

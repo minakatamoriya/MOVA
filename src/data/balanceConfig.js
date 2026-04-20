@@ -42,7 +42,7 @@ const STAGE_OVERRIDES = {
     minions: {
       countMin: 34,
       countMax: 40,
-      hp: 30,
+      hp: 20,
       exp: 12,
       speed: { chaser: 60, shooter: 52, patrol: 40, static: 0 },
       contactDamage: 6,
@@ -58,7 +58,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 1,
       countMax: 1,
-      hp: 120,
+      hp: 84,
       exp: 90,
       speed: { chaser: 55, shooter: 50, patrol: 42, static: 0 },
       contactDamage: 10,
@@ -81,7 +81,7 @@ const STAGE_OVERRIDES = {
     minions: {
       countMin: 38,
       countMax: 44,
-      hp: 40,
+      hp: 28,
       exp: 14,
       speed: { chaser: 66, shooter: 55, patrol: 42, static: 0 },
       contactDamage: 7,
@@ -97,7 +97,7 @@ const STAGE_OVERRIDES = {
     elites: {
       countMin: 2,
       countMax: 2,
-      hp: 165,
+      hp: 118,
       exp: 110,
       speed: { chaser: 60, shooter: 52, patrol: 45, static: 0 },
       contactDamage: 12,
@@ -118,10 +118,10 @@ const STAGE_OVERRIDES = {
 
   3: {
     minions: {
-      hp: 52,
+      hp: 36,
     },
     elites: {
-      hp: 210,
+      hp: 154,
     },
     boss: {
       hp: 400,
@@ -178,7 +178,7 @@ export function getStageBalance(stage) {
     minions: {
       countMin: scaleStageValue(base.minions.countMin, s, 1.04, 24),
       countMax: scaleStageValue(base.minions.countMax, s, 1.04, 28),
-      hp: scaleStageValue(base.minions.hp, s, 1.12, 40),
+      hp: scaleStageValue(base.minions.hp, s, 1.08, 20),
       exp: scaleStageValue(base.minions.exp, s, 1.08, 6),
       speed: { ...base.minions.speed },
       contactDamage: scaleStageValue(base.minions.contactDamage, s, 1.10, 1),
@@ -195,7 +195,7 @@ export function getStageBalance(stage) {
     elites: {
       countMin: scaleStageValue(base.elites.countMin, s, 1.02, 1),
       countMax: scaleStageValue(base.elites.countMax, s, 1.02, 1),
-      hp: scaleStageValue(base.elites.hp, s, 1.12, 80),
+      hp: scaleStageValue(base.elites.hp, s, 1.09, 84),
       exp: scaleStageValue(base.elites.exp, s, 1.08, 20),
       speed: { ...base.elites.speed },
       contactDamage: scaleStageValue(base.elites.contactDamage, s, 1.10, 1),

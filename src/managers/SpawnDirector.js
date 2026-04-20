@@ -32,11 +32,12 @@ export default class SpawnDirector {
       bossDef: config.bossDef || null,
       totalBudget,
       spawnedTotal: 0,
+      reinforcementSpawned: 0,
       eliteTotal,
       eliteSpawned: 0,
       eliteConcurrentMax: Math.max(1, Math.round(Number(config.eliteConcurrentMax) || 1)),
-      eliteFirstProgress: Phaser.Math.Clamp(Number(config.eliteFirstProgress) || 0.34, 0.08, 0.95),
-      eliteProgressStep: Phaser.Math.Clamp(Number(config.eliteProgressStep) || 0.22, 0.05, 0.4),
+      eliteFirstProgress: Phaser.Math.Clamp(Number(config.eliteFirstProgress) || 0.28, 0.08, 0.95),
+      eliteProgressStep: Phaser.Math.Clamp(Number(config.eliteProgressStep) || 0.18, 0.05, 0.4),
       eliteInitialDelayMs: Math.max(1200, Math.round(Number(config.eliteInitialDelayMs) || 12000)),
       eliteIntervalMs: Math.max(1200, Math.round(Number(config.eliteIntervalMs) || 16000)),
       nextEliteAt: now + Math.max(1200, Math.round(Number(config.eliteInitialDelayMs) || 12000)),
@@ -45,14 +46,14 @@ export default class SpawnDirector {
       bossSpawned: false,
       initialAlive,
       maxAlive,
-      aliveRampMs: Math.max(1200, Math.round(Number(config.aliveRampMs) || 6500)),
-      aliveStep: Math.max(1, Math.round(Number(config.aliveStep) || 2)),
-      burstMin: Math.max(1, Math.round(Number(config.burstMin) || 3)),
-      burstMax: Math.max(1, Math.round(Number(config.burstMax) || 5)),
-      burstIntervalMs: Math.max(500, Math.round(Number(config.burstIntervalMs) || 1650)),
-      minBurstIntervalMs: Math.max(360, Math.round(Number(config.minBurstIntervalMs) || 1000)),
+      aliveRampMs: Math.max(900, Math.round(Number(config.aliveRampMs) || 4200)),
+      aliveStep: Math.max(1, Math.round(Number(config.aliveStep) || 3)),
+      burstMin: Math.max(1, Math.round(Number(config.burstMin) || 4)),
+      burstMax: Math.max(1, Math.round(Number(config.burstMax) || 7)),
+      burstIntervalMs: Math.max(360, Math.round(Number(config.burstIntervalMs) || 980)),
+      minBurstIntervalMs: Math.max(220, Math.round(Number(config.minBurstIntervalMs) || 520)),
       burstIntervalDecayMs: Math.max(0, Math.round(Number(config.burstIntervalDecayMs) || 70)),
-      safeSideDurationMs: Math.max(1800, Math.round(Number(config.safeSideDurationMs) || 4200)),
+      safeSideDurationMs: Math.max(900, Math.round(Number(config.safeSideDurationMs) || 1800)),
       offscreenPad: Math.max(72, Math.round(Number(config.offscreenPad) || 180)),
       edgeInset: Math.max(32, Math.round(Number(config.edgeInset) || 72)),
       laneInset: Math.max(36, Math.round(Number(config.laneInset) || 120)),
@@ -67,10 +68,17 @@ export default class SpawnDirector {
       clusterRadius: Math.max(28, Math.round(Number(config.clusterRadius) || 74)),
       clusterDepthJitter: Math.max(18, Math.round(Number(config.clusterDepthJitter) || 42)),
       maxClusterSides: Math.max(1, Math.round(Number(config.maxClusterSides) || 1)),
-      earlyCycleMs: Math.max(6000, Math.round(Number(config.earlyCycleMs) || 12000)),
-      earlySurgeMs: Math.max(3200, Math.round(Number(config.earlySurgeMs) || 7000)),
-      lateCycleMs: Math.max(4800, Math.round(Number(config.lateCycleMs) || 9000)),
-      lateSurgeMs: Math.max(2800, Math.round(Number(config.lateSurgeMs) || 6200)),
+      reinforcementAliveFloor: Math.max(
+        5,
+        Math.round(Number(config.reinforcementAliveFloor) || Math.max(8, Math.min(maxAlive - 2, initialAlive * 0.9)))
+      ),
+      reinforcementBurstMin: Math.max(1, Math.round(Number(config.reinforcementBurstMin) || 3)),
+      reinforcementBurstMax: Math.max(1, Math.round(Number(config.reinforcementBurstMax) || 5)),
+      reinforcementIntervalScale: Phaser.Math.Clamp(Number(config.reinforcementIntervalScale) || 0.68, 0.45, 1.2),
+      earlyCycleMs: Math.max(4200, Math.round(Number(config.earlyCycleMs) || 7200)),
+      earlySurgeMs: Math.max(2600, Math.round(Number(config.earlySurgeMs) || 5600)),
+      lateCycleMs: Math.max(3600, Math.round(Number(config.lateCycleMs) || 5400)),
+      lateSurgeMs: Math.max(2200, Math.round(Number(config.lateSurgeMs) || 4200)),
     };
 
     this.refreshSafeSide(now, true);
@@ -110,24 +118,41 @@ export default class SpawnDirector {
 
     this.trySpawnElite(now);
 
-    if ((state.minionDefs || []).length === 0 || state.spawnedTotal >= state.totalBudget) {
+    if ((state.minionDefs || []).length === 0) {
       return;
     }
 
     if (now < state.nextBurstAt) return;
 
     const pacing = this.getPacingProfile(now);
+    const activeElites = this.countActiveDirectedElites();
+    const reinforcementMode = this.shouldSpawnReinforcements(activeElites);
+    if (!reinforcementMode && state.spawnedTotal >= state.totalBudget) {
+      return;
+    }
+
     const aliveMinions = this.countActiveDirectedMinions();
-    const targetAlive = this.getTargetAliveCount(now);
+    const targetAlive = reinforcementMode
+      ? this.getReinforcementTargetAlive(now, activeElites)
+      : this.getTargetAliveCount(now);
     if (aliveMinions >= targetAlive) {
-      const idleDelay = pacing.isSurge ? 120 : 180;
-      state.nextBurstAt = now + Math.min(idleDelay, Math.round(state.burstIntervalMs * (pacing.isSurge ? 0.12 : 0.18)));
+      const idleDelay = reinforcementMode
+        ? (pacing.isSurge ? 60 : 90)
+        : (pacing.isSurge ? 80 : 120);
+      const idleScale = reinforcementMode
+        ? state.reinforcementIntervalScale * 0.18
+        : (pacing.isSurge ? 0.12 : 0.18);
+      state.nextBurstAt = now + Math.min(idleDelay, Math.round(state.burstIntervalMs * idleScale));
       return;
     }
 
     const remainingBudget = Math.max(0, state.totalBudget - state.spawnedTotal);
-    const burstLimit = Math.max(1, this.getBurstLimit(now));
-    const spawnCount = Math.min(remainingBudget, targetAlive - aliveMinions, burstLimit);
+    const burstLimit = reinforcementMode
+      ? Math.max(1, this.getReinforcementBurstLimit(now, activeElites))
+      : Math.max(1, this.getBurstLimit(now));
+    const spawnCount = reinforcementMode
+      ? Math.min(targetAlive - aliveMinions, burstLimit)
+      : Math.min(remainingBudget, targetAlive - aliveMinions, burstLimit);
     if (spawnCount <= 0) return;
 
     const clusterSeeds = this.buildClusterSeeds(spawnCount, now);
@@ -148,29 +173,69 @@ export default class SpawnDirector {
       state.spawnCursor += 1;
       if (!def) continue;
 
+      const waveIndex = reinforcementMode
+        ? (state.totalBudget + state.reinforcementSpawned)
+        : state.spawnedTotal;
       const minion = scene.spawnDirectedMinion?.({
         mapId: state.mapId,
         stage: state.stage,
         point,
         def,
-        waveIndex: state.spawnedTotal,
+        waveIndex,
       }) || null;
       if (!minion) continue;
 
       minion.spawnDirectorWave = true;
-      state.spawnedTotal += 1;
+      if (!reinforcementMode) {
+        state.spawnedTotal += 1;
+      } else {
+        state.reinforcementSpawned += 1;
+      }
       spawnedThisBurst += 1;
     }
 
     state.burstIndex += 1;
     const nextInterval = Math.max(
       state.minBurstIntervalMs,
-      Math.round((state.burstIntervalMs - (state.burstIndex * state.burstIntervalDecayMs)) * pacing.intervalMult)
+      Math.round(
+        (state.burstIntervalMs - (state.burstIndex * state.burstIntervalDecayMs))
+        * pacing.intervalMult
+        * (reinforcementMode ? state.reinforcementIntervalScale : 1)
+      )
     );
     state.nextBurstAt = now + nextInterval;
     if (spawnedThisBurst <= 0) {
-      state.nextBurstAt = now + (pacing.isSurge ? 160 : 260);
+      state.nextBurstAt = now + (reinforcementMode ? (pacing.isSurge ? 90 : 120) : (pacing.isSurge ? 120 : 180));
     }
+  }
+
+  shouldSpawnReinforcements(activeElites = 0) {
+    const state = this.state;
+    if (!state?.active) return false;
+    if (state.totalBudget <= 0 || state.spawnedTotal < state.totalBudget) return false;
+    if ((state.minionDefs || []).length <= 0) return false;
+
+    const elitesPending = state.eliteSpawned < state.eliteTotal;
+    return elitesPending || activeElites > 0;
+  }
+
+  getReinforcementTargetAlive(now, activeElites = 0) {
+    const state = this.state;
+    if (!state) return 0;
+
+    const pacing = this.getPacingProfile(now);
+    const elitePressureBonus = Math.min(4, Math.max(0, activeElites) * 2);
+    const target = state.reinforcementAliveFloor + elitePressureBonus + Math.max(0, pacing.targetBonus - 1);
+    return Math.min(Math.max(state.reinforcementAliveFloor, target), Math.max(state.reinforcementAliveFloor, state.maxAlive - 2));
+  }
+
+  getReinforcementBurstLimit(now, activeElites = 0) {
+    const state = this.state;
+    if (!state) return 1;
+
+    const pacing = this.getPacingProfile(now);
+    const maxBurst = Math.max(state.reinforcementBurstMin, state.reinforcementBurstMax + (activeElites > 0 ? 1 : 0));
+    return Phaser.Math.Between(state.reinforcementBurstMin, maxBurst) + Math.max(0, pacing.burstBonus - 1);
   }
 
   getPacingProfile(now) {
@@ -194,10 +259,10 @@ export default class SpawnDirector {
 
     return {
       isSurge,
-      targetBonus: isSurge ? (isLateGame ? 5 : 3) : (isLateGame ? 2 : 1),
-      burstBonus: isSurge ? (isLateGame ? 3 : 2) : 0,
-      intervalMult: isSurge ? (isLateGame ? 0.56 : 0.68) : (isLateGame ? 0.78 : 0.9),
-      clusterSideBonus: isSurge ? (isLateGame ? 2 : 1) : 1,
+      targetBonus: isSurge ? (isLateGame ? 7 : 5) : (isLateGame ? 4 : 3),
+      burstBonus: isSurge ? (isLateGame ? 4 : 3) : 1,
+      intervalMult: isSurge ? (isLateGame ? 0.42 : 0.54) : (isLateGame ? 0.62 : 0.74),
+      clusterSideBonus: isSurge ? (isLateGame ? 2 : 2) : 1,
     };
   }
 
@@ -318,13 +383,13 @@ export default class SpawnDirector {
     const elapsed = Math.max(0, Number(now || 0) - state.startedAt);
     let target = state.initialAlive;
 
-    if (elapsed >= 30000) {
+    if (elapsed >= 20000) {
       target += state.aliveStep * 2;
     }
-    if (elapsed >= 60000) {
+    if (elapsed >= 45000) {
       target += state.aliveStep * 3;
     }
-    if (elapsed >= 90000) {
+    if (elapsed >= 70000) {
       target += state.aliveStep * 2;
     }
 
@@ -339,14 +404,14 @@ export default class SpawnDirector {
     const state = this.state;
     if (!state) return 1;
     const elapsed = Math.max(0, Number(now || 0) - state.startedAt);
-    const earlyMax = Math.max(state.burstMin, state.burstMax - 2);
-    const midMax = Math.max(state.burstMin + 1, state.burstMax - 1);
+    const earlyMax = Math.max(state.burstMin + 1, state.burstMax - 1);
+    const midMax = Math.max(state.burstMin + 2, state.burstMax);
     const pacing = this.getPacingProfile(now);
 
-    if (elapsed < 30000) {
+    if (elapsed < 25000) {
       return Phaser.Math.Between(state.burstMin, earlyMax) + pacing.burstBonus;
     }
-    if (elapsed < 60000) {
+    if (elapsed < 55000) {
       return Phaser.Math.Between(state.burstMin + 1, midMax) + pacing.burstBonus;
     }
     return Phaser.Math.Between(Math.max(state.burstMin + 1, midMax), state.burstMax + 1) + pacing.burstBonus;
@@ -417,7 +482,7 @@ export default class SpawnDirector {
 
     const elapsed = Math.max(0, Number(now || 0) - state.startedAt);
     const pacing = this.getPacingProfile(now);
-    const baseSideCount = elapsed >= 60000 ? Math.min(3, state.maxClusterSides + 1, sides.length) : Math.min(2, sides.length);
+    const baseSideCount = elapsed >= 45000 ? Math.min(3, state.maxClusterSides + 1, sides.length) : Math.min(3, sides.length);
     const clusterSideCount = Math.max(1, Math.min(sides.length, baseSideCount + pacing.clusterSideBonus));
     const clusters = [];
 
@@ -477,32 +542,38 @@ export default class SpawnDirector {
       Math.round((pickSpawnCount(balance?.minions?.countMin, balance?.minions?.countMax) * 1.28) + stage * 2)
     );
     const eliteTotal = pickSpawnCount(balance?.elites?.countMin, balance?.elites?.countMax);
+    const initialAlive = Math.max(18, Math.min(28, Math.round(totalBudget * 0.56)));
+    const maxAlive = Math.max(36, Math.min(68, Math.round(totalBudget * 1.18)));
 
     return {
       stage,
       totalBudget,
       eliteTotal,
       eliteConcurrentMax: stage >= 5 ? 2 : 1,
-      eliteFirstProgress: stage >= 4 ? 0.20 : 0.28,
-      eliteProgressStep: stage >= 4 ? 0.15 : 0.18,
-      eliteInitialDelayMs: Math.max(4200, 9000 - stage * 700),
-      eliteIntervalMs: Math.max(4800, 10800 - stage * 520),
+      eliteFirstProgress: stage >= 4 ? 0.16 : 0.22,
+      eliteProgressStep: stage >= 4 ? 0.12 : 0.15,
+      eliteInitialDelayMs: Math.max(3200, 6800 - stage * 520),
+      eliteIntervalMs: Math.max(3600, 7600 - stage * 420),
       bossDelayMs: 1400,
-      initialAlive: Math.max(14, Math.min(22, Math.round(totalBudget * 0.42))),
-      maxAlive: Math.max(30, Math.min(56, Math.round(totalBudget * 0.98))),
-      aliveRampMs: Math.max(1200, 3600 - stage * 140),
-      aliveStep: stage >= 4 ? 5 : 4,
-      burstMin: stage >= 4 ? 6 : 5,
-      burstMax: stage >= 4 ? 11 : 9,
-      burstIntervalMs: Math.max(560, 980 - stage * 55),
-      minBurstIntervalMs: 320,
+      initialAlive,
+      maxAlive,
+      aliveRampMs: Math.max(900, 2400 - stage * 110),
+      aliveStep: stage >= 4 ? 6 : 5,
+      burstMin: stage >= 4 ? 7 : 6,
+      burstMax: stage >= 4 ? 13 : 11,
+      reinforcementAliveFloor: Math.max(10, Math.min(maxAlive - 3, Math.round(initialAlive * 0.96))),
+      reinforcementBurstMin: stage >= 4 ? 4 : 3,
+      reinforcementBurstMax: stage >= 4 ? 7 : 6,
+      reinforcementIntervalScale: stage >= 4 ? 0.6 : 0.68,
+      burstIntervalMs: Math.max(420, 760 - stage * 42),
+      minBurstIntervalMs: 240,
       burstIntervalDecayMs: 64,
-      initialDelayMs: 280,
-      safeSideDurationMs: 1500,
-      earlyCycleMs: 9000,
-      earlySurgeMs: 7000,
-      lateCycleMs: 7200,
-      lateSurgeMs: 6000,
+      initialDelayMs: 120,
+      safeSideDurationMs: 1000,
+      earlyCycleMs: 6800,
+      earlySurgeMs: 5200,
+      lateCycleMs: 5000,
+      lateSurgeMs: 3900,
       offscreenPad: Math.max(110, Math.round(cellSize * 1.08)),
       edgeInset: Math.max(52, Math.round(cellSize * 0.55)),
       laneInset: Math.max(72, Math.round(cellSize * 0.78)),
@@ -510,7 +581,7 @@ export default class SpawnDirector {
       jitter: Math.max(10, Math.round(cellSize * 0.12)),
       clusterRadius: Math.max(46, Math.round(cellSize * 0.58)),
       clusterDepthJitter: Math.max(26, Math.round(cellSize * 0.34)),
-      maxClusterSides: stage >= 4 ? 4 : 3,
+      maxClusterSides: 4,
     };
   }
 }

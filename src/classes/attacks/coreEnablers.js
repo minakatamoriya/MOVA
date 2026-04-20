@@ -1,4 +1,5 @@
 import { normalizeCoreKey } from '../classDefs';
+import { recordSkillTreeProgress } from '../progression';
 
 // 将“职业核心”启用逻辑集中管理（GameScene 只负责调用）
 
@@ -36,6 +37,12 @@ export function applyCoreUpgrade(scene, coreUpgradeId) {
   if (scene.registry) scene.registry.set('mainCore', pickedCore);
   if (scene.player?.setMainCoreAttack) scene.player.setMainCoreAttack(pickedCore);
   if (scene.player) scene.player.canFire = true;
+  if (scene.registry) {
+    const skillTreeLevels = scene.registry.get('skillTreeLevels') || {};
+    if (!((Number(skillTreeLevels[coreUpgradeId]) || 0) > 0)) {
+      recordSkillTreeProgress(scene.registry, { id: coreUpgradeId, category: 'build' });
+    }
+  }
 
   // 战士：启用近战月牙斩基础攻击系统（以前的风刃代码保留，供后续回旋斩扩展）
   if (pickedCore === 'warrior' && typeof scene.enableWarriorBuild === 'function') {

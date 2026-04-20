@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import FormalBossBase from './FormalBossBase';
 import {
   clampWorldPoint,
+  damageTarget,
   destroyDisplayObject,
   distanceBetween,
   getTargetPoint,
@@ -211,8 +212,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
         const point = getTargetPoint(target);
         const hitRadius = star.radius + (point?.radius || 0);
         if (point && distanceBetween(star.x, star.y, point.x, point.y) <= hitRadius) {
-          target.takeDamage(star.damage);
-          this.scene?.createHitEffect?.(point.x, point.y, colors.core);
+          damageTarget(target, star.damage, this.scene, point.x, point.y, colors.core);
           star.tickAt = now + 240;
         }
       }
@@ -250,8 +250,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
       if (isReal && target?.active && target.isAlive !== false && now >= hazard.tickAt) {
         const point = getTargetPoint(target);
         if (point && distanceBetween(hazard.x, hazard.y, point.x, point.y) <= (hazard.radius + point.radius)) {
-          target.takeDamage(hazard.damage);
-          this.scene?.createHitEffect?.(point.x, point.y, colors.core);
+          damageTarget(target, hazard.damage, this.scene, point.x, point.y, colors.core);
           hazard.tickAt = now + 320;
         }
       }

@@ -3,7 +3,6 @@ import { uiBus } from './bus';
 import { useUiStore } from './store';
 import { TREE_DEFS, getMaxLevel, getTreeSpentPoints } from '../classes/talentTrees';
 import { DEPTH_SPEC_POOLS, TALENT_OFFER_WEIGHT_CONFIG, UPGRADE_POOLS, UNIVERSAL_POOLS } from '../classes/upgradePools';
-import { getTalentOfferStage } from '../classes/dualClass';
 import { getEquipState, getOwnedItemCount, getPurchaseState, ITEM_DEFS } from '../data/items';
 import { getGlobalShopCatalog } from '../managers/ShopManager';
 import { getUpgradeCardTheme, toRgba } from './upgradeCardTheme';
@@ -235,19 +234,15 @@ function getDepthUnlockState(selectedTrees = [], skillTreeLevels = {}, levelUps 
   const mainThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecMainPointThreshold || 6));
   const offThreshold = Math.max(1, Number(TALENT_OFFER_WEIGHT_CONFIG?.depthSpecOffPointThreshold || 2));
   const normalizedLevelUps = Math.max(0, Number(levelUps) || 0);
-  const stage = getTalentOfferStage(normalizedLevelUps);
   const mainSpent = mainTreeId ? getTreeSpentPoints(mainTreeId, skillTreeLevels) : 0;
   const offSpent = offTreeId ? getTreeSpentPoints(offTreeId, skillTreeLevels) : 0;
-  const stageReady = stage === 'all';
   const mainReady = !!mainTreeId && mainSpent >= mainThreshold;
   const offReady = !!offTreeId && offSpent >= offThreshold;
 
   return {
-    stage,
-    stageReady,
     mainReady,
     offReady,
-    unlocked: !!mainTreeId && !!offTreeId && stageReady && mainReady && offReady,
+    unlocked: !!mainTreeId && !!offTreeId && mainReady && offReady,
     levelUps: normalizedLevelUps,
     mainTreeId,
     offTreeId,
@@ -255,7 +250,6 @@ function getDepthUnlockState(selectedTrees = [], skillTreeLevels = {}, levelUps 
     offSpent,
     mainThreshold,
     offThreshold,
-    remainingLevelUps: stageReady ? 0 : Math.max(0, 5 - normalizedLevelUps),
     remainingMainPoints: mainReady ? 0 : Math.max(0, mainThreshold - mainSpent),
     remainingOffPoints: offReady ? 0 : Math.max(0, offThreshold - offSpent)
   };
@@ -1059,21 +1053,6 @@ export default function App() {
       return cleaned.slice(0, 2) || '天赋';
     };
 
-    const renderDepthRequirementChip = (label, ready, detail, accentColor) => (
-      <div
-        style={{
-          borderRadius: 12,
-          border: `1px solid ${ready ? 'rgba(74,222,128,0.42)' : 'rgba(255,255,255,0.10)'}`,
-          background: ready ? 'rgba(20,83,45,0.30)' : 'rgba(255,255,255,0.04)',
-          padding: '10px 12px',
-          minWidth: 0
-        }}
-      >
-        <div style={{ fontSize: 11, opacity: 0.72 }}>{label}</div>
-        <div style={{ fontSize: 13, fontWeight: 900, marginTop: 4, color: ready ? '#bbf7d0' : (accentColor || '#ffffff') }}>{detail}</div>
-      </div>
-    );
-
     const TalentIconButton = ({ node, def }) => {
       const meta = getTalentNodeMeta(node.id);
       const level = skillTreeLevels?.[node.id] || 0;
@@ -1251,55 +1230,6 @@ export default function App() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, minHeight: '100%' }}>
         <div
           style={{
-            borderRadius: 16,
-            border: `1px solid ${depthState.unlocked ? 'rgba(74,222,128,0.40)' : 'rgba(255,255,255,0.10)'}`,
-            background: depthState.unlocked
-              ? 'linear-gradient(180deg, rgba(20,83,45,0.36), rgba(9,20,16,0.92))'
-              : 'linear-gradient(180deg, rgba(88,28,135,0.20), rgba(10,10,24,0.88))',
-            padding: 14,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 900, color: depthState.unlocked ? '#bbf7d0' : '#f3e8ff' }}>深度专精进度</div>
-              <div style={{ fontSize: 12, opacity: 0.78, marginTop: 4, lineHeight: 1.5 }}>
-                {depthState.unlocked
-                  ? '已满足后段阶段、主树点数和副树点数条件，深度专精现在可以进入候选池。'
-                  : `当前还未完全解锁。${!depthState.stageReady ? `后段阶段还差 ${depthState.remainingLevelUps} 次普通升级。` : ''}${!depthState.mainReady ? ` 主树还差 ${depthState.remainingMainPoints} 点。` : ''}${!depthState.offReady ? ` ${depthState.offTreeId ? `副树还差 ${depthState.remainingOffPoints} 点。` : '尚未选择副职业。'}` : ''}`}
-              </div>
-            </div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.06em', color: depthState.unlocked ? '#86efac' : '#e9d5ff', opacity: 0.92 }}>
-              {depthState.unlocked ? 'DEPTH READY' : 'DEPTH LOCKED'}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-            {renderDepthRequirementChip(
-              '后段阶段',
-              depthState.stageReady,
-              depthState.stageReady ? '已进入 all 阶段' : `还需 ${depthState.remainingLevelUps} 次普通升级`,
-              '#f8fafc'
-            )}
-            {renderDepthRequirementChip(
-              '主树点数',
-              depthState.mainReady,
-              `${depthState.mainSpent}/${depthState.mainThreshold}`,
-              mainDef ? toCssHex(mainDef.color) : '#f8fafc'
-            )}
-            {renderDepthRequirementChip(
-              '副树点数',
-              depthState.offReady,
-              depthState.offTreeId ? `${depthState.offSpent}/${depthState.offThreshold}` : '未选择副职业',
-              offDef ? toCssHex(offDef.color) : '#f8fafc'
-            )}
-          </div>
-        </div>
-
-        <div
-          style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 12,
@@ -1376,7 +1306,7 @@ export default function App() {
                         opacity: 0.92
                       }}
                     >
-                      {`${learnedCount}/${allNodes.length} 已激活`}
+                      {`${learnedCount}/${allNodes.length} 节点已激活`}
                     </div>
                   ) : null}
                 </div>
@@ -1418,6 +1348,27 @@ export default function App() {
             );
           })}
         </div>
+
+        {(depthState.mainTreeId || depthState.offTreeId) ? (
+          <div
+            style={{
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'rgba(255,255,255,0.04)',
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.68 }}>深度专精解锁进度</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>
+              {depthState.unlocked
+                ? '已满足解锁条件，深度专精后续会进入候选池。'
+                : `主树 ${depthState.mainSpent}/${depthState.mainThreshold}，副树 ${depthState.offTreeId ? `${depthState.offSpent}/${depthState.offThreshold}` : '未选择'}。`}
+            </div>
+          </div>
+        ) : null}
 
         {selectedTalent?.node ? (
           <div
@@ -1463,8 +1414,8 @@ export default function App() {
                 {getTalentNodeMeta(selectedTalent.node.id)?.isDepth ? (
                   <div style={{ fontSize: 12, opacity: 0.74, marginTop: 6, lineHeight: 1.6, color: depthState.unlocked ? '#bbf7d0' : '#f3e8ff' }}>
                     {depthState.unlocked
-                      ? '深度专精已解锁，后续会在满足发牌阶段时进入候选。'
-                      : `深度专精未解锁：${depthState.stageReady ? '后段阶段已满足' : `还差 ${depthState.remainingLevelUps} 次普通升级`}；${depthState.mainReady ? `主树已达 ${depthState.mainThreshold} 点` : `主树还差 ${depthState.remainingMainPoints} 点`}；${depthState.offReady ? `副树已达 ${depthState.offThreshold} 点` : `${depthState.offTreeId ? `副树还差 ${depthState.remainingOffPoints} 点` : '尚未选择副职业'}`}`}
+                      ? '深度专精已解锁，后续会进入候选池。'
+                      : `深度专精未解锁：主树 ${depthState.mainSpent}/${depthState.mainThreshold}；副树 ${depthState.offTreeId ? `${depthState.offSpent}/${depthState.offThreshold}` : '未选择'}`}
                   </div>
                 ) : null}
                 {(selectedTalent.level || 0) <= 0 ? (

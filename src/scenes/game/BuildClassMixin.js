@@ -889,6 +889,7 @@ export function applyBuildClassMixin(GameScene) {
 
         if (!isOffClassChoice) {
           this.buildState.levelUps += 1;
+          this.registry?.set?.('buildLevelUps', Math.max(0, Number(this.buildState.levelUps || 0)));
         }
 
         const shownEntryIds = (offer?.options || [])
@@ -1332,7 +1333,7 @@ export function applyBuildClassMixin(GameScene) {
         combinedPool = combinedPool.concat(universalPools[offFaction] || []);
       }
 
-      if (stage === 'all' && depthUnlocked && mainCore) {
+      if (depthUnlocked && mainCore) {
         combinedPool = combinedPool.concat(DEPTH_SPEC_POOLS[mainCore] || []);
       }
 
@@ -1849,13 +1850,14 @@ export function applyBuildClassMixin(GameScene) {
 
       this.slashSwingStartTime = now;
       this.slashFacingAngle = facingAngle;
+      this.slashSwingDir = swingDir >= 0 ? 1 : -1;
       this.slashLockedFacingAngle = facingAngle;
       this.slashLockUntil = now + Math.max(120, Number(this.slashSwingDuration || 420));
       this.slashArcSpan = Phaser.Math.DegToRad(this.getWarriorArcSpanDeg());
       this.slashTailLength = this.player?.warriorSpin ? 0.5 : 0.32;
 
       this.player?.playAttackAnimation?.();
-      this.spawnWarriorMeleeHit(facingAngle);
+      this.spawnWarriorMeleeHit(facingAngle, this.slashSwingDir);
 
       if (this.player?.warriorSpin && spinUnlocked > 0 && berserkgodLevel > 0) {
         const extraShots = Math.min(3, berserkgodLevel + (lowHpRatio <= 0.35 ? unyieldingLevel : 0));
@@ -1864,7 +1866,7 @@ export function applyBuildClassMixin(GameScene) {
             if (!this.player || this.player.isAlive === false || !this.meleeEnabled) return;
             if (this.warriorBladeCycleSeq !== comboSeq) return;
             const offsetDeg = (i % 2 === 0 ? 1 : -1) * (18 + i * 8);
-            this.spawnWarriorMeleeHit(facingAngle + Phaser.Math.DegToRad(offsetDeg));
+            this.spawnWarriorMeleeHit(facingAngle + Phaser.Math.DegToRad(offsetDeg), this.slashSwingDir);
           });
         }
       }
@@ -1968,14 +1970,22 @@ export function applyBuildClassMixin(GameScene) {
       }
 
       if (time >= this.warriorBladeNextCycleAt) {
-        this.slashSwingDir *= -1;
+        const usesContinuousSpin = this.getWarriorArcSpanDeg() >= 360 || !!this.player?.warriorSpin;
+        if (usesContinuousSpin) {
+          this.slashSwingDir = 1;
+        } else {
+          this.slashSwingDir *= -1;
+        }
         this.warriorBladeNextCycleAt = time + cycleDuration;
         this.triggerWarriorSwingHit(facingAngle, this.slashSwingDir);
       }
     },
 
-    spawnWarriorMeleeHit(facingAngle) {
-      _spawnWarriorMeleeHit(this, facingAngle);
+    spawnWarriorMeleeHit(facingAngle, swingDir) {
+      _spawnWarriorMeleeHit(this, facingAngle, {
+        swingDir,
+        durationMs: this.slashSwingDuration || 420
+      });
     },
 
     spawnWarriorCrescentProjectile(facingAngle, swingDir) {

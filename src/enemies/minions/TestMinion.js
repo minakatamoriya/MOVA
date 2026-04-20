@@ -298,6 +298,19 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     this.orbitRange = (config.orbitRange != null)
       ? Math.max(12, Math.round(Number(config.orbitRange) || 0))
       : (this.minionType === 'ring_shooter' ? 72 : 48);
+    this.meleeSeparationPad = (config.meleeSeparationPad != null)
+      ? Math.max(-6, Math.round(Number(config.meleeSeparationPad) || 0))
+      : (this.isElite ? (this.minionType === 'charger' ? -2 : 1) : 4);
+    this.pressureOvershootPx = (config.pressureOvershootPx != null)
+      ? Math.max(0, Math.round(Number(config.pressureOvershootPx) || 0))
+      : (this.isElite
+        ? (this.minionType === 'charger' ? 24 : (this.minionType === 'chaser' ? 18 : 0))
+        : 0);
+    this.pressurePursuitMult = (config.pressurePursuitMult != null)
+      ? Math.max(0.8, Number(config.pressurePursuitMult) || 1)
+      : (this.isElite
+        ? (this.minionType === 'charger' ? 1.14 : (this.minionType === 'chaser' ? 1.08 : 1))
+        : 1);
 
     // “检测到后缓缓移动”：速度爬升时间（毫秒）
     this.aggroRampMs = (config.aggroRampMs != null) ? Math.max(0, Math.floor(config.aggroRampMs)) : 650;
@@ -778,15 +791,22 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const list = (this.isElite && Array.isArray(affixes))
       ? affixes.filter((item) => item && item.id).map((item) => ({ ...item }))
       : [];
+    const stage = Math.max(1, Math.floor(Number(this.scene?.currentStage || 1)));
+    const earlyStage = stage <= 2;
+    const baseEliteHpMult = earlyStage ? 1.06 : 1.14;
+    const baseEliteTakenMult = earlyStage ? 0.97 : 0.92;
+    const juggernautHpMult = earlyStage ? 1.08 : 1.18;
+    const juggernautTakenMult = earlyStage ? 0.93 : 0.84;
+    const summonerHpMult = earlyStage ? 1.02 : 1.05;
 
     this.eliteAffixes = list;
     this.eliteAffixIds = new Set(list.map((item) => item.id));
     if (list.length <= 0) return;
 
     // 第一版先把精英底座整体稍微抬高一点，确保“有词缀的精英”本体就更有存在感。
-    this.maxHp = Math.round(this.maxHp * 1.14);
+    this.maxHp = Math.round(this.maxHp * baseEliteHpMult);
     this.currentHp = this.maxHp;
-    this.damageTakenMult = Math.min(this.damageTakenMult || 1, 0.92);
+    this.damageTakenMult = Math.min(this.damageTakenMult || 1, baseEliteTakenMult);
 
     if (this.hasEliteAffix('hasted')) {
       this.moveSpeed = Math.round(this.moveSpeed * 1.14);
@@ -796,9 +816,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     if (this.hasEliteAffix('juggernaut')) {
-      this.maxHp = Math.round(this.maxHp * 1.18);
+      this.maxHp = Math.round(this.maxHp * juggernautHpMult);
       this.currentHp = this.maxHp;
-      this.damageTakenMult = Math.min(this.damageTakenMult || 1, 0.84);
+      this.damageTakenMult = Math.min(this.damageTakenMult || 1, juggernautTakenMult);
       this.contactDamage = Math.max(1, Math.round((this.contactDamage || 0) * 1.15));
       this.radius += 2;
     }
@@ -816,7 +836,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     }
 
     if (this.hasEliteAffix('summoner')) {
-      this.maxHp = Math.round(this.maxHp * 1.05);
+      this.maxHp = Math.round(this.maxHp * summonerHpMult);
       this.currentHp = this.maxHp;
     }
 
@@ -2070,6 +2090,27 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     return clampWorldPoint(this.scene, goalX, goalY, 20);
   }
 
+  buildPressureGoal(targetHitbox, target) {
+    const goal = this.buildInterceptGoal(targetHitbox, target);
+    if (!this.isElite || this.pressureOvershootPx <= 0 || this.minionType === 'ring_shooter') {
+      return goal;
+    }
+
+    const dx = targetHitbox.x - this.x;
+    const dy = targetHitbox.y - this.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+    const motion = getTargetMotion(target, dx, dy);
+    const pressureWindow = Phaser.Math.Clamp((dist - 28) / 160, 0, 1);
+    const pressure = this.pressureOvershootPx * pressureWindow;
+    goal.x += motion.dirX * pressure;
+    goal.y += motion.dirY * pressure;
+    return clampWorldPoint(this.scene, goal.x, goal.y, 20);
+  }
+
+  getPlayerSeparationPad() {
+    return this.meleeSeparationPad;
+  }
+
   updateOrbiterMovement(dt, speedMult, target, targetHitbox) {
     const dx = targetHitbox.x - this.x;
     const dy = targetHitbox.y - this.y;
@@ -2233,7 +2274,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const ddx = this.x - targetHitbox.x;
       const ddy = this.y - targetHitbox.y;
       const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
-      const minDist = (this.radius || 16) + pr + 4;
+      const minDist = (this.radius || 16) + pr + this.getPlayerSeparationPad();
       if (d < minDist) {
         const nx = ddx / d;
         const ny = ddy / d;
@@ -2260,7 +2301,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
         const ddx = this.x - targetHitbox.x;
         const ddy = this.y - targetHitbox.y;
         const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
-        const minDist = (this.radius || 16) + pr + 4;
+        const minDist = (this.radius || 16) + pr + this.getPlayerSeparationPad();
         if (d < minDist) {
           const nx = ddx / d;
           const ny = ddy / d;
@@ -2295,8 +2336,10 @@ export default class TestMinion extends Phaser.GameObjects.Container {
 
     // chaser：追玩家
     if (target && target.active !== false && target.isAlive !== false && targetHitbox) {
-      const goal = this.buildInterceptGoal(targetHitbox, target);
-      this.moveTowardPoint(goal.x, goal.y, (this.moveSpeed * speedMult) * dt);
+      const goal = this.isElite
+        ? this.buildPressureGoal(targetHitbox, target)
+        : this.buildInterceptGoal(targetHitbox, target);
+      this.moveTowardPoint(goal.x, goal.y, (this.moveSpeed * speedMult * this.pressurePursuitMult) * dt);
 
       this.tryContact(time, target);
 
@@ -2305,7 +2348,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
       const ddx = this.x - targetHitbox.x;
       const ddy = this.y - targetHitbox.y;
       const d = Math.sqrt(ddx * ddx + ddy * ddy) || 0.0001;
-      const minDist = (this.radius || 16) + pr + 4;
+      const minDist = (this.radius || 16) + pr + this.getPlayerSeparationPad();
       if (d < minDist) {
         const nx = ddx / d;
         const ny = ddy / d;
@@ -2328,7 +2371,7 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const pr = hitbox.radius || 16;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, hitbox.x, hitbox.y);
     // 与“玩家-小怪分离”的留缝一致：不重叠但仍算接触伤害
-    const separationPad = 4;
+    const separationPad = this.getPlayerSeparationPad();
     if (dist <= (this.radius + pr + separationPad)) {
       this._lastContactAt = now;
       player.takeDamage?.(this.contactDamage, { attacker: this, source: 'minion_contact' });
@@ -2604,7 +2647,9 @@ export default class TestMinion extends Phaser.GameObjects.Container {
             radius: 10,
             durationMs: 120
           });
-          this._chargeDistanceLeft = 0;
+          this._chargeDistanceLeft = this.isElite
+            ? Math.min(this._chargeDistanceLeft, Math.max(18, Math.round(this.chargeOvershootPx * 0.45)))
+            : 0;
         }
       }
 
@@ -2627,16 +2672,28 @@ export default class TestMinion extends Phaser.GameObjects.Container {
     const dy = hp.y - this.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
 
-    if (dist <= this.chargeRange && now - this._lastChargeAt >= this.chargeCdMs) {
+    const chargeStartRange = this.isElite ? this.chargeRange + 24 : this.chargeRange;
+    if (dist <= chargeStartRange && now - this._lastChargeAt >= this.chargeCdMs) {
       this.startChargeWindup(now, player);
       return;
     }
 
-    const preferredRange = Math.max(this.chargeRange + 8, this.radius + (hp.radius || 16) + 16);
-    const step = Math.min(Math.max(0, dist - preferredRange), (this.moveSpeed * speedMult) * dt);
-    this.x += (dx / dist) * step;
-    this.y += (dy / dist) * step;
-    this.updateFacingVisual(Math.atan2(dy, dx));
+    const preferredRange = this.isElite
+      ? Math.max(this.radius + (hp.radius || 16) + 8, Math.round(this.chargeRange * 0.52))
+      : Math.max(this.chargeRange + 8, this.radius + (hp.radius || 16) + 16);
+    const pressureGoal = this.isElite
+      ? this.buildPressureGoal(hp, player)
+      : { x: hp.x, y: hp.y };
+    const goalDx = pressureGoal.x - this.x;
+    const goalDy = pressureGoal.y - this.y;
+    const goalDist = Math.sqrt(goalDx * goalDx + goalDy * goalDy) || 0.0001;
+    const moveStep = Math.min(
+      Math.max(0, dist - preferredRange),
+      (this.moveSpeed * speedMult * this.pressurePursuitMult) * dt
+    );
+    this.x += (goalDx / goalDist) * moveStep;
+    this.y += (goalDy / goalDist) * moveStep;
+    this.updateFacingVisual(Math.atan2(goalDy, goalDx));
   }
 
   updateFacingVisual(angleRad) {

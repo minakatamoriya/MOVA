@@ -773,6 +773,18 @@ export default class BulletManager {
         }
       }
 
+      if (bullet.sweepLine) {
+        const durationMs = Math.max(1, Number(bullet.sweepDurationMs || bullet.maxLifeMs || 1));
+        const progress = Phaser.Math.Clamp((bullet.lifeMs || 0) / durationMs, 0, 1);
+        const startAngle = Number.isFinite(Number(bullet.sweepStartAngle)) ? Number(bullet.sweepStartAngle) : 0;
+        const endAngle = Number.isFinite(Number(bullet.sweepEndAngle)) ? Number(bullet.sweepEndAngle) : startAngle;
+        const previousAngle = Number.isFinite(Number(bullet.sweepCurrentAngleRaw)) ? Number(bullet.sweepCurrentAngleRaw) : startAngle;
+        const currentAngle = Phaser.Math.Linear(startAngle, endAngle, progress);
+        bullet.sweepPrevAngleRaw = previousAngle;
+        bullet.sweepCurrentAngleRaw = currentAngle;
+        bullet.rotation = Phaser.Math.Angle.Wrap(currentAngle);
+      }
+
       // 月火术：自定义运动（慢速下坠 + 漂浮 + 极窄亲和吸附）
       if (bullet.motionType === 'moonfire') {
         const dt = delta / 1000;
