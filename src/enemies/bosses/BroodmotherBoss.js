@@ -25,6 +25,8 @@ export default class BroodmotherBoss extends FormalBossBase {
     this._nests = [];
     this._slimeHazards = [];
     this._baseMoveSpeed = this.moveSpeed;
+    this._broodWindowUntil = 0;
+    this._broodMoveMult = 1;
   }
 
   update(time, delta) {
@@ -32,7 +34,11 @@ export default class BroodmotherBoss extends FormalBossBase {
     if (!this.isAlive || this.isDestroyed) return;
     updatePersistentCircleHazards(this, this._slimeHazards, time);
     this.updateNests(time);
-    this.moveSpeed = this._baseMoveSpeed + (this.getPhase() >= 3 ? Math.min(10, this._nests.length * 2) : 0);
+    const now = Number(time || this.scene?.time?.now || 0);
+    const p3Bonus = this.getPhase() >= 3 ? Math.min(10, this._nests.length * 2) : 0;
+    const broodWindowActive = (this._broodWindowUntil || 0) > now;
+    const moveMult = broodWindowActive ? this._broodMoveMult : 1;
+    this.moveSpeed = Math.max(18, (this._baseMoveSpeed * moveMult) + p3Bonus);
   }
 
   destroy() {
@@ -55,6 +61,23 @@ export default class BroodmotherBoss extends FormalBossBase {
       this.castBroodWave,
       this.castSlimeCarpet
     ];
+  }
+
+  getNestCap() {
+    const phase = this.getPhase();
+    if (phase >= 3) return 4;
+    if (phase >= 2) return 3;
+    return 2;
+  }
+
+  beginBroodWindow(durationMs, moveMult, incomingDamageMult) {
+    const now = Number(this.scene?.time?.now || 0);
+    this._broodWindowUntil = Math.max(this._broodWindowUntil || 0, now + Math.max(0, Math.round(durationMs || 0)));
+    this._broodMoveMult = Math.max(0.35, Math.min(1, Number(moveMult || 1)));
+    this.setIncomingDamageWindow(incomingDamageMult, durationMs, {
+      tintColor: 0xd9ffad,
+      strokeColor: BROOD_GLOW
+    });
   }
 
   spawnNest(point) {
@@ -91,6 +114,12 @@ export default class BroodmotherBoss extends FormalBossBase {
       alpha: 0.16,
       strokeAlpha: 0.74
     });
+
+    while (this._nests.length >= this.getNestCap()) {
+      const removed = this._nests.shift();
+      destroyDisplayObject(removed?.glyph);
+      destroyDisplayObject(removed?.ring);
+    }
 
     this._nests.push(nest);
     return nest;
@@ -172,6 +201,7 @@ export default class BroodmotherBoss extends FormalBossBase {
     const phase = this.getPhase();
     const count = phase >= 3 ? 3 : (phase >= 2 ? 2 : 1);
     const telegraphMs = 720;
+    this.beginBroodWindow(telegraphMs + 560, 0.62, phase >= 2 ? 1.42 : 1.28);
     this.showAlertIcon(telegraphMs);
 
     for (let index = 0; index < count; index += 1) {
@@ -201,6 +231,7 @@ export default class BroodmotherBoss extends FormalBossBase {
       return;
     }
 
+    this.beginBroodWindow(920, 0.56, phase >= 2 ? 1.48 : 1.34);
     this.showAlertIcon(640);
     this.scene?.vfxSystem?.playCharge?.(this.x, this.y, {
       radius: 26,

@@ -28,6 +28,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
     this._zones = [];
     this._starProjectiles = [];
     this._bombHazards = [];
+    this._polarityStableUntil = 0;
     this.rebuildOppositionZones();
   }
 
@@ -77,12 +78,25 @@ export default class StarRoyalistBoss extends FormalBossBase {
 
     const rect = getWorldRect(this.scene);
     const centerY = rect.y + (rect.height * 0.5);
-    const left = { x: rect.x + (rect.width * 0.32), y: centerY, radius: 160, colorType: 'dark' };
-    const right = { x: rect.x + (rect.width * 0.68), y: centerY, radius: 160, colorType: 'light' };
-    this._zones.push(left, right);
-
-    if (this.getPhase() >= 2) {
-      this._zones.push({ x: rect.x + (rect.width * 0.5), y: centerY, radius: 96, colorType: this._polarity === 'dark' ? 'light' : 'dark' });
+    const phase = this.getPhase();
+    if (phase === 1) {
+      this._zones.push(
+        { x: rect.x + (rect.width * 0.28), y: centerY, radius: 196, colorType: 'dark' },
+        { x: rect.x + (rect.width * 0.72), y: centerY, radius: 196, colorType: 'light' }
+      );
+    } else if (phase === 2) {
+      this._zones.push(
+        { x: rect.x + (rect.width * 0.24), y: centerY, radius: 148, colorType: 'dark' },
+        { x: rect.x + (rect.width * 0.76), y: centerY, radius: 148, colorType: 'light' },
+        { x: rect.x + (rect.width * 0.5), y: centerY, radius: 104, colorType: this._polarity === 'dark' ? 'light' : 'dark' }
+      );
+    } else {
+      this._zones.push(
+        { x: rect.x + (rect.width * 0.28), y: rect.y + (rect.height * 0.34), radius: 110, colorType: 'dark' },
+        { x: rect.x + (rect.width * 0.72), y: rect.y + (rect.height * 0.34), radius: 110, colorType: 'light' },
+        { x: rect.x + (rect.width * 0.34), y: rect.y + (rect.height * 0.70), radius: 102, colorType: 'light' },
+        { x: rect.x + (rect.width * 0.66), y: rect.y + (rect.height * 0.70), radius: 102, colorType: 'dark' }
+      );
     }
 
     this._zones.forEach((zone) => {
@@ -127,6 +141,10 @@ export default class StarRoyalistBoss extends FormalBossBase {
   canPlayerDamageBoss() {
     const zoneColor = this.getPlayerZoneColor();
     return !!zoneColor && zoneColor !== this._polarity;
+  }
+
+  isStableWindowActive(now = this.scene?.time?.now ?? 0) {
+    return (this._polarityStableUntil || 0) > now;
   }
 
   takeDamage(damage, context = {}) {
@@ -176,7 +194,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
       star.x += Math.cos(star.angle) * star.speed * 0.016;
       star.y += Math.sin(star.angle) * star.speed * 0.016;
       const colors = this.getPolarityColors(star.colorType);
-      const isReal = star.colorType === this._polarity;
+      const isReal = star.colorType === this._polarity && !this.isStableWindowActive(now);
       const alpha = isReal ? 0.92 : 0.28;
 
       star.glow.clear();
@@ -218,7 +236,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
       }
 
       const colors = this.getPolarityColors(hazard.colorType);
-      const isReal = hazard.colorType === this._polarity;
+      const isReal = hazard.colorType === this._polarity && !this.isStableWindowActive(now);
       const pulse = 0.88 + (0.12 * Math.sin((now * 0.01) + index));
       hazard.glow.clear();
       hazard.glow.fillStyle(colors.glow, (isReal ? 0.10 : 0.05) * pulse);
@@ -255,6 +273,8 @@ export default class StarRoyalistBoss extends FormalBossBase {
     });
     const timer = this.scene.time?.delayedCall?.(telegraphMs, () => {
       this._polarity = this._polarity === 'dark' ? 'light' : 'dark';
+      const stableMs = this.getPhase() >= 3 ? 480 : (this.getPhase() >= 2 ? 620 : 760);
+      this._polarityStableUntil = Number(this.scene?.time?.now || 0) + stableMs;
       this.rebuildOppositionZones();
     });
     if (timer) this._trackHazardTimer?.(timer);
@@ -276,7 +296,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
 
     const phase = this.getPhase();
     const baseAngle = Math.atan2(targetPoint.y - this.y, targetPoint.x - this.x);
-    const count = phase >= 3 ? 8 : 6;
+    const count = phase >= 3 ? 8 : (phase >= 2 ? 6 : 4);
     const spread = Phaser.Math.DegToRad(phase >= 3 ? 12 : 16);
     const half = (count - 1) * 0.5;
     for (let index = 0; index < count; index += 1) {
@@ -284,7 +304,7 @@ export default class StarRoyalistBoss extends FormalBossBase {
       this.spawnStarProjectile(baseAngle + ((index - half) * spread), colorType);
     }
 
-    const bombCount = phase >= 3 ? 3 : 2;
+    const bombCount = phase >= 3 ? 3 : (phase >= 2 ? 2 : 1);
     for (let index = 0; index < bombCount; index += 1) {
       const angle = ((Math.PI * 2) / bombCount) * index + Math.random() * 0.3;
       const point = clampWorldPoint(this.scene, targetPoint.x + (Math.cos(angle) * 110), targetPoint.y + (Math.sin(angle) * 110), 96);

@@ -45,6 +45,60 @@ export default class ToxicWeaverBoss extends FormalBossBase {
     ];
   }
 
+  scheduleLineGroups(lineGroups, telegraphMs = 760, durationMs = 2600, staggerMs = 260) {
+    const scene = this.scene;
+    if (!scene?.patternSystem || !Array.isArray(lineGroups) || lineGroups.length <= 0) return;
+
+    const lastSpawnDelay = ((lineGroups.length - 1) * staggerMs) + telegraphMs;
+    this.showAlertIcon(lastSpawnDelay);
+    this.lockAction?.(lastSpawnDelay + 200);
+
+    lineGroups.forEach((group, groupIndex) => {
+      const spawnDelay = groupIndex * staggerMs;
+
+      group.forEach((line) => {
+        const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1);
+        const length = Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+        const cx = (line.x1 + line.x2) * 0.5;
+        const cy = (line.y1 + line.y2) * 0.5;
+        const telegraph = scene.patternSystem.emitGroundTelegraph({
+          x: cx,
+          y: cy,
+          shape: 'line',
+          angle,
+          telegraphWidth: line.width || 42,
+          telegraphLength: length,
+          telegraphColor: line.color || TOXIC_COLOR,
+          durationMs: telegraphMs + spawnDelay
+        });
+        if (telegraph) this._trackHazardObject?.(telegraph);
+      });
+
+      const timer = scene.time?.delayedCall?.(telegraphMs + spawnDelay, () => {
+        if (!this.isAlive || this.isDestroyed) return;
+        group.forEach((line) => {
+          spawnPersistentLineHazard(scene, this, this._lineHazards, {
+            ...line,
+            width: line.width || 40,
+            color: line.color || TOXIC_COLOR,
+            glowColor: line.glowColor || TOXIC_GLOW,
+            durationMs,
+            damage: this.scaleAttackDamage(line.damage || 7, 5),
+            tickIntervalMs: line.tickIntervalMs || 360,
+            alpha: 0.92,
+            glowAlpha: 0.22
+          });
+        });
+        scene.vfxSystem?.playBurst?.(this.x, this.y, {
+          radius: 42,
+          color: TOXIC_GLOW,
+          durationMs: 180
+        });
+      });
+      if (timer) this._trackHazardTimer?.(timer);
+    });
+  }
+
   buildAxisLine(axis, value) {
     const rect = getWorldRect(this.scene);
     if (axis === 'vertical') {
@@ -108,13 +162,12 @@ export default class ToxicWeaverBoss extends FormalBossBase {
     if (!targetPoint) return;
 
     const phase = this.getPhase();
-    const lines = [];
     const vertical = Math.random() >= 0.5;
     const mainValue = vertical ? targetPoint.x : targetPoint.y;
-    lines.push({ ...this.buildAxisLine(vertical ? 'vertical' : 'horizontal', mainValue), width: phase >= 3 ? 46 : 40 });
+    const lineGroups = [[{ ...this.buildAxisLine(vertical ? 'vertical' : 'horizontal', mainValue), width: phase >= 3 ? 46 : 40 }]];
 
     if (phase >= 2) {
-      lines.push({ ...this.buildAxisLine(vertical ? 'horizontal' : 'vertical', vertical ? targetPoint.y : targetPoint.x), width: 40 });
+      lineGroups.push([{ ...this.buildAxisLine(vertical ? 'horizontal' : 'vertical', vertical ? targetPoint.y : targetPoint.x), width: 40 }]);
     }
 
     if (phase >= 3) {
@@ -124,10 +177,10 @@ export default class ToxicWeaverBoss extends FormalBossBase {
       const clamped = vertical
         ? Phaser.Math.Clamp(extraValue, rect.x + 80, rect.x + rect.width - 80)
         : Phaser.Math.Clamp(extraValue, rect.y + 80, rect.y + rect.height - 80);
-      lines.push({ ...this.buildAxisLine(vertical ? 'vertical' : 'horizontal', clamped), width: 44, damage: 9 });
+      lineGroups.push([{ ...this.buildAxisLine(vertical ? 'vertical' : 'horizontal', clamped), width: 44, damage: 9 }]);
     }
 
-    this.telegraphAndSpawnLines(lines, 760, phase >= 3 ? 3200 : 2800);
+    this.scheduleLineGroups(lineGroups, 620, phase >= 3 ? 3000 : 2600, phase >= 3 ? 240 : 320);
   }
 
   castGridLock() {
