@@ -41,7 +41,9 @@ export default class MenuScene extends Phaser.Scene {
       this.createButton(centerX, centerY - 40, '开始游戏', () => {
         console.log('点击：开始游戏');
         resetSkillTreeProgress(this.registry);
-        this.scene.start('GameScene');
+        this.scene.start('CoreDefensePrototypeScene', {
+          selectedMainCore: this.registry.get('preferredMainCore') || 'warrior'
+        });
       }),
       this.createButton(centerX, centerY + 30, '道具商店', () => {
         this.scene.start('ItemShopScene');

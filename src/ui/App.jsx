@@ -2025,7 +2025,7 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => uiBus.emit('ui:gotoScene', 'GameScene', { selectedMainCore: selectedMenuClass?.id || 'warrior' })}
+                    onClick={() => uiBus.emit('ui:gotoScene', 'CoreDefensePrototypeScene', { selectedMainCore: selectedMenuClass?.id || 'warrior' })}
                     style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%', height: 54, background: `linear-gradient(180deg, ${selectedMenuClass?.accent || 'rgba(255,255,255,0.12)'}, rgba(255,255,255,0.10))`, border: `1px solid ${selectedMenuClass?.color || 'rgba(255,255,255,0.25)'}` }}
                   >
                     以{selectedMenuClass?.name || '该职业'}进入试炼之地

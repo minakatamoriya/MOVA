@@ -5,6 +5,7 @@ import MenuScene from './scenes/MenuScene';
 import ItemShopScene from './scenes/ItemShopScene';
 import EquipmentScene from './scenes/EquipmentScene';
 import GameScene from './scenes/GameScene';
+import CoreDefensePrototypeScene from './coreDefense/scenes/CoreDefensePrototypeScene';
 import LevelUpScene from './scenes/LevelUpScene';
 import BuildTreeScene from './scenes/BuildTreeScene';
 import ShopScene from './scenes/ShopScene';
@@ -180,6 +181,7 @@ const config = {
     MenuScene,
     ItemShopScene,
     EquipmentScene,
+    CoreDefensePrototypeScene,
     GameScene,
     BuildTreeScene,
     LevelUpScene,
@@ -240,7 +242,7 @@ game.registry.set('uiMode', 'react');
 
 // 稳定的场景上下文广播：无论从哪里 start 场景，都同步给 React
 (() => {
-  const IN_GAME_SCENES = new Set(['GameScene', 'LevelUpScene', 'BuildTreeScene', 'ShopScene']);
+  const IN_GAME_SCENES = new Set(['GameScene', 'CoreDefensePrototypeScene', 'LevelUpScene', 'BuildTreeScene', 'ShopScene']);
   const sceneManager = game.scene;
   const emitContext = (key) => {
     const sceneKey = typeof key === 'string' ? key : key?.key;
@@ -282,7 +284,7 @@ game.registry.set('uiMode', 'react');
 uiBus.on('ui:gotoScene', (sceneKey, data) => {
   if (!sceneKey) return;
   try {
-    if (sceneKey === 'GameScene') {
+    if (sceneKey === 'GameScene' || sceneKey === 'CoreDefensePrototypeScene') {
       const selectedMainCore = data?.selectedMainCore || null;
       resetSkillTreeProgress(game.registry);
       if (selectedMainCore) {
