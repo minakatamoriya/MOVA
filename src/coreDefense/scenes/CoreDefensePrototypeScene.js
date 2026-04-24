@@ -1,20 +1,48 @@
 import Phaser from 'phaser';
 import { buildArenaMetrics } from '../config/arenaLayout';
 import { getCoreDefenseClassOption } from '../config/classOptions';
-import { CORE_DEFENSE_ENEMY_DEFS, getWaveProfileByMinute, rollEnemyType } from '../config/waveTimeline';
-
-const ROUND_DURATION_MS = 20 * 60 * 1000;
-const PRESSURE_TICK_MS = 500;
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function distanceSq(ax, ay, bx, by) {
-  const dx = ax - bx;
-  const dy = ay - by;
-  return dx * dx + dy * dy;
-}
+import { CORE_DEFENSE_ENEMY_DEFS, getEnemyHpMultiplier, getWaveDirectorState, rollEnemyType } from '../config/waveTimeline';
+import {
+  createInitialCoreModuleLevels,
+  createInitialUpgradeLevels,
+  getNextBattleExp,
+} from '../prototype/config/progressionCatalog';
+import { createInitialEliteDropState } from '../prototype/config/eliteDropCatalog';
+import {
+  CORE_APPROACH_OFFSET_Y,
+  CORE_TOUCH_HEIGHT,
+  CORE_TOUCH_OFFSET_Y,
+  CORE_TOUCH_WIDTH,
+  PRESSURE_TICK_MS,
+  UPGRADE_INTERACT_RADIUS,
+} from '../prototype/config/prototypeSceneConfig';
+import { clamp, distanceSq } from '../prototype/utils/math';
+import { createTopHud, refreshTopHud } from '../prototype/ui/topHud';
+import {
+  closeUpgradeMenu as closeUpgradeMenuUi,
+  createUpgradeMenu as createUpgradeMenuUi,
+  openUpgradeMenu as openUpgradeMenuUi,
+  purchaseCoreModule as purchaseCoreModuleUi,
+  purchasePrototypeUpgrade as purchasePrototypeUpgradeUi,
+  purchaseUpgradeMenuEntry as purchaseUpgradeMenuEntryUi,
+  refreshUpgradeMenu as refreshUpgradeMenuUi,
+  setUpgradeScrollOffset as setUpgradeScrollOffsetUi,
+  switchUpgradeMenuTab as switchUpgradeMenuTabUi,
+  updateUpgradeMenuScroll as updateUpgradeMenuScrollUi,
+} from '../prototype/ui/upgradeMenu/menu';
+import {
+  canPlayerAttackEnemy as canPlayerAttackEnemySystem,
+  findOverloadTarget as findOverloadTargetSystem,
+  gainBattleExp as gainBattleExpSystem,
+  handleEnemyDefeat as handleEnemyDefeatSystem,
+  hasActiveEliteAnchor as hasActiveEliteAnchorSystem,
+  shouldSpawnEliteAnchorForWave as shouldSpawnEliteAnchorForWaveSystem,
+  updateAutoAttack as updateAutoAttackSystem,
+  updateCoreModules as updateCoreModulesSystem,
+  updateEnemies as updateEnemiesSystem,
+  updatePressure as updatePressureSystem,
+} from '../prototype/systems/combatSystems';
+import { clearCoinDrops, updateCoinDrops } from '../prototype/systems/coinDrops';
 
 export default class CoreDefensePrototypeScene extends Phaser.Scene {
   constructor() {
@@ -30,22 +58,50 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     this.metrics = buildArenaMetrics(this.scale.width, this.scale.height);
     this.classOption = getCoreDefenseClassOption(this.selectedClassId);
     this.roundStartedAt = this.time.now;
-    this.roundEndsAt = this.roundStartedAt + ROUND_DURATION_MS;
     this.lastPressureTickAt = this.roundStartedAt;
     this.lastAttackAt = 0;
     this.score = 0;
+    this.gold = 0;
+    this.battleLevel = 1;
+    this.battleExp = 0;
+    this.nextBattleExp = getNextBattleExp(this.battleLevel);
+    this.survivedMs = 0;
+    this.pausedAccumulatedMs = 0;
+    this.currentThreat = 0;
+    this.currentPressure = 0;
+    this.currentThreatTier = '低';
+    this.currentWaveLabel = '第1波 建立波';
+    this.currentThreatStageLabel = '战线建立';
+    this.currentEliteAnchorId = null;
+    this.currentEliteWaveIndex = null;
+    this.isUpgradeMenuOpen = false;
+    this.upgradeMenuOpenedAt = 0;
+    this.upgradeMenuTab = 'player';
+    this.upgradeLevels = createInitialUpgradeLevels();
+    this.coreModuleLevels = createInitialCoreModuleLevels();
+    this.eliteDropState = createInitialEliteDropState();
+    this.coreModuleRuntime = {
+      lastBurnAt: 0,
+      lastRecoveryAt: 0,
+      lastOverloadAt: 0,
+    };
+    this.playerCritChance = 0;
+    this.playerCritMultiplier = 1.75;
     this.gameResolved = false;
     this.pointerTarget = null;
+    this.skipNextGroundPointerDown = false;
     this.enemies = [];
+    this.coinDrops = [];
 
     this.createArena();
     this.createCore();
     this.createPlayer();
     this.createHud();
     this.createInput();
+    this.createUpgradeMenu();
 
     this.spawnTimer = this.time.addEvent({
-      delay: getWaveProfileByMinute(0).spawnIntervalMs,
+      delay: getWaveDirectorState(0).spawnIntervalMs,
       loop: true,
       callback: () => this.spawnEnemy(),
     });
@@ -82,7 +138,23 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     const { core } = this.metrics;
     this.coreMaxHp = 1000;
     this.coreHp = this.coreMaxHp;
+    this.coreShieldMax = 0;
+    this.coreShield = 0;
+    this.coreThreatFlashAlpha = 0.1;
+    const openCoreUpgrade = () => {
+      if (this.gameResolved || this.isUpgradeMenuOpen) return;
+      this.skipNextGroundPointerDown = true;
+      this.openUpgradeMenu();
+    };
+    this.coreTouchTarget = this.add.zone(core.x, core.y + CORE_TOUCH_OFFSET_Y, CORE_TOUCH_WIDTH, CORE_TOUCH_HEIGHT)
+      .setOrigin(0.5)
+      .setDepth(50);
+    this.coreTouchTarget.setInteractive({ useHandCursor: true });
+    this.coreTouchTarget.on('pointerdown', openCoreUpgrade);
     this.core = this.add.circle(core.x, core.y, core.radius, 0x7c5cff, 0.95).setStrokeStyle(4, 0xe7dcff, 0.95);
+    this.core.setInteractive(new Phaser.Geom.Circle(0, 0, core.radius), Phaser.Geom.Circle.Contains);
+    this.core.on('pointerdown', openCoreUpgrade);
+    this.coreThreatAura = this.add.circle(core.x, core.y, core.threatRadius, 0xffd36b, 0.06).setStrokeStyle(2, 0xffd36b, 0.22);
     this.coreAura = this.add.circle(core.x, core.y, core.pressureRadius, 0x7c5cff, 0.08).setStrokeStyle(2, 0xb89cff, 0.34);
   }
 
@@ -93,82 +165,144 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
   }
 
   createHud() {
-    this.classText = this.add.text(20, 20, `职业：${this.classOption.name}`, {
-      fontSize: '24px',
+    createTopHud(this);
+    this.interactHintText = this.add.text(this.scale.width * 0.5, this.scale.height - 46, '', {
+      fontSize: '18px',
       color: '#ffffff',
-      fontStyle: 'bold',
-    }).setScrollFactor(0);
-
-    this.timerText = this.add.text(this.scale.width - 20, 20, '20:00', {
-      fontSize: '28px',
-      color: '#ffe18a',
-      fontStyle: 'bold',
-    }).setOrigin(1, 0).setScrollFactor(0);
-
-    this.coreHpText = this.add.text(20, 56, `核心：${this.coreHp}/${this.coreMaxHp}`, {
-      fontSize: '22px',
-      color: '#ffd6ef',
-    }).setScrollFactor(0);
-
-    this.pressureText = this.add.text(20, 88, '当前施压：0', {
-      fontSize: '20px',
-      color: '#9ce6ff',
-    }).setScrollFactor(0);
-
-    this.scoreText = this.add.text(this.scale.width - 20, 56, '清除：0', {
-      fontSize: '22px',
-      color: '#cce7ff',
-    }).setOrigin(1, 0).setScrollFactor(0);
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      padding: { left: 10, right: 10, top: 6, bottom: 6 },
+    }).setOrigin(0.5).setScrollFactor(0);
   }
 
   createInput() {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D' });
+    this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.escapeKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
 
     this.input.on('pointerdown', (pointer) => {
+      if (this.isUpgradeMenuOpen || this.gameResolved) return;
+      if (this.skipNextGroundPointerDown) {
+        this.skipNextGroundPointerDown = false;
+        return;
+      }
       this.pointerTarget = { x: pointer.worldX, y: pointer.worldY };
     });
     this.input.on('pointermove', (pointer) => {
+      if (this.isUpgradeMenuOpen || this.gameResolved) return;
       if (!pointer.isDown) return;
       this.pointerTarget = { x: pointer.worldX, y: pointer.worldY };
     });
     this.input.on('pointerup', () => {
+      if (this.isUpgradeMenuOpen || this.gameResolved) return;
       this.pointerTarget = null;
     });
   }
 
+  createUpgradeMenu() {
+    createUpgradeMenuUi(this);
+  }
+
+  isPlayerNearCore() {
+    return distanceSq(this.player.x, this.player.y, this.metrics.core.x, this.metrics.core.y) <= (UPGRADE_INTERACT_RADIUS * UPGRADE_INTERACT_RADIUS);
+  }
+
+  setCoreApproachTarget(pointer) {
+    const targetX = this.metrics.core.x;
+    const targetY = this.metrics.core.y - CORE_APPROACH_OFFSET_Y;
+    const fallbackX = clamp(targetX, 28, this.scale.width - 28);
+    const fallbackY = clamp(targetY, this.metrics.zones.frontline.y + 16, this.scale.height - 32);
+
+    this.pointerTarget = {
+      x: fallbackX,
+      y: fallbackY,
+    };
+
+    if (pointer) {
+      pointer.event?.preventDefault?.();
+    }
+  }
+
+  openUpgradeMenu() {
+    openUpgradeMenuUi(this);
+  }
+
+  closeUpgradeMenu() {
+    closeUpgradeMenuUi(this);
+  }
+
+  refreshUpgradeMenu() {
+    refreshUpgradeMenuUi(this);
+  }
+
+  setUpgradeScrollOffset(nextOffset) {
+    setUpgradeScrollOffsetUi(this, nextOffset);
+  }
+
+  switchUpgradeMenuTab(tabKey) {
+    switchUpgradeMenuTabUi(this, tabKey);
+  }
+
+  purchaseUpgradeMenuEntry(index) {
+    purchaseUpgradeMenuEntryUi(this, index);
+  }
+
+  purchasePrototypeUpgrade(upgradeId) {
+    purchasePrototypeUpgradeUi(this, upgradeId);
+  }
+
+  purchaseCoreModule(moduleId) {
+    purchaseCoreModuleUi(this, moduleId);
+  }
+
   spawnEnemy() {
     if (this.gameResolved) return;
-    const elapsedMinute = Math.floor((this.time.now - this.roundStartedAt) / 60000);
-    const profile = getWaveProfileByMinute(elapsedMinute);
+    const elapsedMs = Math.max(0, this.time.now - this.roundStartedAt);
+    const directorState = getWaveDirectorState(elapsedMs);
     if (this.spawnTimer) {
-      this.spawnTimer.delay = profile.spawnIntervalMs;
+      this.spawnTimer.delay = directorState.spawnIntervalMs;
     }
 
     const laneKeys = ['left', 'mid', 'right'];
-    const laneKey = laneKeys[Phaser.Math.Between(0, laneKeys.length - 1)];
-    const enemyType = rollEnemyType(Math.random(), elapsedMinute);
+    const shouldSpawnEliteAnchor = this.shouldSpawnEliteAnchorForWave(directorState);
+    const laneKey = shouldSpawnEliteAnchor ? 'mid' : laneKeys[Phaser.Math.Between(0, laneKeys.length - 1)];
+    const enemyType = shouldSpawnEliteAnchor ? 'anchor' : rollEnemyType(Math.random(), directorState.weights);
     const def = CORE_DEFENSE_ENEMY_DEFS[enemyType];
-    const drift = Phaser.Math.Between(-Math.round(this.metrics.laneWidth * 0.28), Math.round(this.metrics.laneWidth * 0.28));
+    const hpMultiplier = getEnemyHpMultiplier(enemyType, directorState.groupIndex) * (shouldSpawnEliteAnchor ? 2.6 : 1);
+    const drift = shouldSpawnEliteAnchor
+      ? 0
+      : Phaser.Math.Between(-Math.round(this.metrics.laneWidth * 0.28), Math.round(this.metrics.laneWidth * 0.28));
     const x = clamp(this.metrics.laneCenters[laneKey] + drift, def.radius + 6, this.scale.width - def.radius - 6);
     const y = this.metrics.spawnY;
-    const body = this.add.circle(x, y, def.radius, def.color, 0.96).setStrokeStyle(2, 0x000000, 0.35);
+    const body = this.add.circle(x, y, shouldSpawnEliteAnchor ? def.radius + 6 : def.radius, def.color, 0.96)
+      .setStrokeStyle(shouldSpawnEliteAnchor ? 3 : 2, shouldSpawnEliteAnchor ? 0xffe08a : 0x000000, shouldSpawnEliteAnchor ? 0.85 : 0.35);
+    const scaledHp = Math.max(1, Math.round(def.hp * hpMultiplier));
+
+    const enemyId = `${enemyType}_${this.time.now}_${Math.random().toString(16).slice(2, 6)}`;
+    if (shouldSpawnEliteAnchor) {
+      this.currentEliteAnchorId = enemyId;
+      this.currentEliteWaveIndex = directorState.waveIndex;
+    }
 
     this.enemies.push({
-      id: `${enemyType}_${this.time.now}_${Math.random().toString(16).slice(2, 6)}`,
+      id: enemyId,
       type: enemyType,
       laneKey,
       x,
       y,
-      radius: def.radius,
-      hp: def.hp,
-      maxHp: def.hp,
-      speed: def.speed,
-      pressure: def.pressure,
-      remotePressure: def.remotePressure || 0,
-      score: def.score || 1,
+      radius: shouldSpawnEliteAnchor ? def.radius + 6 : def.radius,
+      hp: scaledHp,
+      maxHp: scaledHp,
+      speed: shouldSpawnEliteAnchor ? Math.max(16, def.speed * 0.9) : def.speed,
+      pressure: shouldSpawnEliteAnchor ? ((def.pressure || 0) * 1.6) : def.pressure,
+      threat: shouldSpawnEliteAnchor ? ((def.threat || def.pressure || 0) * 1.8) : (def.threat || def.pressure),
+      remoteThreat: shouldSpawnEliteAnchor ? ((def.remoteThreat || 0) * 1.6) : (def.remoteThreat || 0),
+      remotePressure: shouldSpawnEliteAnchor ? ((def.remotePressure || 0) * 1.7) : (def.remotePressure || 0),
+      score: shouldSpawnEliteAnchor ? Math.max(6, (def.score || 1) * 3) : (def.score || 1),
       anchorY: enemyType === 'anchor' ? this.scale.height * def.anchorYRatio : null,
       stopped: false,
+      enteredFrontline: false,
+      isEliteAnchor: shouldSpawnEliteAnchor,
       display: body,
     });
   }
@@ -176,23 +310,64 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
   update(time, delta) {
     if (this.gameResolved) return;
 
+    if (this.isUpgradeMenuOpen) {
+      if (Phaser.Input.Keyboard.JustDown(this.escapeKey)) {
+        this.closeUpgradeMenu();
+      }
+      this.updateUpgradeMenuScroll();
+      this.refreshHud();
+      return;
+    }
+
+    this.updateDirectorState(time);
     this.updateTimer(time);
+    this.updateInteractionHint();
     this.updatePlayer(delta);
     this.updateEnemies(delta);
+    this.updateCoreModules(time);
     this.updatePressure(time);
     this.updateAutoAttack(time);
+    updateCoinDrops(this, delta);
+
+    if (Phaser.Input.Keyboard.JustDown(this.interactKey) && this.isPlayerNearCore()) {
+      this.openUpgradeMenu();
+    }
+
     this.refreshHud();
   }
 
   updateTimer(time) {
-    const remaining = Math.max(0, this.roundEndsAt - time);
-    const totalSeconds = Math.ceil(remaining / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    this.timerText.setText(`${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`);
-    if (remaining <= 0) {
-      this.resolveRound(true, '守住了 20 分钟，原型目标达成');
+    this.survivedMs = Math.max(0, time - this.roundStartedAt - this.pausedAccumulatedMs);
+  }
+
+  updateDirectorState(time) {
+    const elapsedMs = Math.max(0, time - this.roundStartedAt - this.pausedAccumulatedMs);
+    const directorState = getWaveDirectorState(elapsedMs);
+    const eliteAnchorAlive = this.hasActiveEliteAnchor();
+    this.currentWaveLabel = eliteAnchorAlive && directorState.isRecoveryWindow
+      ? `第${directorState.waveIndex}波 ${directorState.waveName}·精英未清`
+      : `第${directorState.waveIndex}波 ${directorState.waveName}`;
+    this.currentThreatStageLabel = eliteAnchorAlive && directorState.isRecoveryWindow ? '精英压阵' : directorState.threatStageLabel;
+    if (this.spawnTimer) {
+      this.spawnTimer.delay = eliteAnchorAlive && directorState.isRecoveryWindow
+        ? Math.min(780, directorState.spawnIntervalMs)
+        : directorState.spawnIntervalMs;
     }
+  }
+
+  updateInteractionHint() {
+    if (this.isPlayerNearCore()) {
+      this.interactHintText.setText('点核心可随时打开升级，靠近核心时也可按 E');
+      this.interactHintText.setVisible(true);
+      return;
+    }
+    const nearCoreBand = distanceSq(this.player.x, this.player.y, this.metrics.core.x, this.metrics.core.y) <= ((UPGRADE_INTERACT_RADIUS + 90) * (UPGRADE_INTERACT_RADIUS + 90));
+    if (nearCoreBand) {
+      this.interactHintText.setText('点核心可直接打开升级');
+      this.interactHintText.setVisible(true);
+      return;
+    }
+    this.interactHintText.setVisible(false);
   }
 
   updatePlayer(delta) {
@@ -223,36 +398,7 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
   }
 
   updateEnemies(delta) {
-    const dt = Math.max(0, Number(delta || 0)) / 1000;
-    const nextEnemies = [];
-
-    for (let i = 0; i < this.enemies.length; i += 1) {
-      const enemy = this.enemies[i];
-      if (!enemy || enemy.hp <= 0) {
-        enemy?.display?.destroy?.();
-        continue;
-      }
-
-      if (enemy.type === 'anchor' && !enemy.stopped && enemy.anchorY != null && enemy.y >= enemy.anchorY) {
-        enemy.stopped = true;
-      }
-
-      if (!enemy.stopped) {
-        const targetX = this.metrics.core.x + this.getLaneBias(enemy);
-        const targetY = this.metrics.core.y;
-        const vx = targetX - enemy.x;
-        const vy = targetY - enemy.y;
-        const dist = Math.max(0.0001, Math.hypot(vx, vy));
-        enemy.x += (vx / dist) * enemy.speed * dt;
-        enemy.y += (vy / dist) * enemy.speed * dt;
-      }
-
-      enemy.display.x = enemy.x;
-      enemy.display.y = enemy.y;
-      nextEnemies.push(enemy);
-    }
-
-    this.enemies = nextEnemies;
+    updateEnemiesSystem(this, delta);
   }
 
   getLaneBias(enemy) {
@@ -264,85 +410,56 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
   }
 
   updatePressure(time) {
-    if ((time - this.lastPressureTickAt) < PRESSURE_TICK_MS) return;
-    this.lastPressureTickAt = time;
+    updatePressureSystem(this, time);
+  }
 
-    const { core } = this.metrics;
-    let directPressure = 0;
-    let remotePressure = 0;
-    const pressureRadiusSq = core.pressureRadius * core.pressureRadius;
-
-    for (let i = 0; i < this.enemies.length; i += 1) {
-      const enemy = this.enemies[i];
-      if (!enemy || enemy.hp <= 0) continue;
-      if (distanceSq(enemy.x, enemy.y, core.x, core.y) <= pressureRadiusSq) {
-        directPressure += Number(enemy.pressure || 0);
-      } else if (enemy.type === 'anchor' && enemy.stopped) {
-        remotePressure += Number(enemy.remotePressure || 0);
-      }
-    }
-
-    const totalPressure = directPressure + remotePressure;
-    this.currentPressure = totalPressure;
-    const softenedPressure = totalPressure <= 10 ? totalPressure : (10 + Math.sqrt(totalPressure - 10) * 3.2);
-    const damage = Math.round(softenedPressure * 3.5);
-
-    if (damage > 0) {
-      this.coreHp = Math.max(0, this.coreHp - damage);
-      this.tweens.add({ targets: this.core, scaleX: 1.08, scaleY: 1.08, duration: 80, yoyo: true, ease: 'Sine.easeOut' });
-    }
-
-    if (this.coreHp <= 0) {
-      this.resolveRound(false, '核心被怪潮压垮');
-    }
+  updateCoreModules(time) {
+    updateCoreModulesSystem(this, time);
   }
 
   updateAutoAttack(time) {
-    if ((time - this.lastAttackAt) < this.classOption.fireIntervalMs) return;
+    updateAutoAttackSystem(this, time);
+  }
 
-    let best = null;
-    let bestDistSq = Infinity;
-    const maxRangeSq = this.classOption.attackRange * this.classOption.attackRange;
+  handleEnemyDefeat(enemy, burstColor) {
+    handleEnemyDefeatSystem(this, enemy, burstColor);
+  }
 
-    for (let i = 0; i < this.enemies.length; i += 1) {
-      const enemy = this.enemies[i];
-      if (!enemy || enemy.hp <= 0) continue;
-      const d2 = distanceSq(this.player.x, this.player.y, enemy.x, enemy.y);
-      if (d2 > maxRangeSq) continue;
-      if (d2 < bestDistSq) {
-        best = enemy;
-        bestDistSq = d2;
-      }
-    }
+  canPlayerAttackEnemy(enemy) {
+    return canPlayerAttackEnemySystem(this, enemy);
+  }
 
-    if (!best) return;
-    this.lastAttackAt = time;
-    best.hp -= this.classOption.attackDamage;
+  findOverloadTarget() {
+    return findOverloadTargetSystem(this);
+  }
 
-    const line = this.add.line(0, 0, this.player.x, this.player.y, best.x, best.y, this.classOption.color, 0.9)
-      .setOrigin(0, 0)
-      .setLineWidth(3, 3);
-    this.tweens.add({ targets: line, alpha: 0, duration: 100, onComplete: () => line.destroy() });
+  hasActiveEliteAnchor() {
+    return hasActiveEliteAnchorSystem(this);
+  }
 
-    if (best.hp <= 0) {
-      this.score += Number(best.score || 1);
-      const burst = this.add.circle(best.x, best.y, best.radius + 8, this.classOption.color, 0.4);
-      this.tweens.add({ targets: burst, alpha: 0, scaleX: 1.6, scaleY: 1.6, duration: 180, onComplete: () => burst.destroy() });
-    }
+  shouldSpawnEliteAnchorForWave(directorState) {
+    return shouldSpawnEliteAnchorForWaveSystem(this, directorState);
+  }
+
+  gainBattleExp(amount) {
+    gainBattleExpSystem(this, amount);
+  }
+
+  updateUpgradeMenuScroll() {
+    updateUpgradeMenuScrollUi(this);
   }
 
   refreshHud() {
-    this.coreHpText.setText(`核心：${Math.max(0, Math.round(this.coreHp))}/${this.coreMaxHp}`);
-    this.pressureText.setText(`当前施压：${(Number(this.currentPressure || 0)).toFixed(1)}`);
-    this.scoreText.setText(`清除：${this.score}`);
+    refreshTopHud(this);
   }
 
   resolveRound(victory, message) {
     if (this.gameResolved) return;
     this.gameResolved = true;
     this.spawnTimer?.remove?.();
+    clearCoinDrops(this);
 
-    const title = victory ? '原型通关' : '原型失败';
+    const title = victory ? '原型结算' : '原型失败';
     this.add.rectangle(this.scale.width * 0.5, this.scale.height * 0.5, this.scale.width * 0.82, 220, 0x000000, 0.72).setOrigin(0.5);
     this.add.text(this.scale.width * 0.5, this.scale.height * 0.5 - 38, title, {
       fontSize: '46px',
@@ -359,6 +476,8 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
       fontSize: '20px',
       color: '#c8d6e5',
     }).setOrigin(0.5);
+
+    this.upgradeMenu?.setVisible(false);
 
     this.input.keyboard.once('keydown-R', () => {
       this.scene.restart({ selectedMainCore: this.selectedClassId });

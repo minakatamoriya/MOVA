@@ -5,13 +5,14 @@ export const CORE_DEFENSE_LAYOUT = {
   coreRatio: 0.35,
   coreYRatio: 0.78,
   coreRadius: 52,
+  coreThreatRadius: 224,
   corePressureRadius: 132,
   playerStartYRatio: 0.34,
   leftLaneCenterRatio: 0.23,
   midLaneCenterRatio: 0.5,
   rightLaneCenterRatio: 0.77,
   laneWidthRatio: 0.28,
-  spawnYRatio: 0.06,
+  spawnOffscreenMargin: 56,
 };
 
 export function buildArenaMetrics(width, height) {
@@ -40,6 +41,7 @@ export function buildArenaMetrics(width, height) {
     x: safeWidth * 0.5,
     y: safeHeight * CORE_DEFENSE_LAYOUT.coreYRatio,
     radius: CORE_DEFENSE_LAYOUT.coreRadius,
+    threatRadius: CORE_DEFENSE_LAYOUT.coreThreatRadius,
     pressureRadius: CORE_DEFENSE_LAYOUT.corePressureRadius,
   };
 
@@ -54,6 +56,6 @@ export function buildArenaMetrics(width, height) {
       x: safeWidth * 0.5,
       y: safeHeight * CORE_DEFENSE_LAYOUT.playerStartYRatio,
     },
-    spawnY: safeHeight * CORE_DEFENSE_LAYOUT.spawnYRatio,
+    spawnY: -Math.max(24, Number(CORE_DEFENSE_LAYOUT.spawnOffscreenMargin || 56)),
   };
 }
