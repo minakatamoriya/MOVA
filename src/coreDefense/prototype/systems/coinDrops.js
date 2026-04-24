@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 import { getCoinMagnetConfig } from '../../../data/currencyConfig';
 import { showDamageNumber } from '../utils/combatFeedback';
 
+const MAX_ACTIVE_COIN_DROPS = 26;
+
 function buildCoinChunks(totalAmount, isElite) {
   const total = Math.max(0, Math.round(Number(totalAmount || 0)));
   if (total <= 0) return [];
 
-  const targetChunkValue = isElite ? 20 : 8;
-  const maxChunks = isElite ? 4 : 3;
+  const targetChunkValue = isElite ? 22 : 10;
+  const maxChunks = isElite ? 3 : 2;
   const chunkCount = Math.max(1, Math.min(maxChunks, Math.ceil(total / targetChunkValue)));
   const chunks = [];
   let remaining = total;
@@ -78,7 +80,11 @@ function showCoinCollectFx(scene, x, y, amount, variant) {
 }
 
 export function spawnCoinBurst(scene, x, y, totalAmount, options = {}) {
-  const chunks = buildCoinChunks(totalAmount, options.isElite);
+  const activeDrops = Array.isArray(scene.coinDrops) ? scene.coinDrops.length : 0;
+  const collapseToSingle = activeDrops >= MAX_ACTIVE_COIN_DROPS;
+  const chunks = collapseToSingle
+    ? [Math.max(1, Math.round(Number(totalAmount || 0)))]
+    : buildCoinChunks(totalAmount, options.isElite);
   if (!chunks.length) return;
   if (!Array.isArray(scene.coinDrops)) {
     scene.coinDrops = [];

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import SystemMessageOverlay from '../../ui/SystemMessageOverlay';
 import { buildArenaMetrics } from '../config/arenaLayout';
 import { getCoreDefenseClassOption } from '../config/classOptions';
 import { CORE_DEFENSE_ENEMY_DEFS, getEnemyHpMultiplier, getWaveDirectorState, rollEnemyType } from '../config/waveTimeline';
@@ -7,7 +8,6 @@ import {
   createInitialUpgradeLevels,
   getNextBattleExp,
 } from '../prototype/config/progressionCatalog';
-import { createInitialEliteDropState } from '../prototype/config/eliteDropCatalog';
 import {
   CORE_APPROACH_OFFSET_Y,
   CORE_TOUCH_HEIGHT,
@@ -79,7 +79,6 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     this.upgradeMenuTab = 'player';
     this.upgradeLevels = createInitialUpgradeLevels();
     this.coreModuleLevels = createInitialCoreModuleLevels();
-    this.eliteDropState = createInitialEliteDropState();
     this.coreModuleRuntime = {
       lastBurnAt: 0,
       lastRecoveryAt: 0,
@@ -97,6 +96,7 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     this.createCore();
     this.createPlayer();
     this.createHud();
+    this.createSystemMessageOverlay();
     this.createInput();
     this.createUpgradeMenu();
 
@@ -172,6 +172,16 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
       backgroundColor: 'rgba(0,0,0,0.35)',
       padding: { left: 10, right: 10, top: 6, bottom: 6 },
     }).setOrigin(0.5).setScrollFactor(0);
+  }
+
+  createSystemMessageOverlay() {
+    const anchorY = Phaser.Math.Clamp((this.topPanelHeight + 84) / Math.max(1, this.scale.height), 0.16, 0.28);
+    this.systemMessage = new SystemMessageOverlay(this, {
+      anchorY,
+      marginTopPx: this.topPanelHeight + 24,
+      marginBottomPx: 20,
+      depth: 1600,
+    });
   }
 
   createInput() {
@@ -276,12 +286,98 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     const y = this.metrics.spawnY;
     const body = this.add.circle(x, y, shouldSpawnEliteAnchor ? def.radius + 6 : def.radius, def.color, 0.96)
       .setStrokeStyle(shouldSpawnEliteAnchor ? 3 : 2, shouldSpawnEliteAnchor ? 0xffe08a : 0x000000, shouldSpawnEliteAnchor ? 0.85 : 0.35);
+    const eliteAuraTypes = ['haste', 'guard', 'corrosion'];
+    const eliteAuraType = shouldSpawnEliteAnchor
+      ? eliteAuraTypes[(directorState.waveIndex + directorState.groupIndex) % eliteAuraTypes.length]
+      : null;
+    const eliteAuraStyleMap = {
+      haste: {
+        fill: 0xffb85c,
+        stroke: 0xfff0a8,
+        aura: 0xff9f40,
+        ring: 0xffd280,
+        label: '加速光环',
+        icon: '>>',
+      },
+      guard: {
+        fill: 0x7fb7ff,
+        stroke: 0xd8ecff,
+        aura: 0x69a8ff,
+        ring: 0xaed2ff,
+        label: '减伤光环',
+        icon: '盾',
+      },
+      corrosion: {
+        fill: 0x7ef0bf,
+        stroke: 0xd8ff8a,
+        aura: 0x68ff95,
+        ring: 0x9dffb7,
+        label: '腐蚀光环',
+        icon: '蚀',
+      },
+    };
+    const eliteAuraStyle = eliteAuraType ? eliteAuraStyleMap[eliteAuraType] : null;
+    let eliteAura = null;
+    let eliteAuraRing = null;
+    let eliteHpBarBg = null;
+    let eliteHpBarFill = null;
+    let eliteLabelText = null;
+    let eliteIconText = null;
+    if (shouldSpawnEliteAnchor) {
+      body.setFillStyle(eliteAuraStyle.fill, 0.95);
+      body.setStrokeStyle(4, eliteAuraStyle.stroke, 0.95);
+      eliteAura = this.add.circle(x, y, def.radius + 30, eliteAuraStyle.aura, 0.08)
+        .setStrokeStyle(2, eliteAuraStyle.aura, 0.42);
+      eliteAuraRing = this.add.circle(x, y, def.radius + 18, eliteAuraStyle.ring, 0)
+        .setStrokeStyle(2, eliteAuraStyle.stroke, 0.26);
+      eliteHpBarBg = this.add.rectangle(x, y - (def.radius + 18), 44, 6, 0x10161f, 0.95)
+        .setOrigin(0.5, 0.5)
+        .setStrokeStyle(1, 0x000000, 0.45);
+      eliteHpBarFill = this.add.rectangle(x - 21, y - (def.radius + 18), 42, 4, 0x8dff72, 1)
+        .setOrigin(0, 0.5);
+      eliteIconText = this.add.text(x, y - (def.radius + 34), eliteAuraStyle.icon, {
+        fontSize: '12px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#102030',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
+      eliteLabelText = this.add.text(x, y - (def.radius + 48), eliteAuraStyle.label, {
+        fontSize: '12px',
+        color: '#f5fbff',
+        fontStyle: 'bold',
+        stroke: '#102030',
+        strokeThickness: 3,
+      }).setOrigin(0.5);
+      this.tweens.add({
+        targets: eliteAura,
+        alpha: { from: 0.06, to: 0.14 },
+        scaleX: { from: 0.96, to: 1.05 },
+        scaleY: { from: 0.96, to: 1.05 },
+        duration: 760,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut',
+      });
+      this.tweens.add({
+        targets: eliteAuraRing,
+        alpha: { from: 0.12, to: 0.3 },
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut',
+      });
+    }
     const scaledHp = Math.max(1, Math.round(def.hp * hpMultiplier));
 
     const enemyId = `${enemyType}_${this.time.now}_${Math.random().toString(16).slice(2, 6)}`;
     if (shouldSpawnEliteAnchor) {
       this.currentEliteAnchorId = enemyId;
       this.currentEliteWaveIndex = directorState.waveIndex;
+      this.systemMessage?.show?.(`压阵精英入场：${eliteAuraStyle.label}`, {
+        key: `elite_${enemyId}`,
+        durationMs: 2200,
+      });
     }
 
     this.enemies.push({
@@ -294,16 +390,32 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
       hp: scaledHp,
       maxHp: scaledHp,
       speed: shouldSpawnEliteAnchor ? Math.max(16, def.speed * 0.9) : def.speed,
+      baseSpeed: shouldSpawnEliteAnchor ? Math.max(16, def.speed * 0.9) : def.speed,
       pressure: shouldSpawnEliteAnchor ? ((def.pressure || 0) * 1.6) : def.pressure,
+      basePressure: shouldSpawnEliteAnchor ? ((def.pressure || 0) * 1.6) : def.pressure,
       threat: shouldSpawnEliteAnchor ? ((def.threat || def.pressure || 0) * 1.8) : (def.threat || def.pressure),
+      baseThreat: shouldSpawnEliteAnchor ? ((def.threat || def.pressure || 0) * 1.8) : (def.threat || def.pressure),
       remoteThreat: shouldSpawnEliteAnchor ? ((def.remoteThreat || 0) * 1.6) : (def.remoteThreat || 0),
+      baseRemoteThreat: shouldSpawnEliteAnchor ? ((def.remoteThreat || 0) * 1.6) : (def.remoteThreat || 0),
       remotePressure: shouldSpawnEliteAnchor ? ((def.remotePressure || 0) * 1.7) : (def.remotePressure || 0),
+      baseRemotePressure: shouldSpawnEliteAnchor ? ((def.remotePressure || 0) * 1.7) : (def.remotePressure || 0),
       score: shouldSpawnEliteAnchor ? Math.max(6, (def.score || 1) * 3) : (def.score || 1),
       anchorY: enemyType === 'anchor' ? this.scale.height * def.anchorYRatio : null,
       stopped: false,
       enteredFrontline: false,
       isEliteAnchor: shouldSpawnEliteAnchor,
+      eliteAuraType,
+      eliteAuraLabel: eliteAuraStyle?.label || '',
+      eliteAuraIcon: eliteAuraStyle?.icon || '',
+      eliteAuraRadius: shouldSpawnEliteAnchor ? (def.radius + 34 + (directorState.groupIndex * 8)) : 0,
+      eliteAuraStrength: shouldSpawnEliteAnchor ? Math.min(0.42, 0.16 + (directorState.groupIndex * 0.06)) : 0,
       display: body,
+      eliteAura,
+      eliteAuraRing,
+      eliteHpBarBg,
+      eliteHpBarFill,
+      eliteLabelText,
+      eliteIconText,
     });
   }
 

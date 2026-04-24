@@ -1,9 +1,143 @@
+import Phaser from 'phaser';
 import { PRESSURE_TICK_MS } from '../config/prototypeSceneConfig';
+import { CORE_DEFENSE_ENEMY_DEFS } from '../../config/waveTimeline';
 import { getNextBattleExp } from '../config/progressionCatalog';
-import { awardEliteDrop, getEliteHunterBonus, getFrontlineBountyReward } from '../config/eliteDropCatalog';
 import { spawnCoinBurst } from './coinDrops';
 import { distanceSq } from '../utils/math';
 import { showDamageNumber } from '../utils/combatFeedback';
+
+const ELITE_AURA_TINT = 0x75ff9b;
+const ELITE_AURA_STYLE = {
+  haste: {
+    tint: 0xffc56a,
+    bar: 0xffc56a,
+    icon: '>>',
+  },
+  guard: {
+    tint: 0x8ebeff,
+    bar: 0x8ebeff,
+    icon: '盾',
+  },
+  corrosion: {
+    tint: 0x75ff9b,
+    bar: 0x8dff72,
+    icon: '蚀',
+  },
+};
+
+function setEliteHpBar(enemy) {
+  if (!enemy?.eliteHpBarBg || !enemy?.eliteHpBarFill) return;
+  const width = 42;
+  const hpRatio = Phaser.Math.Clamp(enemy.hp / Math.max(1, enemy.maxHp || 1), 0, 1);
+  const fillWidth = Math.max(2, Math.round(width * hpRatio));
+  const auraStyle = ELITE_AURA_STYLE[enemy.eliteAuraType] || ELITE_AURA_STYLE.corrosion;
+  enemy.eliteHpBarBg.setPosition(enemy.x, enemy.y - (enemy.radius + 18));
+  enemy.eliteHpBarFill.setPosition(enemy.x - 21, enemy.y - (enemy.radius + 18));
+  enemy.eliteHpBarFill.width = fillWidth;
+  enemy.eliteHpBarFill.setFillStyle(hpRatio > 0.55 ? auraStyle.bar : (hpRatio > 0.28 ? 0xffd45c : 0xff6b78), 1);
+  enemy.eliteLabelText?.setPosition?.(enemy.x, enemy.y - (enemy.radius + 48));
+  enemy.eliteIconText?.setPosition?.(enemy.x, enemy.y - (enemy.radius + 34));
+}
+
+function destroyEnemyVisuals(enemy) {
+  enemy?.display?.destroy?.();
+  enemy?.eliteAura?.destroy?.();
+  enemy?.eliteAuraRing?.destroy?.();
+  enemy?.eliteHpBarBg?.destroy?.();
+  enemy?.eliteHpBarFill?.destroy?.();
+  enemy?.eliteLabelText?.destroy?.();
+  enemy?.eliteIconText?.destroy?.();
+}
+
+function applyEliteAuraBuffs(scene, enemies) {
+  for (let i = 0; i < enemies.length; i += 1) {
+    const enemy = enemies[i];
+    if (!enemy || enemy.hp <= 0) continue;
+    enemy.speed = enemy.baseSpeed ?? enemy.speed;
+    enemy.pressure = enemy.basePressure ?? enemy.pressure;
+    enemy.threat = enemy.baseThreat ?? enemy.threat;
+    enemy.remoteThreat = enemy.baseRemoteThreat ?? enemy.remoteThreat;
+    enemy.remotePressure = enemy.baseRemotePressure ?? enemy.remotePressure;
+    enemy.damageTakenMultiplier = 1;
+    enemy.isAuraBuffed = false;
+    if (!enemy.isEliteAnchor) {
+      enemy.display?.setStrokeStyle?.(2, 0x000000, 0.35);
+    }
+  }
+
+  const elites = enemies.filter((enemy) => enemy && enemy.hp > 0 && enemy.isEliteAnchor);
+  for (let i = 0; i < elites.length; i += 1) {
+    const elite = elites[i];
+    const auraRadiusSq = Math.max(0, Number(elite.eliteAuraRadius || 0)) ** 2;
+    const auraStrength = Math.max(0, Number(elite.eliteAuraStrength || 0));
+    const auraStyle = ELITE_AURA_STYLE[elite.eliteAuraType] || ELITE_AURA_STYLE.corrosion;
+    elite.eliteAura?.setRadius?.(elite.eliteAuraRadius);
+    elite.eliteAuraRing?.setRadius?.(Math.max(8, elite.eliteAuraRadius - 12));
+    elite.eliteAura?.setFillStyle?.(auraStyle.tint, 0.08);
+    elite.eliteAura?.setStrokeStyle?.(2, auraStyle.tint, 0.42);
+    elite.eliteAuraRing?.setStrokeStyle?.(2, auraStyle.tint, 0.26);
+    elite.eliteIconText?.setText?.(auraStyle.icon);
+    if (elite.eliteAura?.active) {
+      elite.eliteAura.x = elite.x;
+      elite.eliteAura.y = elite.y;
+    }
+    if (elite.eliteAuraRing?.active) {
+      elite.eliteAuraRing.x = elite.x;
+      elite.eliteAuraRing.y = elite.y;
+    }
+    setEliteHpBar(elite);
+
+    for (let j = 0; j < enemies.length; j += 1) {
+      const enemy = enemies[j];
+      if (!enemy || enemy.hp <= 0 || enemy.id === elite.id) continue;
+      const d2 = distanceSq(enemy.x, enemy.y, elite.x, elite.y);
+      if (d2 > auraRadiusSq) continue;
+      if (elite.eliteAuraType === 'haste') {
+        enemy.speed = (enemy.baseSpeed ?? enemy.speed) * (1 + auraStrength * 0.8);
+        enemy.threat = (enemy.baseThreat ?? enemy.threat) * (1 + auraStrength * 0.22);
+      } else if (elite.eliteAuraType === 'guard') {
+        enemy.damageTakenMultiplier = Math.min(enemy.damageTakenMultiplier, 1 - (auraStrength * 0.45));
+        enemy.pressure = (enemy.basePressure ?? enemy.pressure) * (1 + auraStrength * 0.18);
+      } else {
+        enemy.pressure = (enemy.basePressure ?? enemy.pressure) * (1 + auraStrength * 0.7);
+        enemy.threat = (enemy.baseThreat ?? enemy.threat) * (1 + auraStrength * 0.55);
+        enemy.remoteThreat = (enemy.baseRemoteThreat ?? enemy.remoteThreat) * (1 + auraStrength * 0.55);
+        enemy.remotePressure = (enemy.baseRemotePressure ?? enemy.remotePressure) * (1 + auraStrength * 0.7);
+      }
+      enemy.isAuraBuffed = true;
+      enemy.display?.setStrokeStyle?.(2, auraStyle.tint, 0.8);
+    }
+  }
+}
+
+function applyIncomingDamage(enemy, amount) {
+  const multiplier = Phaser.Math.Clamp(Number(enemy?.damageTakenMultiplier ?? 1), 0.35, 1);
+  return Math.max(1, Math.round(Number(amount || 0) * multiplier));
+}
+
+function getEnemyBaseGold(enemy) {
+  const def = CORE_DEFENSE_ENEMY_DEFS[enemy?.type] || null;
+  const fallback = Math.max(1, Math.round(Number(enemy?.score || 1) * 3));
+  return Math.max(1, Math.round(Number(def?.goldDrop || fallback)));
+}
+
+function shouldDropGold(enemy) {
+  const def = CORE_DEFENSE_ENEMY_DEFS[enemy?.type] || null;
+  const chance = Phaser.Math.Clamp(Number(def?.goldDropChance ?? 1), 0, 1);
+  if (chance <= 0) return false;
+  if (chance >= 1) return true;
+  return Math.random() <= chance;
+}
+
+function getFrontlineGoldMultiplier(scene, enemy) {
+  if (!scene?.metrics?.zones?.frontline || !enemy) return 1;
+  const frontlineY = scene.metrics.zones.frontline.y;
+  const coreY = scene.metrics.core.y;
+  if (enemy.y <= frontlineY) return 1;
+  const travelSpan = Math.max(40, coreY - frontlineY);
+  const coreDepth = Phaser.Math.Clamp((enemy.y - frontlineY) / travelSpan, 0, 1);
+  return 1 + ((1 - coreDepth) * 0.35);
+}
 
 export function updateEnemies(scene, delta) {
   const dt = Math.max(0, Number(delta || 0)) / 1000;
@@ -13,13 +147,15 @@ export function updateEnemies(scene, delta) {
   const slowfieldRadius = scene.metrics.core.threatRadius + ((scene.coreModuleLevels.core_bastion || 0) * 18);
   const slowfieldRadiusSq = slowfieldRadius * slowfieldRadius;
 
+  applyEliteAuraBuffs(scene, scene.enemies);
+
   for (let i = 0; i < scene.enemies.length; i += 1) {
     const enemy = scene.enemies[i];
     if (!enemy || enemy.hp <= 0) {
       if (enemy?.id && enemy.id === scene.currentEliteAnchorId) {
         scene.currentEliteAnchorId = null;
       }
-      enemy?.display?.destroy?.();
+      destroyEnemyVisuals(enemy);
       continue;
     }
 
@@ -45,6 +181,17 @@ export function updateEnemies(scene, delta) {
     enemy.enteredFrontline = enemy.enteredFrontline || enemy.y >= frontlineY;
     enemy.display.x = enemy.x;
     enemy.display.y = enemy.y;
+    if (enemy.isEliteAnchor) {
+      if (enemy.eliteAura?.active) {
+        enemy.eliteAura.x = enemy.x;
+        enemy.eliteAura.y = enemy.y;
+      }
+      if (enemy.eliteAuraRing?.active) {
+        enemy.eliteAuraRing.x = enemy.x;
+        enemy.eliteAuraRing.y = enemy.y;
+      }
+      setEliteHpBar(enemy);
+    }
     nextEnemies.push(enemy);
   }
 
@@ -157,8 +304,9 @@ export function updateCoreModules(scene, time) {
       if (!enemy || enemy.hp <= 0) continue;
       const d2 = distanceSq(enemy.x, enemy.y, scene.metrics.core.x, scene.metrics.core.y);
       if (d2 > burnRadiusSq) continue;
-      enemy.hp -= burnDamage;
-      showDamageNumber(scene, enemy.x, enemy.y - Math.max(18, enemy.radius + 16), burnDamage, { color: '#ff9b5f', fontSize: 18, whisper: true });
+      const resolvedDamage = applyIncomingDamage(enemy, burnDamage);
+      enemy.hp -= resolvedDamage;
+      showDamageNumber(scene, enemy.x, enemy.y - Math.max(18, enemy.radius + 16), resolvedDamage, { color: '#ff9b5f', fontSize: 18, whisper: true });
       burnedAnyEnemy = true;
       if (enemy.hp <= 0) {
         handleEnemyDefeat(scene, enemy, 0xffa86b);
@@ -187,8 +335,9 @@ export function updateCoreModules(scene, time) {
     const overloadTarget = findOverloadTarget(scene);
     if (overloadTarget) {
       const overloadDamage = 16 + (overloadLevel * 12);
-      overloadTarget.hp -= overloadDamage;
-      showDamageNumber(scene, overloadTarget.x, overloadTarget.y - Math.max(18, overloadTarget.radius + 18), overloadDamage, { color: '#ffe082', fontSize: 20, whisper: true });
+      const resolvedDamage = applyIncomingDamage(overloadTarget, overloadDamage);
+      overloadTarget.hp -= resolvedDamage;
+      showDamageNumber(scene, overloadTarget.x, overloadTarget.y - Math.max(18, overloadTarget.radius + 18), resolvedDamage, { color: '#ffe082', fontSize: 20, whisper: true });
       const beam = scene.add.line(0, 0, scene.metrics.core.x, scene.metrics.core.y, overloadTarget.x, overloadTarget.y, 0xffd36b, 0.86)
         .setOrigin(0, 0)
         .setLineWidth(4, 4);
@@ -226,11 +375,11 @@ export function updateAutoAttack(scene, time) {
 
   if (!best) return;
   scene.lastAttackAt = time;
-  const eliteHunterBonus = getEliteHunterBonus(scene, best);
-  const critChance = Math.min(0.95, scene.playerCritChance + eliteHunterBonus.critChance);
+  const critChance = Math.min(0.95, scene.playerCritChance);
   const isCrit = Math.random() < critChance;
-  const baseDamage = scene.classOption.attackDamage + eliteHunterBonus.damage;
-  const damageAmount = Math.max(1, Math.round(baseDamage * (isCrit ? scene.playerCritMultiplier : 1)));
+  const baseDamage = scene.classOption.attackDamage;
+  const rawDamage = Math.max(1, Math.round(baseDamage * (isCrit ? scene.playerCritMultiplier : 1)));
+  const damageAmount = applyIncomingDamage(best, rawDamage);
   best.hp -= damageAmount;
   showDamageNumber(scene, best.x, best.y - Math.max(18, best.radius + 18), damageAmount, { color: '#ffe082', fontSize: 22, whisper: true, isCrit });
 
@@ -267,34 +416,19 @@ export function handleEnemyDefeat(scene, enemy, burstColor) {
     scene.currentEliteAnchorId = null;
   }
   const baseScore = Number(enemy.score || 1);
-  const baseGold = Math.max(1, Math.round(baseScore * 3));
+  const baseGold = getEnemyBaseGold(enemy);
   const baseExp = Math.max(1, Math.round(baseScore));
-  const frontlineReward = getFrontlineBountyReward(scene, enemy);
-  const eliteGoldBonus = enemy.isEliteAnchor ? 24 : 0;
+  const eliteGoldBonus = enemy.isEliteAnchor ? 28 : 0;
   const eliteExpBonus = enemy.isEliteAnchor ? 6 : 0;
-  const totalGoldReward = baseGold + frontlineReward.gold + eliteGoldBonus;
+  const frontlineMultiplier = getFrontlineGoldMultiplier(scene, enemy);
+  const totalGoldReward = shouldDropGold(enemy)
+    ? Math.max(1, Math.round((baseGold * frontlineMultiplier) + eliteGoldBonus))
+    : (enemy.isEliteAnchor ? eliteGoldBonus : 0);
 
   scene.score += baseScore;
-  gainBattleExp(scene, baseExp + frontlineReward.exp + eliteExpBonus);
-  spawnCoinBurst(scene, enemy.x, enemy.y, totalGoldReward, { isElite: enemy.isEliteAnchor });
-
-  if (enemy.isEliteAnchor) {
-    const dropReward = awardEliteDrop(scene);
-    if (dropReward) {
-      showDamageNumber(scene, enemy.x, enemy.y - Math.max(42, enemy.radius + 36), dropReward.name, {
-        color: dropReward.color,
-        fontSize: 18,
-        whisper: true,
-      });
-      showDamageNumber(scene, scene.metrics.core.x, scene.metrics.core.y - 108, dropReward.summary, {
-        color: dropReward.color,
-        fontSize: 18,
-        whisper: true,
-      });
-      if (scene.isUpgradeMenuOpen) {
-        scene.refreshUpgradeMenu();
-      }
-    }
+  gainBattleExp(scene, baseExp + eliteExpBonus);
+  if (totalGoldReward > 0) {
+    spawnCoinBurst(scene, enemy.x, enemy.y, totalGoldReward, { isElite: enemy.isEliteAnchor });
   }
 
   const burst = scene.add.circle(enemy.x, enemy.y, enemy.radius + 8, burstColor || 0xffffff, 0.4);

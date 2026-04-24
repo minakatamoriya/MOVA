@@ -59,6 +59,8 @@ export const CORE_DEFENSE_ENEMY_DEFS = {
     speed: 34,
     threat: 0.8,
     pressure: 1.0,
+    goldDropChance: 0.42,
+    goldDrop: 3,
     score: 1,
   },
   brute: {
@@ -70,6 +72,8 @@ export const CORE_DEFENSE_ENEMY_DEFS = {
     speed: 24,
     threat: 2.8,
     pressure: 2.4,
+    goldDropChance: 1,
+    goldDrop: 9,
     score: 3,
   },
   infiltrator: {
@@ -81,6 +85,8 @@ export const CORE_DEFENSE_ENEMY_DEFS = {
     speed: 58,
     threat: 2.2,
     pressure: 1.8,
+    goldDropChance: 0.88,
+    goldDrop: 7,
     score: 2,
   },
   anchor: {
@@ -95,6 +101,8 @@ export const CORE_DEFENSE_ENEMY_DEFS = {
     remoteThreat: 0.9,
     remotePressure: 1.3,
     anchorYRatio: 0.46,
+    goldDropChance: 1,
+    goldDrop: 12,
     score: 4,
   },
 };
