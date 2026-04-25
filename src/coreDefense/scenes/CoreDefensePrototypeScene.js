@@ -146,7 +146,7 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
   }
 
   createArena() {
-    const { width, zones, laneCenters, laneWidth } = this.metrics;
+    const { width, zones } = this.metrics;
     const zoneDefs = [
       ['入口带', zones.entrance, 0x163247],
       ['前线交战带', zones.frontline, 0x163f36],
@@ -161,10 +161,6 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
         color: '#d7e9ff',
         fontStyle: 'bold',
       }).setOrigin(0, 0);
-    });
-
-    [laneCenters.left, laneCenters.mid, laneCenters.right].forEach((centerX) => {
-      this.add.rectangle(centerX, this.scale.height * 0.5, laneWidth, this.scale.height, 0xffffff, 0.03).setOrigin(0.5);
     });
 
     [zones.frontline.y, zones.mid.y, zones.core.y].forEach((lineY) => {
@@ -340,10 +336,30 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     const enemyType = shouldSpawnEliteAnchor ? 'anchor' : rollEnemyType(Math.random(), directorState.weights);
     const def = CORE_DEFENSE_ENEMY_DEFS[enemyType];
     const hpMultiplier = getEnemyHpMultiplier(enemyType, directorState.groupIndex) * (shouldSpawnEliteAnchor ? 2.6 : 1);
-    const drift = shouldSpawnEliteAnchor
-      ? 0
-      : Phaser.Math.Between(-Math.round(this.metrics.laneWidth * 0.28), Math.round(this.metrics.laneWidth * 0.28));
-    const x = clamp(this.metrics.laneCenters[laneKey] + drift, def.radius + 6, this.scale.width - def.radius - 6);
+    const edgePadding = 0;
+    const leftLaneMaxX = Math.round(this.metrics.laneCenters.left + this.metrics.laneWidth * 0.5);
+    const rightLaneMinX = Math.round(this.metrics.laneCenters.right - this.metrics.laneWidth * 0.5);
+    const edgeBandWidth = Math.max(28, Math.round(this.metrics.laneWidth * 0.34));
+    let x = this.metrics.laneCenters[laneKey];
+
+    if (shouldSpawnEliteAnchor) {
+      x = this.metrics.laneCenters.mid;
+    } else if (laneKey === 'left') {
+      const preferOuterEdge = Phaser.Math.Between(0, 99) < 72;
+      x = preferOuterEdge
+        ? Phaser.Math.Between(edgePadding, Math.min(leftLaneMaxX, edgePadding + edgeBandWidth))
+        : Phaser.Math.Between(edgePadding, leftLaneMaxX);
+    } else if (laneKey === 'right') {
+      const preferOuterEdge = Phaser.Math.Between(0, 99) < 72;
+      x = preferOuterEdge
+        ? Phaser.Math.Between(Math.max(rightLaneMinX, this.scale.width - edgePadding - edgeBandWidth), this.scale.width - edgePadding)
+        : Phaser.Math.Between(rightLaneMinX, this.scale.width - edgePadding);
+    } else {
+      const drift = Phaser.Math.Between(-Math.round(this.metrics.laneWidth * 0.28), Math.round(this.metrics.laneWidth * 0.28));
+      x = this.metrics.laneCenters.mid + drift;
+    }
+
+    x = clamp(x, 0, this.scale.width);
     const y = this.metrics.spawnY;
     const bodyRadius = shouldSpawnEliteAnchor ? def.radius + 6 : def.radius;
     const { sprite: body, shadow, shadowCore, textureSet } = this.createEnemyDisplay(enemyType, x, y, bodyRadius, shouldSpawnEliteAnchor);

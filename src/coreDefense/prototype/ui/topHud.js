@@ -97,139 +97,147 @@ export function createTopHud(scene) {
   const centerX = Math.round(width * 0.5);
   const depthBase = 920;
   const sidePadding = 18;
-  const fullBarWidth = Math.max(280, width - (sidePadding * 2));
-  const coreBarWidth = fullBarWidth;
-  const coreBarHeight = 18;
-  const expBarWidth = fullBarWidth;
-  const expBarHeight = 10;
+  const barGap = 14;
+  const menuReserve = 0;
+  const availableBarWidth = Math.max(320, width - (sidePadding * 2) - menuReserve);
+  const barWidth = Math.max(150, Math.floor((availableBarWidth - barGap) / 2));
+  const coreBarWidth = barWidth;
+  const coreBarHeight = 14;
+  const expBarWidth = barWidth;
+  const expBarHeight = 14;
 
   scene.topPanelHeight = panelHeight;
 
-  const bg = scene.add.rectangle(centerX, panelHeight * 0.5, width, panelHeight, 0x050b12, 0.9)
+  const bg = scene.add.rectangle(centerX, panelHeight * 0.5, width, panelHeight, 0x050b12, 0)
     .setOrigin(0.5, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase);
-  bg.setStrokeStyle(1, 0xffffff, 0.08);
+  bg.setStrokeStyle(0, 0xffffff, 0);
   const topLine = scene.add.line(0, 0, 0, 6, width, 6, 0x90e0ff, 0.22)
     .setOrigin(0, 0)
     .setScrollFactor(0)
     .setDepth(depthBase + 1);
-  const bottomLine = scene.add.line(0, 0, 0, panelHeight - 4, width, panelHeight - 4, 0xffc46b, 0.16)
+  const bottomLine = scene.add.line(0, 0, 0, panelHeight - 4, width, panelHeight - 4, 0xffc46b, 0)
     .setOrigin(0, 0)
     .setScrollFactor(0)
     .setDepth(depthBase + 1);
+
+  const topBarY = 20;
+  const topTextY = 31;
+  const leftBarX = sidePadding;
+  const rightBarX = leftBarX + coreBarWidth + barGap;
 
   const classText = scene.add.text(18, 16, '', {
     fontSize: '20px',
     color: '#ffffff',
     fontStyle: 'bold',
   }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 1);
+  classText.setVisible(false);
 
-  const goldText = scene.add.text(18, 40, '', {
+  const goldText = scene.add.text(18, 50, '', {
     fontSize: '16px',
     color: '#ffe18a',
     fontStyle: 'bold',
   }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const scoreText = scene.add.text(18, 60, '', {
+  const scoreText = scene.add.text(18, 70, '', {
     fontSize: '16px',
     color: '#cce7ff',
   }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const timerText = scene.add.text(width - 18, 16, '', {
+  const timerText = scene.add.text(width - 18, 50, '', {
     fontSize: '20px',
     color: '#ffe18a',
     fontStyle: 'bold',
   }).setOrigin(1, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const waveText = scene.add.text(width - 18, 40, '', {
+  const waveText = scene.add.text(width - 18, 72, '', {
     fontSize: '15px',
     color: '#d9ecff',
     fontStyle: 'bold',
   }).setOrigin(1, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const stageText = scene.add.text(width - 18, 60, '', {
+  const stageText = scene.add.text(width - 18, 90, '', {
     fontSize: '15px',
     color: '#ffcf80',
     fontStyle: 'bold',
   }).setOrigin(1, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const threatText = scene.add.text(18, 86, '', {
+  const threatText = scene.add.text(18, 90, '', {
     fontSize: '14px',
     color: '#ffd36b',
   }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const pressureText = scene.add.text(width - 18, 86, '', {
+  const pressureText = scene.add.text(width - 18, 108, '', {
     fontSize: '14px',
     color: '#9ce6ff',
   }).setOrigin(1, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const coreTitleText = scene.add.text(18, 104, '核心完整度', {
+  const coreTitleText = scene.add.text(leftBarX, topTextY, '核心 0/0', {
     fontSize: '14px',
     color: '#ffd6ef',
     fontStyle: 'bold',
-  }).setOrigin(0, 1).setScrollFactor(0).setDepth(depthBase + 1);
+  }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 6);
 
-  const coreBarY = 108;
-  const expBarY = 124;
-  const barStartX = sidePadding;
+  const coreBarY = topBarY;
+  const expBarY = topBarY;
 
-  const coreBarBg = scene.add.rectangle(centerX, coreBarY, coreBarWidth + 6, coreBarHeight + 8, 0x10161f, 0.96)
-    .setOrigin(0.5, 0.5)
+  const coreBarBg = scene.add.rectangle(leftBarX, coreBarY, coreBarWidth + 4, coreBarHeight + 4, 0x10161f, 1)
+    .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 1);
   coreBarBg.setStrokeStyle(1, 0xffffff, 0.12);
 
-  const coreFrame = scene.add.rectangle(centerX, coreBarY, coreBarWidth + 10, coreBarHeight + 10, 0x000000, 0)
+  const coreFrame = scene.add.rectangle(leftBarX + (coreBarWidth + 4) * 0.5, coreBarY, coreBarWidth + 8, coreBarHeight + 8, 0x000000, 0)
     .setOrigin(0.5, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 2);
   coreFrame.setStrokeStyle(2, 0xffd7de, 0.4);
 
-  const coreBarLag = scene.add.rectangle(barStartX, coreBarY, coreBarWidth, coreBarHeight, 0xd8b85d, 0.72)
+  const coreBarLag = scene.add.rectangle(leftBarX + 2, coreBarY, coreBarWidth, coreBarHeight, 0xd8b85d, 0.72)
     .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 3);
 
-  const coreBar = scene.add.rectangle(barStartX, coreBarY, coreBarWidth, coreBarHeight, 0x52d66f, 1)
+  const coreBar = scene.add.rectangle(leftBarX + 2, coreBarY, coreBarWidth, coreBarHeight, 0x52d66f, 1)
     .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 4);
 
-  const coreDamageFlash = scene.add.rectangle(barStartX, coreBarY, 0, coreBarHeight + 2, 0xffffff, 0)
+  const coreDamageFlash = scene.add.rectangle(leftBarX + 2, coreBarY, 0, coreBarHeight + 2, 0xffffff, 0)
     .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 5);
 
-  const coreValueText = scene.add.text(width - 18, 104, '', {
+  const coreValueText = scene.add.text(leftBarX, topTextY, '', {
     fontSize: '14px',
     color: '#ffffff',
     fontStyle: 'bold',
-  }).setOrigin(1, 1).setScrollFactor(0).setDepth(depthBase + 6);
+  }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 6);
 
-  const shieldText = scene.add.text(width - 18, 86, '', {
+  const shieldText = scene.add.text(18, 108, '', {
     fontSize: '14px',
     color: '#b6d6ff',
-  }).setOrigin(1, 1).setScrollFactor(0).setDepth(depthBase + 1);
+  }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 1);
 
-  const expLabelText = scene.add.text(18, 118, '', {
+  const expLabelText = scene.add.text(rightBarX, topTextY, '', {
     fontSize: '14px',
     color: '#d4e7ff',
     fontStyle: 'bold',
-  }).setOrigin(0, 1).setScrollFactor(0).setDepth(depthBase + 1);
+  }).setOrigin(0, 0).setScrollFactor(0).setDepth(depthBase + 6);
 
-  const expBarBg = scene.add.rectangle(centerX, expBarY, expBarWidth + 6, expBarHeight + 6, 0x10161f, 0.96)
-    .setOrigin(0.5, 0.5)
+  const expBarBg = scene.add.rectangle(rightBarX, expBarY, expBarWidth + 4, expBarHeight + 4, 0x10161f, 1)
+    .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 1);
   expBarBg.setStrokeStyle(1, 0xffffff, 0.1);
 
-  const expBar = scene.add.rectangle(barStartX, expBarY, expBarWidth, expBarHeight, 0x7bd8ff, 1)
+  const expBar = scene.add.rectangle(rightBarX + 2, expBarY, expBarWidth, expBarHeight, 0x7bd8ff, 1)
     .setOrigin(0, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 3);
 
-  const levelPulse = scene.add.rectangle(centerX, expBarY, expBarWidth + 8, expBarHeight + 10, 0x9ce6ff, 0)
+  const levelPulse = scene.add.rectangle(rightBarX + (expBarWidth + 4) * 0.5, expBarY, expBarWidth + 8, expBarHeight + 8, 0x9ce6ff, 0)
     .setOrigin(0.5, 0.5)
     .setScrollFactor(0)
     .setDepth(depthBase + 4);
@@ -279,7 +287,7 @@ export function refreshTopHud(scene, options = {}) {
   const leveledUp = scene.battleLevel > (hud.lastBattleLevel || scene.battleLevel);
   hud.lastBattleLevel = scene.battleLevel;
 
-  hud.classText.setText(`职业：${scene.classOption.name}`);
+  hud.classText.setText('');
   hud.goldText.setText(`金币：${scene.gold}`);
   hud.scoreText.setText(`清除：${scene.score}`);
   hud.timerText.setText(`坚守 ${String(Math.floor(scene.survivedMs / 60000)).padStart(2, '0')}:${String(Math.floor(scene.survivedMs / 1000) % 60).padStart(2, '0')}`);
@@ -287,7 +295,8 @@ export function refreshTopHud(scene, options = {}) {
   hud.stageText.setText(`战局：${scene.currentThreatStageLabel}`);
   hud.threatText.setText(`威胁 ${(Number(scene.currentThreat || 0)).toFixed(1)} ${scene.currentThreatTier}`);
   hud.pressureText.setText(`施压 ${(Number(scene.currentPressure || 0)).toFixed(1)}`);
-  hud.coreValueText.setText(`${Math.max(0, Math.round(scene.coreHp))}/${scene.coreMaxHp}`);
+  hud.coreTitleText.setText('');
+  hud.coreValueText.setText(`核心 ${Math.max(0, Math.round(scene.coreHp))}/${scene.coreMaxHp}`);
   hud.shieldText.setText(`护盾 ${Math.max(0, Math.round(scene.coreShield))}/${scene.coreShieldMax}`);
   hud.expLabelText.setText(`Lv.${scene.battleLevel} 经验 ${scene.battleExp}/${scene.nextBattleExp}`);
 

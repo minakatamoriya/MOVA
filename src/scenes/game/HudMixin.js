@@ -153,7 +153,9 @@ export function applyHudMixin(GameScene) {
         this.updateHpProgressBar(hpPercent);
 
         if (this.hpBarText) {
-          this.hpBarText.setText(`${this.player.hp}`);
+          const currentHp = Math.max(0, Math.round(Number(this.player.hp || 0)));
+          const maxHp = Math.max(1, Math.round(Number(this.player.maxHp || 1)));
+          this.hpBarText.setText(`生命 ${currentHp}/${maxHp}`);
           if (hpPercent > 0.6) {
             this.hpBarText.setColor('#caffca');
           } else if (hpPercent > 0.3) {
@@ -170,7 +172,10 @@ export function applyHudMixin(GameScene) {
           : 0;
         this.updateExpProgressBar(expPercent);
         if (this.expBarText?.setText) {
-          this.expBarText.setText(`Lv.${Math.max(1, Number(this.playerData.level || this.currentLevel || 1))}`);
+          const level = Math.max(1, Number(this.playerData.level || this.currentLevel || 1));
+          const currentExp = Math.max(0, Math.round(Number(this.playerData.exp || 0)));
+          const maxExp = Math.max(0, Math.round(Number(this.playerData.maxExp || 0)));
+          this.expBarText.setText(`Lv.${level} 经验 ${currentExp}/${maxExp}`);
         }
       }
 
@@ -284,7 +289,7 @@ export function applyHudMixin(GameScene) {
     updateHpProgressBar(hpPercent) {
       if (!this.hpBarFill || !this.hpBarBg) return;
       const percent = Phaser.Math.Clamp(hpPercent, 0, 1);
-      const fillWidth = Math.max(2, Math.floor(this.hpBarWidth * percent));
+      const fillWidth = percent > 0 ? Math.max(2, Math.floor(this.hpBarWidth * percent)) : 0;
       this.hpBarFill.width = fillWidth;
 
       let fillColor;
@@ -313,7 +318,7 @@ export function applyHudMixin(GameScene) {
     updateExpProgressBar(expPercent) {
       if (!this.expBarFill || !this.expBarBg) return;
       const percent = Phaser.Math.Clamp(expPercent, 0, 1);
-      const fillWidth = Math.max(2, Math.floor(this.expBarWidth * percent));
+      const fillWidth = percent > 0 ? Math.max(2, Math.floor(this.expBarWidth * percent)) : 0;
       this.expBarFill.width = fillWidth;
       this.expBarFill.setFillStyle(0x00ffff, 1);
     },
@@ -506,24 +511,20 @@ export function applyHudMixin(GameScene) {
 
     createTopLeftHud() {
       const x = 14;
-      const y = 10;
-      this.hpLabelText = this.add.text(x, 20, '生命', {
-        fontSize: '15px',
-        color: '#8ff5b5',
-        fontStyle: 'bold',
-        stroke: '#000000',
-        strokeThickness: 3
-      }).setOrigin(0, 0.5);
-      this.hpLabelText.setScrollFactor(0);
-      this.hpLabelText.setDepth(920);
+      const y = 8;
+      const barY = y + 8;
+      const barGap = 12;
+      const menuReservedWidth = 92;
+      const availableWidth = Math.max(360, this.cameras.main.width - x * 2 - menuReservedWidth);
+      const barWidth = Math.max(160, Math.floor((availableWidth - barGap) / 2));
+      const barHeight = 14;
+      const textY = barY + 18;
+      const barX = x;
 
-      const barX = x + 42;
-      const barY = y + 10;
-      const barWidth = Math.min(360, Math.max(220, Math.floor(this.cameras.main.width * 0.28)));
-      const barHeight = 12;
+      this.hpLabelText = null;
 
       this.hpBarWidth = barWidth - 4;
-      this.hpBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x0b0b18, 0.92).setOrigin(0, 0.5);
+      this.hpBarBg = this.add.rectangle(barX, barY, barWidth, barHeight, 0x121827, 1).setOrigin(0, 0.5);
       this.hpBarBg.setStrokeStyle(1, 0x2a2a3a);
       this.hpBarBg.setScrollFactor(0);
       this.hpBarBg.setDepth(920);
@@ -532,31 +533,25 @@ export function applyHudMixin(GameScene) {
       this.hpBarFill.setScrollFactor(0);
       this.hpBarFill.setDepth(921);
 
-      this.hpBarText = this.add.text(barX + barWidth + 10, barY, '100', {
-        fontSize: '16px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      }).setOrigin(0, 0.5);
-      this.hpBarText.setScrollFactor(0);
-      this.hpBarText.setDepth(922);
-
-      const expBarX = Math.max(barX + barWidth + 44, Math.floor(this.cameras.main.width * 0.5));
-      this.expLabelText = this.add.text(expBarX - 10, barY, '等级', {
+      this.hpBarText = this.add.text(barX, textY, '生命 100/100', {
         fontSize: '14px',
-        color: '#9be7ff',
+        color: '#ffffff',
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(1, 0.5);
-      this.expLabelText.setScrollFactor(0);
-      this.expLabelText.setDepth(922);
+      }).setOrigin(0, 0);
+      this.hpBarText.setScrollFactor(0);
+      this.hpBarText.setDepth(922);
+
+      const expBarX = barX + barWidth + barGap;
+      this.expLabelText = null;
 
       const expBarY = barY;
       const expBarWidth = barWidth;
       const expBarHeight = barHeight;
 
       this.expBarWidth = expBarWidth - 4;
-      this.expBarBg = this.add.rectangle(expBarX, expBarY, expBarWidth, expBarHeight, 0x0b0b18, 0.85).setOrigin(0, 0.5);
+      this.expBarBg = this.add.rectangle(expBarX, expBarY, expBarWidth, expBarHeight, 0x121827, 1).setOrigin(0, 0.5);
       this.expBarBg.setStrokeStyle(1, 0x2a2a3a);
       this.expBarBg.setScrollFactor(0);
       this.expBarBg.setDepth(920);
@@ -565,18 +560,18 @@ export function applyHudMixin(GameScene) {
       this.expBarFill.setScrollFactor(0);
       this.expBarFill.setDepth(921);
 
-      this.expBarText = this.add.text(expBarX + expBarWidth + 10, expBarY, '', {
+      this.expBarText = this.add.text(expBarX, textY, '', {
         fontSize: '14px',
         color: '#ffffff',
         fontStyle: 'bold',
         stroke: '#000000',
         strokeThickness: 3
-      }).setOrigin(0, 0.5);
+      }).setOrigin(0, 0);
       this.expBarText.setScrollFactor(0);
       this.expBarText.setDepth(922);
       this.expBarText.setVisible(true);
 
-      const coinY = barY + 30;
+      const coinY = textY + 28;
       this.sessionCoinLabelText = this.add.text(x, coinY, '金币', {
         fontSize: '15px',
         color: '#ffd76b',
