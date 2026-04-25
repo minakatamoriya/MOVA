@@ -411,7 +411,6 @@ export default function App() {
   const [confirmExitOpen, setConfirmExitOpen] = useState(false);
   const [floatingInfoText, setFloatingInfoText] = useState('');
   const [gameViewportRect, setGameViewportRect] = useState(() => getGameViewportRect());
-  const [selectedMenuCore, setSelectedMenuCore] = useState(MENU_CLASS_OPTIONS[0]?.id || 'warrior');
   const [menuScreen, setMenuScreen] = useState('home');
   const floatingInfoTimerRef = useRef(null);
   const prevSceneKeyRef = useRef(sceneKey);
@@ -580,7 +579,6 @@ export default function App() {
     Number(levelUp?.pendingSinceMs || 0),
     Number(levelUp?.lastInteractionMs || 0)
   );
-  const selectedMenuClass = MENU_CLASS_OPTIONS.find((item) => item.id === selectedMenuCore) || MENU_CLASS_OPTIONS[0];
   const menuViewportCompact = gameViewportRect.width <= 430;
   const levelUpAttentionElapsedMs = (!levelUpPanelOpen && levelUpPendingPoints > 0)
     ? Math.max(0, gameplayNowMs - levelUpAttentionBaseMs)
@@ -1879,20 +1877,19 @@ export default function App() {
               <>
                 <div style={{ opacity: 0.85, textAlign: 'center', marginBottom: 6 }}>主职业选择</div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                   {MENU_CLASS_OPTIONS.map((item) => {
-                    const selected = selectedMenuClass?.id === item.id;
                     return (
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setSelectedMenuCore(item.id)}
+                        onClick={() => uiBus.emit('ui:gotoScene', 'CoreDefensePrototypeScene', { selectedMainCore: item.id })}
                         style={{
                           cursor: 'pointer',
                           minHeight: menuViewportCompact ? 84 : 96,
                           borderRadius: 16,
-                          border: selected ? `2px solid ${item.color}` : '1px solid rgba(255,255,255,0.12)',
-                          background: selected ? `linear-gradient(180deg, ${item.accent}, rgba(11,11,24,0.92))` : 'rgba(255,255,255,0.05)',
+                          border: `1px solid ${item.color}88`,
+                          background: `linear-gradient(180deg, ${item.accent}, rgba(11,11,24,0.92))`,
                           color: '#fff',
                           display: 'flex',
                           flexDirection: 'column',
@@ -1900,7 +1897,7 @@ export default function App() {
                           justifyContent: 'center',
                           gap: 6,
                           padding: '10px 8px',
-                          boxShadow: selected ? `0 0 0 1px ${item.color}44 inset, 0 12px 24px ${item.color}22` : 'none'
+                          boxShadow: `0 0 0 1px ${item.color}33 inset, 0 12px 24px ${item.color}22`
                         }}
                       >
                         <div style={{ fontSize: menuViewportCompact ? 24 : 28, lineHeight: 1 }}>{item.glyph}</div>
@@ -1908,128 +1905,6 @@ export default function App() {
                       </button>
                     );
                   })}
-                </div>
-
-                {selectedMenuClass ? (
-                  <div
-                    style={{
-                      borderRadius: 18,
-                      border: `1px solid ${selectedMenuClass.color}66`,
-                      background: `linear-gradient(180deg, ${selectedMenuClass.accent}, rgba(11,11,24,0.88))`,
-                      padding: menuViewportCompact ? 14 : 16,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12,
-                      marginBottom: 14
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div
-                        style={{
-                          width: menuViewportCompact ? 58 : 68,
-                          height: menuViewportCompact ? 58 : 68,
-                          borderRadius: 18,
-                          background: 'rgba(255,255,255,0.08)',
-                          border: `1px solid ${selectedMenuClass.color}66`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: menuViewportCompact ? 28 : 34,
-                          flexShrink: 0
-                        }}
-                      >
-                        {selectedMenuClass.glyph}
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: menuViewportCompact ? 24 : 28, fontWeight: 900 }}>{selectedMenuClass.name}</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
-                          {selectedMenuClass.tags.map((tag) => (
-                            <div
-                              key={tag}
-                              style={{
-                                height: 24,
-                                padding: '0 10px',
-                                borderRadius: 999,
-                                border: '1px solid rgba(255,255,255,0.14)',
-                                background: 'rgba(255,255,255,0.06)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                fontSize: 11,
-                                fontWeight: 900,
-                                opacity: 0.92
-                              }}
-                            >
-                              {tag}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ fontSize: 14, lineHeight: 1.65, opacity: 0.9 }}>{selectedMenuClass.summary}</div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-                      {selectedMenuClass.stats.map((stat) => (
-                        <div key={stat.label} style={{ borderRadius: 12, background: 'rgba(11,11,24,0.58)', padding: '10px 10px 8px' }}>
-                          <div style={{ fontSize: 12, opacity: 0.68 }}>{stat.label}</div>
-                          <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
-                            {new Array(5).fill(null).map((_, index) => (
-                              <div
-                                key={`${stat.label}-${index}`}
-                                style={{
-                                  flex: 1,
-                                  height: 7,
-                                  borderRadius: 999,
-                                  background: index < stat.value ? selectedMenuClass.color : 'rgba(255,255,255,0.08)',
-                                  opacity: index < stat.value ? 0.95 : 1
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
-                        <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>基础攻击</div>
-                        <div style={{ fontSize: 14, lineHeight: 1.6 }}>{selectedMenuClass.baseSkill}</div>
-                      </div>
-                      <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
-                        <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>职业优势</div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 14, lineHeight: 1.5 }}>
-                          {selectedMenuClass.strengths.map((text) => <div key={text}>{text}</div>)}
-                        </div>
-                      </div>
-                      {/* <div style={{ borderRadius: 14, background: 'rgba(11,11,24,0.58)', padding: '12px 12px 10px' }}>
-                        <div style={{ fontSize: 12, opacity: 0.68, marginBottom: 6 }}>代表成长</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {selectedMenuClass.showcase.map((text) => (
-                            <div key={text} style={{ borderRadius: 999, padding: '6px 10px', background: 'rgba(255,255,255,0.06)', fontSize: 12, fontWeight: 800 }}>
-                              {text}
-                            </div>
-                          ))}
-                        </div>
-                      </div> */}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => setMenuScreen('home')}
-                    style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%' }}
-                  >
-                    返回
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => uiBus.emit('ui:gotoScene', 'CoreDefensePrototypeScene', { selectedMainCore: selectedMenuClass?.id || 'warrior' })}
-                    style={{ ...menuBtnStyle, width: 'auto', flex: '1 1 48%', height: 54, background: `linear-gradient(180deg, ${selectedMenuClass?.accent || 'rgba(255,255,255,0.12)'}, rgba(255,255,255,0.10))`, border: `1px solid ${selectedMenuClass?.color || 'rgba(255,255,255,0.25)'}` }}
-                  >
-                    以{selectedMenuClass?.name || '该职业'}进入试炼之地
-                  </button>
                 </div>
               </>
             )}

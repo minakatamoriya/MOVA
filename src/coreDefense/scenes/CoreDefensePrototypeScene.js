@@ -44,9 +44,47 @@ import {
 } from '../prototype/systems/combatSystems';
 import { clearCoinDrops, updateCoinDrops } from '../prototype/systems/coinDrops';
 
+const CORE_DEFENSE_MONSTER_TEXTURES = {
+  swarm: {
+    base: 'coreDefenseMonsterSwarm',
+    hit: 'coreDefenseMonsterSwarmHit',
+  },
+  brute: {
+    base: 'coreDefenseMonsterBrute',
+    hit: 'coreDefenseMonsterBruteHit',
+  },
+  infiltrator: {
+    base: 'coreDefenseMonsterInfiltrator',
+    hit: 'coreDefenseMonsterInfiltratorHit',
+  },
+  anchor: {
+    base: 'coreDefenseMonsterAnchor',
+    hit: 'coreDefenseMonsterAnchorHit',
+  },
+};
+
+const CORE_DEFENSE_MONSTER_TEXTURE_PATHS = {
+  [CORE_DEFENSE_MONSTER_TEXTURES.swarm.base]: 'assets/monsters/sprite_candidates/core_swarm_slime.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.swarm.hit]: 'assets/monsters/sprite_candidates/core_swarm_slime_hit.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.brute.base]: 'assets/monsters/sprite_candidates/core_brute_barkhide.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.brute.hit]: 'assets/monsters/sprite_candidates/core_brute_barkhide_hit.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.infiltrator.base]: 'assets/monsters/sprite_candidates/core_raider_needlefang.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.infiltrator.hit]: 'assets/monsters/sprite_candidates/core_raider_needlefang_hit.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.anchor.base]: 'assets/monsters/sprite_candidates/core_anchor_sporetotem.png',
+  [CORE_DEFENSE_MONSTER_TEXTURES.anchor.hit]: 'assets/monsters/sprite_candidates/core_anchor_sporetotem_hit.png',
+};
+
 export default class CoreDefensePrototypeScene extends Phaser.Scene {
   constructor() {
     super({ key: 'CoreDefensePrototypeScene' });
+  }
+
+  preload() {
+    Object.entries(CORE_DEFENSE_MONSTER_TEXTURE_PATHS).forEach(([key, path]) => {
+      if (!this.textures.exists(key)) {
+        this.load.image(key, path);
+      }
+    });
   }
 
   init(data = {}) {
@@ -265,6 +303,29 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     purchaseCoreModuleUi(this, moduleId);
   }
 
+  createEnemyDisplay(enemyType, x, y, radius, isEliteAnchor) {
+    const textureSet = CORE_DEFENSE_MONSTER_TEXTURES[enemyType] || CORE_DEFENSE_MONSTER_TEXTURES.swarm;
+    const diameter = Math.max(18, radius * 2);
+    const shadowY = y + Math.max(9, Math.round(radius * 0.76));
+    const shadow = this.add.ellipse(x, shadowY, Math.round(diameter * 1.02), Math.max(10, Math.round(radius * 0.92)), 0x000000, 0.2)
+      .setOrigin(0.5)
+      .setDepth(1);
+    const shadowCore = this.add.ellipse(x, shadowY, Math.round(diameter * 0.68), Math.max(7, Math.round(radius * 0.56)), 0x000000, 0.36)
+      .setOrigin(0.5)
+      .setDepth(1);
+    const sprite = this.add.image(x, y, textureSet.base)
+      .setOrigin(0.5)
+      .setDisplaySize(diameter, diameter)
+      .setDepth(2)
+      .setAlpha(0.98);
+    if (isEliteAnchor) {
+      sprite.setScale((diameter / Math.max(1, sprite.width)) * 1.08, (diameter / Math.max(1, sprite.height)) * 1.08);
+      shadow.setScale(1.14, 1.05);
+      shadowCore.setScale(1.1, 1.04);
+    }
+    return { sprite, shadow, shadowCore, textureSet };
+  }
+
   spawnEnemy() {
     if (this.gameResolved) return;
     const elapsedMs = Math.max(0, this.time.now - this.roundStartedAt);
@@ -284,8 +345,8 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
       : Phaser.Math.Between(-Math.round(this.metrics.laneWidth * 0.28), Math.round(this.metrics.laneWidth * 0.28));
     const x = clamp(this.metrics.laneCenters[laneKey] + drift, def.radius + 6, this.scale.width - def.radius - 6);
     const y = this.metrics.spawnY;
-    const body = this.add.circle(x, y, shouldSpawnEliteAnchor ? def.radius + 6 : def.radius, def.color, 0.96)
-      .setStrokeStyle(shouldSpawnEliteAnchor ? 3 : 2, shouldSpawnEliteAnchor ? 0xffe08a : 0x000000, shouldSpawnEliteAnchor ? 0.85 : 0.35);
+    const bodyRadius = shouldSpawnEliteAnchor ? def.radius + 6 : def.radius;
+    const { sprite: body, shadow, shadowCore, textureSet } = this.createEnemyDisplay(enemyType, x, y, bodyRadius, shouldSpawnEliteAnchor);
     const eliteAuraTypes = ['haste', 'guard', 'corrosion'];
     const eliteAuraType = shouldSpawnEliteAnchor
       ? eliteAuraTypes[(directorState.waveIndex + directorState.groupIndex) % eliteAuraTypes.length]
@@ -324,8 +385,7 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
     let eliteLabelText = null;
     let eliteIconText = null;
     if (shouldSpawnEliteAnchor) {
-      body.setFillStyle(eliteAuraStyle.fill, 0.95);
-      body.setStrokeStyle(4, eliteAuraStyle.stroke, 0.95);
+      body.setTint(eliteAuraStyle.fill);
       eliteAura = this.add.circle(x, y, def.radius + 30, eliteAuraStyle.aura, 0.08)
         .setStrokeStyle(2, eliteAuraStyle.aura, 0.42);
       eliteAuraRing = this.add.circle(x, y, def.radius + 18, eliteAuraStyle.ring, 0)
@@ -409,7 +469,22 @@ export default class CoreDefensePrototypeScene extends Phaser.Scene {
       eliteAuraIcon: eliteAuraStyle?.icon || '',
       eliteAuraRadius: shouldSpawnEliteAnchor ? (def.radius + 34 + (directorState.groupIndex * 8)) : 0,
       eliteAuraStrength: shouldSpawnEliteAnchor ? Math.min(0.42, 0.16 + (directorState.groupIndex * 0.06)) : 0,
+      baseTextureKey: textureSet.base,
+      hitTextureKey: textureSet.hit,
+      baseTint: shouldSpawnEliteAnchor ? eliteAuraStyle?.fill || null : null,
+      auraTint: null,
+      displayBaseScaleX: body.scaleX,
+      displayBaseScaleY: body.scaleY,
+      hoverPhase: Math.random() * Math.PI * 2,
+      breathPhase: Math.random() * Math.PI * 2,
+      hoverAmplitude: shouldSpawnEliteAnchor ? 4.5 : (enemyType === 'infiltrator' ? 3.8 : 2.8),
+      breathAmplitude: shouldSpawnEliteAnchor ? 0.05 : 0.035,
+      hitTextureUntil: 0,
+      hitFlashUntil: 0,
+      hitReactUntil: 0,
       display: body,
+      shadow,
+      shadowCore,
       eliteAura,
       eliteAuraRing,
       eliteHpBarBg,

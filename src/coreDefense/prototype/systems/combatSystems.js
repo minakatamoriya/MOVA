@@ -40,6 +40,8 @@ function setEliteHpBar(enemy) {
 }
 
 function destroyEnemyVisuals(enemy) {
+  enemy?.shadow?.destroy?.();
+  enemy?.shadowCore?.destroy?.();
   enemy?.display?.destroy?.();
   enemy?.eliteAura?.destroy?.();
   enemy?.eliteAuraRing?.destroy?.();
@@ -49,10 +51,119 @@ function destroyEnemyVisuals(enemy) {
   enemy?.eliteIconText?.destroy?.();
 }
 
+function resetEnemyVisualState(enemy) {
+  if (!enemy) return;
+  enemy.auraTint = null;
+}
+
+function applyEnemyAuraState(enemy, tint) {
+  if (!enemy) return;
+  enemy.auraTint = tint;
+}
+
+function triggerEnemyHitReaction(scene, enemy) {
+  if (!scene || !enemy || enemy.hp <= 0) return;
+  const now = Number(scene.time?.now || 0);
+  enemy.hitTextureUntil = Math.max(enemy.hitTextureUntil || 0, now + 90);
+  enemy.hitFlashUntil = Math.max(enemy.hitFlashUntil || 0, now + 70);
+  enemy.hitReactUntil = Math.max(enemy.hitReactUntil || 0, now + 140);
+}
+
+function applyEnemyPresentation(scene, enemy) {
+  if (!scene || !enemy?.display) return;
+  const now = Number(scene.time?.now || 0);
+  const hoverWave = Math.sin((now * 0.007) + Number(enemy.hoverPhase || 0));
+  const breathWave = Math.sin((now * 0.0048) + Number(enemy.breathPhase || 0));
+  const hoverOffset = hoverWave * Number(enemy.hoverAmplitude || 0);
+  const breatheAmplitude = Number(enemy.breathAmplitude || 0);
+  const baseScaleX = Number(enemy.displayBaseScaleX || 1);
+  const baseScaleY = Number(enemy.displayBaseScaleY || 1);
+  const breatheScaleX = 1 + (breathWave * breatheAmplitude);
+  const breatheScaleY = 1 - (breathWave * breatheAmplitude * 0.55);
+  let hitScaleX = 1;
+  let hitScaleY = 1;
+  if ((enemy.hitReactUntil || 0) > now) {
+    const reactProgress = Phaser.Math.Clamp((enemy.hitReactUntil - now) / 140, 0, 1);
+    const impact = Math.sin((1 - reactProgress) * Math.PI);
+    hitScaleX += impact * 0.18;
+    hitScaleY -= impact * 0.2;
+  }
+
+  enemy.presentYOffset = hoverOffset;
+  enemy.display.x = enemy.x;
+  enemy.display.y = enemy.y + hoverOffset;
+  enemy.display.setScale(baseScaleX * breatheScaleX * hitScaleX, baseScaleY * breatheScaleY * hitScaleY);
+
+  const nextTexture = (enemy.hitTextureUntil || 0) > now ? enemy.hitTextureKey : enemy.baseTextureKey;
+  if (nextTexture && enemy.display.texture?.key !== nextTexture) {
+    enemy.display.setTexture(nextTexture);
+  }
+
+  if ((enemy.hitFlashUntil || 0) > now) {
+    enemy.display.setTintFill?.(0xffffff);
+  } else {
+    const tint = enemy.auraTint ?? enemy.baseTint ?? null;
+    if (tint != null) enemy.display.setTint?.(tint);
+    else enemy.display.clearTint?.();
+  }
+
+  const shadowBaseX = enemy.isEliteAnchor ? 1.14 : 1;
+  const shadowBaseY = enemy.isEliteAnchor ? 1.05 : 1;
+  const shadowStretchX = 1 + (Math.max(0, hoverOffset) * 0.025) + (Math.max(0, breathWave) * 0.06);
+  const shadowStretchY = (enemy.stopped ? 0.96 : 1) - (Math.abs(hoverOffset) * 0.012);
+  if (enemy.shadow?.active) {
+    const shadowYOffset = Math.max(10, Math.round(enemy.radius * 0.78));
+    enemy.shadow.x = enemy.x;
+    enemy.shadow.y = enemy.y + shadowYOffset;
+    enemy.shadow.setScale?.(shadowBaseX * shadowStretchX, shadowBaseY * shadowStretchY);
+    enemy.shadow.setAlpha?.(enemy.isEliteAnchor ? 0.28 : 0.24);
+  }
+  if (enemy.shadowCore?.active) {
+    const shadowYOffset = Math.max(10, Math.round(enemy.radius * 0.78));
+    enemy.shadowCore.x = enemy.x;
+    enemy.shadowCore.y = enemy.y + shadowYOffset;
+    enemy.shadowCore.setScale?.((enemy.isEliteAnchor ? 1.1 : 1) * (1 + Math.max(0, hoverOffset) * 0.018), (enemy.stopped ? 1 : 1.02) * (1 - Math.abs(hoverOffset) * 0.008));
+    enemy.shadowCore.setAlpha?.(enemy.isEliteAnchor ? 0.42 : 0.34);
+  }
+}
+
+function applyEnemyDeathPresentation(scene, enemy) {
+  if (!scene || !enemy?.display) return;
+  const now = Number(scene.time?.now || 0);
+  const start = Number(enemy.deathStartedAt || now);
+  const end = Number(enemy.deathAnimUntil || now);
+  const duration = Math.max(1, end - start);
+  const progress = Phaser.Math.Clamp((now - start) / duration, 0, 1);
+  const eased = Phaser.Math.Easing.Cubic.Out(progress);
+  const baseScaleX = Number(enemy.displayBaseScaleX || 1);
+  const baseScaleY = Number(enemy.displayBaseScaleY || 1);
+
+  enemy.display.setTexture?.(enemy.hitTextureKey || enemy.baseTextureKey);
+  enemy.display.x = enemy.x;
+  enemy.display.y = enemy.y - (eased * Math.max(10, enemy.radius * 0.55));
+  enemy.display.setScale(baseScaleX * (1 + ((1 - eased) * 0.16)), baseScaleY * (1 - (eased * 0.45)));
+  enemy.display.setAlpha?.(1 - eased);
+  enemy.display.setTintFill?.(0xffffff);
+  enemy.display.rotation = Number(enemy.deathSpinDir || 0) * eased * 0.22;
+
+  if (enemy.shadow?.active) {
+    enemy.shadow.x = enemy.x;
+    enemy.shadow.y = enemy.y + Math.max(10, Math.round(enemy.radius * 0.78));
+    enemy.shadow.setScale?.((enemy.isEliteAnchor ? 1.14 : 1) * (1 + eased * 0.18), (enemy.isEliteAnchor ? 1.05 : 1) * (1 - eased * 0.24));
+    enemy.shadow.setAlpha?.((enemy.isEliteAnchor ? 0.28 : 0.24) * (1 - eased * 0.85));
+  }
+  if (enemy.shadowCore?.active) {
+    enemy.shadowCore.x = enemy.x;
+    enemy.shadowCore.y = enemy.y + Math.max(10, Math.round(enemy.radius * 0.78));
+    enemy.shadowCore.setScale?.((enemy.isEliteAnchor ? 1.1 : 1) * (1 + eased * 0.14), 1 - eased * 0.18);
+    enemy.shadowCore.setAlpha?.((enemy.isEliteAnchor ? 0.42 : 0.34) * (1 - eased * 0.9));
+  }
+}
+
 function applyEliteAuraBuffs(scene, enemies) {
   for (let i = 0; i < enemies.length; i += 1) {
     const enemy = enemies[i];
-    if (!enemy || enemy.hp <= 0) continue;
+    if (!enemy || enemy.hp <= 0 || enemy.isDying) continue;
     enemy.speed = enemy.baseSpeed ?? enemy.speed;
     enemy.pressure = enemy.basePressure ?? enemy.pressure;
     enemy.threat = enemy.baseThreat ?? enemy.threat;
@@ -61,7 +172,7 @@ function applyEliteAuraBuffs(scene, enemies) {
     enemy.damageTakenMultiplier = 1;
     enemy.isAuraBuffed = false;
     if (!enemy.isEliteAnchor) {
-      enemy.display?.setStrokeStyle?.(2, 0x000000, 0.35);
+      resetEnemyVisualState(enemy);
     }
   }
 
@@ -89,7 +200,7 @@ function applyEliteAuraBuffs(scene, enemies) {
 
     for (let j = 0; j < enemies.length; j += 1) {
       const enemy = enemies[j];
-      if (!enemy || enemy.hp <= 0 || enemy.id === elite.id) continue;
+      if (!enemy || enemy.hp <= 0 || enemy.isDying || enemy.id === elite.id) continue;
       const d2 = distanceSq(enemy.x, enemy.y, elite.x, elite.y);
       if (d2 > auraRadiusSq) continue;
       if (elite.eliteAuraType === 'haste') {
@@ -105,7 +216,7 @@ function applyEliteAuraBuffs(scene, enemies) {
         enemy.remotePressure = (enemy.baseRemotePressure ?? enemy.remotePressure) * (1 + auraStrength * 0.7);
       }
       enemy.isAuraBuffed = true;
-      enemy.display?.setStrokeStyle?.(2, auraStyle.tint, 0.8);
+      applyEnemyAuraState(enemy, auraStyle.tint);
     }
   }
 }
@@ -151,7 +262,23 @@ export function updateEnemies(scene, delta) {
 
   for (let i = 0; i < scene.enemies.length; i += 1) {
     const enemy = scene.enemies[i];
-    if (!enemy || enemy.hp <= 0) {
+    if (!enemy) {
+      continue;
+    }
+    if (enemy.isDying) {
+      const deathEnd = Number(enemy.deathAnimUntil || 0);
+      if (deathEnd > Number(scene.time?.now || 0)) {
+        applyEnemyDeathPresentation(scene, enemy);
+        nextEnemies.push(enemy);
+        continue;
+      }
+      if (enemy?.id && enemy.id === scene.currentEliteAnchorId) {
+        scene.currentEliteAnchorId = null;
+      }
+      destroyEnemyVisuals(enemy);
+      continue;
+    }
+    if (enemy.hp <= 0) {
       if (enemy?.id && enemy.id === scene.currentEliteAnchorId) {
         scene.currentEliteAnchorId = null;
       }
@@ -179,16 +306,15 @@ export function updateEnemies(scene, delta) {
     }
 
     enemy.enteredFrontline = enemy.enteredFrontline || enemy.y >= frontlineY;
-    enemy.display.x = enemy.x;
-    enemy.display.y = enemy.y;
+    applyEnemyPresentation(scene, enemy);
     if (enemy.isEliteAnchor) {
       if (enemy.eliteAura?.active) {
         enemy.eliteAura.x = enemy.x;
-        enemy.eliteAura.y = enemy.y;
+        enemy.eliteAura.y = enemy.y + Number(enemy.presentYOffset || 0);
       }
       if (enemy.eliteAuraRing?.active) {
         enemy.eliteAuraRing.x = enemy.x;
-        enemy.eliteAuraRing.y = enemy.y;
+        enemy.eliteAuraRing.y = enemy.y + Number(enemy.presentYOffset || 0);
       }
       setEliteHpBar(enemy);
     }
@@ -306,6 +432,7 @@ export function updateCoreModules(scene, time) {
       if (d2 > burnRadiusSq) continue;
       const resolvedDamage = applyIncomingDamage(enemy, burnDamage);
       enemy.hp -= resolvedDamage;
+      triggerEnemyHitReaction(scene, enemy);
       showDamageNumber(scene, enemy.x, enemy.y - Math.max(18, enemy.radius + 16), resolvedDamage, { color: '#ff9b5f', fontSize: 18, whisper: true });
       burnedAnyEnemy = true;
       if (enemy.hp <= 0) {
@@ -337,6 +464,7 @@ export function updateCoreModules(scene, time) {
       const overloadDamage = 16 + (overloadLevel * 12);
       const resolvedDamage = applyIncomingDamage(overloadTarget, overloadDamage);
       overloadTarget.hp -= resolvedDamage;
+      triggerEnemyHitReaction(scene, overloadTarget);
       showDamageNumber(scene, overloadTarget.x, overloadTarget.y - Math.max(18, overloadTarget.radius + 18), resolvedDamage, { color: '#ffe082', fontSize: 20, whisper: true });
       const beam = scene.add.line(0, 0, scene.metrics.core.x, scene.metrics.core.y, overloadTarget.x, overloadTarget.y, 0xffd36b, 0.86)
         .setOrigin(0, 0)
@@ -381,6 +509,7 @@ export function updateAutoAttack(scene, time) {
   const rawDamage = Math.max(1, Math.round(baseDamage * (isCrit ? scene.playerCritMultiplier : 1)));
   const damageAmount = applyIncomingDamage(best, rawDamage);
   best.hp -= damageAmount;
+  triggerEnemyHitReaction(scene, best);
   showDamageNumber(scene, best.x, best.y - Math.max(18, best.radius + 18), damageAmount, { color: '#ffe082', fontSize: 22, whisper: true, isCrit });
 
   const line = scene.add.line(0, 0, scene.player.x, scene.player.y, best.x, best.y, scene.classOption.color, 0.9)
@@ -412,6 +541,13 @@ export function handleEnemyDefeat(scene, enemy, burstColor) {
   if (!enemy || enemy.rewardGranted) return;
   enemy.rewardGranted = true;
   enemy.hp = 0;
+  enemy.isDying = true;
+  enemy.deathStartedAt = Number(scene.time?.now || 0);
+  enemy.deathAnimUntil = enemy.deathStartedAt + 240;
+  enemy.deathSpinDir = enemy.x < scene.metrics.core.x ? -1 : 1;
+  enemy.hitTextureUntil = enemy.deathAnimUntil;
+  enemy.hitFlashUntil = enemy.deathStartedAt + 90;
+  enemy.hitReactUntil = enemy.deathStartedAt + 120;
   if (enemy.id === scene.currentEliteAnchorId) {
     scene.currentEliteAnchorId = null;
   }

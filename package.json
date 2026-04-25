@@ -1,7 +1,7 @@
 {
   "name": "phaser-roguelike-bossrush",
   "version": "1.0.0",
-  "description": "MOVA 走位策略类 Roguelike 游戏",
+  "description": "MOVA 走位 塔防 策略类 Roguelike 游戏",
   "main": "index.js",
   "scripts": {
     "start": "webpack serve --mode development",

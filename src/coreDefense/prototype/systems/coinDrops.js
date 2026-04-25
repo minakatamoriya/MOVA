@@ -157,15 +157,22 @@ export function updateCoinDrops(scene, delta) {
     drop.sprite.x = Phaser.Math.Clamp(drop.sprite.x, minX, maxX);
     drop.sprite.y = Phaser.Math.Clamp(drop.sprite.y, minY, maxY);
 
-    const dx = drop.sprite.x - scene.player.x;
-    const dy = drop.sprite.y - scene.player.y;
-    const distSq = (dx * dx) + (dy * dy);
+    let dx = drop.sprite.x - scene.player.x;
+    let dy = drop.sprite.y - scene.player.y;
+    let distSq = (dx * dx) + (dy * dy);
 
     if (distSq < attractRadiusSq && distSq > collectRadiusSq) {
       const dist = Math.sqrt(distSq) || 1;
       const speed = drop.type === 'coin_bag' ? magnetConfig.bagSpeed : magnetConfig.coinSpeed;
-      drop.sprite.x -= (dx / dist) * speed * dt;
-      drop.sprite.y -= (dy / dist) * speed * dt;
+      const maxStep = Math.max(0, dist - magnetConfig.collectRadius);
+      const travel = Math.min(speed * dt, maxStep);
+      if (travel > 0) {
+        drop.sprite.x -= (dx / dist) * travel;
+        drop.sprite.y -= (dy / dist) * travel;
+        dx = drop.sprite.x - scene.player.x;
+        dy = drop.sprite.y - scene.player.y;
+        distSq = (dx * dx) + (dy * dy);
+      }
     }
 
     if (distSq <= collectRadiusSq) {
