@@ -1,0 +1,17 @@
+{
+  "id": "core_swarm_slime",
+  "name": "基础潮怪-果冻史莱姆",
+  "backend": "procedural",
+  "model": "runwayml/stable-diffusion-v1-5",
+  "seed": 20260425,
+  "prompt": "cute chibi slime monster sprite concept, bright green gelatin body, tiny leaf sprout on head, rounded silhouette, simple readable shape, hand-painted pixel-art inspired fantasy enemy, clean solid background, game asset concept, centered full body",
+  "negative_prompt": "blurry, low detail, photorealistic, realistic human face, text, watermark, logo, cropped, extra limbs, disfigured, weapon UI icon, background scenery, frame, border",
+  "width": 512,
+  "height": 512,
+  "steps": 28,
+  "guidance_scale": 7.5,
+  "sprite_size": 48,
+  "sprite_path": "assets\\monsters\\sprite_candidates\\core_swarm_slime.png",
+  "hit_sprite_path": "assets\\monsters\\sprite_candidates\\core_swarm_slime_hit.png",
+  "generated_at": "2026-04-25T10:27:08"
+}

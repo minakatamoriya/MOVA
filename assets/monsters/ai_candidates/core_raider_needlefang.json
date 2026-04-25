@@ -1,0 +1,17 @@
+{
+  "id": "core_raider_needlefang",
+  "name": "渗透怪-针牙掠行兽",
+  "backend": "procedural",
+  "model": "runwayml/stable-diffusion-v1-5",
+  "seed": 20260427,
+  "prompt": "cute agile needlefang raider monster sprite concept, lean body, long hind legs, sharp nose, speed-focused silhouette, slightly mischievous expression, hand-painted pixel-art inspired fantasy enemy, clean solid background, centered full body",
+  "negative_prompt": "blurry, low detail, photorealistic, realistic human face, text, watermark, logo, cropped, extra limbs, disfigured, weapon UI icon, background scenery, frame, border",
+  "width": 512,
+  "height": 512,
+  "steps": 28,
+  "guidance_scale": 7.5,
+  "sprite_size": 48,
+  "sprite_path": "assets\\monsters\\sprite_candidates\\core_raider_needlefang.png",
+  "hit_sprite_path": "assets\\monsters\\sprite_candidates\\core_raider_needlefang_hit.png",
+  "generated_at": "2026-04-25T10:27:08"
+}

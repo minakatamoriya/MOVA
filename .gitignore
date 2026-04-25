@@ -4,6 +4,3 @@ dist/
 *.log
 .venv-image/
 tools/local-image-gen/
-assets/coreDefense/arena/
-assets/monsters/ai_candidates/
-assets/monsters/sprite_candidates/
